@@ -6,7 +6,20 @@ from dotenv import load_dotenv
 
 from app.api import upload, process, download
 
-load_dotenv()
+# Load environment variables from .env file
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
+
+# Debug: Print Google Cloud credentials path
+google_creds = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+if google_creds:
+    print(f"✅ Google Cloud credentials loaded: {google_creds}")
+    if os.path.exists(google_creds):
+        print("✅ Credentials file exists")
+    else:
+        print("❌ Credentials file not found")
+else:
+    print("❌ GOOGLE_APPLICATION_CREDENTIALS not set")
 
 app = FastAPI(title="Photo Processor API", version="1.0.0")
 

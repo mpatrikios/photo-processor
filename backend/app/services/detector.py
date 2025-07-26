@@ -12,13 +12,21 @@ from app.models.schemas import DetectionResult, PhotoInfo, ProcessingStatus, Gro
 class NumberDetector:
     def __init__(self):
         self.results: Dict[str, DetectionResult] = {}
+        self.vision_client = None
+        self.use_google_vision = None  # Will be determined on first use
+    
+    def _initialize_vision_client(self):
+        """Initialize Google Vision client lazily when first needed"""
+        if self.use_google_vision is not None:
+            return  # Already initialized
+            
         try:
             self.vision_client = vision.ImageAnnotatorClient()
             self.use_google_vision = True
-            print("Google Cloud Vision API initialized successfully")
+            print("✅ Google Cloud Vision API initialized successfully")
         except Exception as e:
-            print(f"Google Cloud Vision API not available: {e}")
-            print("Falling back to Tesseract OCR only")
+            print(f"❌ Google Cloud Vision API not available: {e}")
+            print("🔄 Falling back to Tesseract OCR only")
             self.vision_client = None
             self.use_google_vision = False
     
@@ -26,6 +34,9 @@ class NumberDetector:
         photo_path = self._find_photo_path(photo_id)
         if not photo_path:
             raise FileNotFoundError(f"Photo {photo_id} not found")
+        
+        # Initialize Google Vision client if needed
+        self._initialize_vision_client()
         
         if self.use_google_vision:
             try:
@@ -37,11 +48,12 @@ class NumberDetector:
                         bbox=bbox
                     )
                     self.results[photo_id] = result
+                    print(f"🎯 Google Vision detected bib #{bib_number} (confidence: {confidence:.2f}) for {photo_id}")
                     return result
             except Exception as e:
-                print(f"Google Vision failed for {photo_id}: {e}")
+                print(f"❌ Google Vision failed for {photo_id}: {e}")
         
-        print(f"Using Tesseract fallback for {photo_id}")
+        print(f"🔄 Using Tesseract fallback for {photo_id}")
         image = cv2.imread(photo_path)
         if image is None:
             raise ValueError(f"Could not load image {photo_path}")
