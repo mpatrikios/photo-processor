@@ -93,12 +93,25 @@ class PhotoProcessor {
 
     // File Selection Handler
     handleFileSelect(files, isFolder = false) {
-        const imageFiles = Array.from(files).filter(file => 
-            file.type.startsWith('image/')
-        );
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        
+        const validFiles = [];
+        const invalidFiles = [];
+        const oversizedFiles = [];
+        
+        Array.from(files).forEach(file => {
+            if (!SUPPORTED_FORMATS.includes(file.type)) {
+                invalidFiles.push(file.name);
+            } else if (file.size > MAX_FILE_SIZE) {
+                oversizedFiles.push(file.name);
+            } else {
+                validFiles.push(file);
+            }
+        });
         
         // Add to existing files instead of replacing
-        this.selectedFiles = [...this.selectedFiles, ...imageFiles];
+        this.selectedFiles = [...this.selectedFiles, ...validFiles];
         
         // Remove duplicates based on file name and size
         this.selectedFiles = this.selectedFiles.filter((file, index, self) =>
@@ -107,10 +120,17 @@ class PhotoProcessor {
         
         this.displaySelectedFiles();
         
-        if (isFolder && imageFiles.length > 0) {
-            this.showSuccess(`Added ${imageFiles.length} photos from folder`);
-        } else if (imageFiles.length > 0) {
-            this.showSuccess(`Added ${imageFiles.length} photos`);
+        // Show feedback messages
+        if (validFiles.length > 0) {
+            this.showSuccess(`Added ${validFiles.length} photos${isFolder ? ' from folder' : ''}`);
+        }
+        
+        if (invalidFiles.length > 0) {
+            this.showError(`${invalidFiles.length} files skipped (unsupported format)`);
+        }
+        
+        if (oversizedFiles.length > 0) {
+            this.showError(`${oversizedFiles.length} files skipped (too large)`);
         }
     }
 
@@ -324,8 +344,12 @@ class PhotoProcessor {
                         
                         <div class="photo-grid">
                             ${group.photos.slice(0, 4).map(photo => `
-                                <div class="photo-item">
-                                    <div class="photo-placeholder">
+                                <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')">
+                                    <img src="${this.apiBase}/photos/${photo.id}" 
+                                         alt="${photo.filename}" 
+                                         style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
+                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="photo-placeholder" style="display: none;">
                                         <i class="fas fa-image fa-2x"></i>
                                     </div>
                                     ${photo.detection_result ? `
@@ -338,9 +362,12 @@ class PhotoProcessor {
                         </div>
                         
                         ${group.count > 4 ? `
-                            <p class="text-muted text-center mt-2 mb-0">
-                                <small>+${group.count - 4} more photos</small>
-                            </p>
+                            <div class="text-center mt-2">
+                                <button class="btn btn-outline-primary btn-sm" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View All ${group.count} Photos
+                                </button>
+                            </div>
                         ` : ''}
                     </div>
                 </div>

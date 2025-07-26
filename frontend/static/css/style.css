@@ -511,6 +511,35 @@ header .lead {
     
     .file-item {
         padding: 0.75rem;
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .file-item .file-info {
+        margin-bottom: 0.5rem;
+    }
+    
+    .stats-card {
+        margin-bottom: 1rem;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 0.5rem;
+        border-radius: var(--border-radius-sm) !important;
+    }
+    
+    /* Stack buttons vertically on mobile */
+    .d-flex.gap-2 {
+        flex-direction: column;
+    }
+    
+    .d-flex.gap-2 .btn {
+        margin-bottom: 0.5rem;
     }
 }
 
@@ -572,6 +601,41 @@ header .lead {
 input[type="checkbox"]:focus {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     outline: none;
+}
+
+/* Keyboard Navigation */
+.photo-item:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.file-item:focus-within {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Screen Reader Only */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .card {
+        border: 2px solid var(--dark-color);
+    }
+    
+    .upload-dropzone {
+        border-width: 3px !important;
+    }
 }
 
 /* Animation for appearing elements */
