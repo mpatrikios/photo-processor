@@ -67,3 +67,4 @@ async def get_photo_info(photo_id: str):
         original_path=file_path,
         status=ProcessingStatus.PENDING
     )
+

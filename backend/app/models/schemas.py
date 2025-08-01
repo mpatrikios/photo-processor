@@ -41,3 +41,14 @@ class GroupedPhotos(BaseModel):
 class ExportRequest(BaseModel):
     photo_ids: List[str]
     format: str = "zip"
+
+class ManualLabelRequest(BaseModel):
+    photo_id: str
+    bib_number: str
+
+class FeedbackRequest(BaseModel):
+    type: str  # bug, suggestion, improvement, general
+    title: str
+    description: str
+    email: Optional[str] = None
+    system_info: Optional[str] = None

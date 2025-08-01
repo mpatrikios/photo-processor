@@ -197,3 +197,23 @@ class NumberDetector:
             )
             for bib_number, photos in groups.items()
         ]
+    
+    def update_manual_label(self, photo_id: str, bib_number: str) -> bool:
+        """Update a photo's detection result with a manual label"""
+        try:
+            # Create a manual detection result with high confidence
+            manual_result = DetectionResult(
+                bib_number=bib_number,
+                confidence=1.0,  # Manual labels get 100% confidence
+                bbox=None  # No bounding box for manual labels
+            )
+            
+            # Store the manual result
+            self.results[photo_id] = manual_result
+            
+            print(f"✅ Manually labeled photo {photo_id} as bib #{bib_number}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to manually label photo {photo_id}: {e}")
+            return False

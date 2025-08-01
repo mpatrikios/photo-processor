@@ -16,22 +16,88 @@
 </head>
 <body>
     <div id="app">
-        <!-- Header -->
-        <header class="bg-primary text-white py-4 mb-4">
+        <!-- Login Section -->
+        <div id="login-section" class="d-none">
             <div class="container">
-                <div class="row">
-                    <div class="col text-center">
-                        <h1 class="display-4 mb-2">
-                            <i class="fas fa-camera me-3"></i>
-                            Race Photo Processor
-                        </h1>
-                        <p class="lead">Upload race photos and automatically sort them by bib numbers</p>
+                <div class="row justify-content-center min-vh-100 align-items-center">
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card shadow-lg">
+                            <div class="card-body p-5">
+                                <div class="text-center mb-4">
+                                    <i class="fas fa-camera fa-3x text-primary mb-3"></i>
+                                    <h3 class="card-title">Race Photo Processor</h3>
+                                    <p class="text-muted">Please sign in to continue</p>
+                                </div>
+                                
+                                <form id="loginForm">
+                                    <div class="mb-3">
+                                        <label for="username" class="form-label">Username</label>
+                                        <input type="text" class="form-control" id="username" required>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <label for="password" class="form-label">Password</label>
+                                        <input type="password" class="form-control" id="password" required>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-sign-in-alt me-2"></i>
+                                            Sign In
+                                        </button>
+                                    </div>
+                                </form>
+                                
+                                <div class="text-center mt-3">
+                                    <small class="text-muted">
+                                        <strong>Demo Credentials:</strong><br>
+                                        Username: <code>admin</code> | Password: <code>admin</code><br>
+                                        Username: <code>user</code> | Password: <code>password</code>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </header>
+        </div>
 
-        <!-- Main Content -->
+        <!-- Main App Content -->
+        <div id="main-content" class="d-none">
+            <!-- Header -->
+            <header class="bg-primary text-white py-4 mb-4">
+                <div class="container">
+                    <div class="row">
+                        <div class="col text-center position-relative">
+                            <h1 class="display-4 mb-2">
+                                <i class="fas fa-camera me-3"></i>
+                                Race Photo Processor
+                            </h1>
+                            <p class="lead">Upload race photos and automatically sort them by bib numbers</p>
+                            
+                            <!-- Top Right Buttons -->
+                            <div class="position-absolute top-0 end-0">
+                                <button class="btn btn-outline-light btn-sm me-2" 
+                                        id="feedbackBtn" 
+                                        onclick="photoProcessor.showFeedbackModal()"
+                                        title="Report bugs or suggest improvements">
+                                    <i class="fas fa-comment-alt me-1"></i>
+                                    Feedback
+                                </button>
+                                <button class="btn btn-outline-light btn-sm" 
+                                        id="logoutBtn" 
+                                        onclick="photoProcessor.logout()"
+                                        title="Sign out">
+                                    <i class="fas fa-sign-out-alt me-1"></i>
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
         <div class="container">
             <!-- Upload Section -->
             <div id="upload-section">
@@ -119,98 +185,80 @@
             <div id="results-section" class="d-none">
                 <div class="row">
                     <div class="col-12">
-                        <!-- Search and Filter Controls -->
-                        <div class="card mb-4">
-                            <div class="card-body">
-                                <div class="row align-items-center">
-                                    <div class="col-md-6">
-                                        <div class="input-group">
-                                            <span class="input-group-text">
-                                                <i class="fas fa-search"></i>
-                                            </span>
-                                            <input type="text" id="searchBib" class="form-control" placeholder="Search by bib number...">
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="d-flex gap-2">
-                                            <button id="filterAll" class="btn btn-outline-primary active">All</button>
-                                            <button id="filterDetected" class="btn btn-outline-success">Detected</button>
-                                            <button id="filterUnknown" class="btn btn-outline-warning">Unknown</button>
+                        <!-- Simple Results Header -->
+                        <div class="text-center mb-4">
+                            <h3 class="mb-2">
+                                <i class="fas fa-check-circle text-success me-2"></i>
+                                Processing Complete!
+                            </h3>
+                            <p class="text-muted mb-0">Your photos have been sorted by bib number</p>
+                        </div>
+
+                        <!-- Simple Stats -->
+                        <div class="row mb-4">
+                            <div class="col-md-8 mx-auto">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <div class="row">
+                                            <div class="col-4">
+                                                <i class="fas fa-images fa-2x text-primary mb-2"></i>
+                                                <h4 id="total-photos">0</h4>
+                                                <small class="text-muted">Total Photos</small>
+                                            </div>
+                                            <div class="col-4">
+                                                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                                                <h4 id="detected-photos">0</h4>
+                                                <small class="text-muted">Detected</small>
+                                            </div>
+                                            <div class="col-4">
+                                                <i class="fas fa-question-circle fa-2x text-warning mb-2"></i>
+                                                <h4 id="unknown-photos">0</h4>
+                                                <small class="text-muted">Undetected</small>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Stats Cards -->
-                        <div class="row mb-4">
-                            <div class="col-md-4">
-                                <div class="card bg-primary text-white">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-images fa-2x mb-2"></i>
-                                        <h3 id="total-photos">0</h3>
-                                        <p class="mb-0">Total Photos</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-success text-white">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-check-circle fa-2x mb-2"></i>
-                                        <h3 id="detected-photos">0</h3>
-                                        <p class="mb-0">Detected</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-warning text-white">
-                                    <div class="card-body text-center">
-                                        <i class="fas fa-question-circle fa-2x mb-2"></i>
-                                        <h3 id="unknown-photos">0</h3>
-                                        <p class="mb-0">Unknown</p>
-                                    </div>
-                                </div>
-                            </div>
+                        <!-- Results Count -->
+                        <div class="text-center mb-3">
+                            <small class="text-muted" id="resultsCount">Loading...</small>
                         </div>
 
                         <!-- Photo Groups -->
                         <div id="photo-groups" class="row"></div>
+                        
+                        <!-- Hidden Export Groups (needed by JavaScript) -->
+                        <div id="export-groups" style="display: none;"></div>
 
-                        <!-- Export Controls -->
-                        <div class="card mt-4">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h5 class="card-title mb-0">
-                                        <i class="fas fa-download me-2"></i>
-                                        Export Photos
-                                    </h5>
-                                    <div class="d-flex gap-2">
-                                        <button id="upload-more-btn" class="btn btn-outline-primary">
-                                            <i class="fas fa-plus me-2"></i>
-                                            Upload More
-                                        </button>
-                                        <button id="reset-btn" class="btn btn-outline-secondary">
-                                            <i class="fas fa-redo me-2"></i>
-                                            Start Over
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-8">
-                                        <div id="export-groups" class="row"></div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <button id="export-btn" class="btn btn-success w-100" disabled>
-                                            <i class="fas fa-file-archive me-2"></i>
-                                            Export Selected
-                                        </button>
-                                        <p class="text-muted text-center mt-2 mb-0">
-                                            <small>Export as organized ZIP file</small>
-                                        </p>
-                                    </div>
+                        <!-- Simple Export Controls -->
+                        <div class="text-center mt-4">
+                            <div class="d-flex justify-content-center gap-3 mb-4">
+                                <button id="download-all-btn" class="btn btn-success btn-lg">
+                                    <i class="fas fa-download me-2"></i>
+                                    Download All Photos as ZIP
+                                </button>
+                                <button id="upload-more-btn" class="btn btn-outline-primary btn-lg">
+                                    <i class="fas fa-plus me-2"></i>
+                                    Upload More
+                                </button>
+                                <button id="reset-btn" class="btn btn-outline-secondary btn-lg">
+                                    <i class="fas fa-redo me-2"></i>
+                                    Start Over
+                                </button>
+                            </div>
+                            
+                            <!-- Export Progress -->
+                            <div class="progress mb-3" id="exportProgress" style="display: none; max-width: 400px; margin: 0 auto;">
+                                <div class="progress-bar" role="progressbar" style="width: 0%">
+                                    <small>Preparing export...</small>
                                 </div>
                             </div>
+                            
+                            <p class="text-muted">
+                                <small>Photos will be organized by bib number in separate folders</small>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -218,22 +266,85 @@
         </div>
     </div>
 
-    <!-- Photo Modal -->
+    <!-- Enhanced Photo Lightbox Modal -->
     <div class="modal fade" id="photoModal" tabindex="-1" aria-labelledby="photoModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="photoModalLabel">Photo View</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content bg-dark">
+                <div class="modal-header border-0 position-absolute top-0 start-0 end-0 z-3 bg-dark bg-opacity-75">
+                    <div class="d-flex align-items-center w-100">
+                        <h5 class="modal-title text-white me-auto" id="photoModalLabel">Photo View</h5>
+                        <div class="d-flex gap-2 me-3">
+                            <span class="badge bg-primary" id="photoPosition">1 of 5</span>
+                            <span class="badge bg-success" id="photoConfidence">95%</span>
+                        </div>
+                        <button type="button" class="btn btn-outline-light btn-sm me-2" id="fullscreenBtn" title="Fullscreen (F11)">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-light btn-sm me-2" id="downloadPhotoBtn" title="Download">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
                 </div>
-                <div class="modal-body text-center">
-                    <img id="modalPhotoImage" src="" alt="" class="img-fluid rounded" style="max-height: 70vh;">
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" id="downloadPhotoBtn" class="btn btn-primary">
-                        <i class="fas fa-download me-2"></i>Download
+                
+                <div class="modal-body p-0 position-relative d-flex align-items-center justify-content-center">
+                    <!-- Navigation Arrows -->
+                    <button type="button" class="btn btn-dark btn-lg position-absolute start-0 ms-3 z-3" id="prevPhotoBtn" title="Previous (Left Arrow)">
+                        <i class="fas fa-chevron-left"></i>
                     </button>
+                    <button type="button" class="btn btn-dark btn-lg position-absolute end-0 me-3 z-3" id="nextPhotoBtn" title="Next (Right Arrow)">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    
+                    <!-- Photo Container with Zoom -->
+                    <div class="photo-container w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
+                        <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
+                        
+                        <!-- Loading Spinner -->
+                        <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Photo Metadata Overlay -->
+                    <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white p-3" id="photoMetadata">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small class="text-muted">Filename:</small>
+                                <div id="photoFilename">IMG_001.jpg</div>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Bib Number:</small>
+                                <div id="photoBibNumber">123</div>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">Detection Confidence:</small>
+                                <div id="photoConfidenceDetail">95.2%</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Zoom Controls -->
+                    <div class="position-absolute top-50 end-0 me-3 d-flex flex-column gap-2" id="zoomControls">
+                        <button type="button" class="btn btn-dark btn-sm" id="zoomInBtn" title="Zoom In (+)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button type="button" class="btn btn-dark btn-sm" id="zoomOutBtn" title="Zoom Out (-)">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button type="button" class="btn btn-dark btn-sm" id="zoomResetBtn" title="Reset Zoom (0)">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Thumbnail Strip -->
+                <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-90 p-2" id="thumbnailStrip">
+                    <div class="d-flex gap-2 justify-content-center overflow-auto" id="thumbnailContainer">
+                        <!-- Thumbnails will be populated here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -313,6 +424,109 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Manual Labeling Modal -->
+    <div class="modal fade" id="manualLabelModal" tabindex="-1" aria-labelledby="manualLabelModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="manualLabelModalLabel">
+                        <i class="fas fa-tag me-2"></i>
+                        Manual Labeling - Unknown Photos
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <p class="text-muted mb-3">Assign bib numbers to photos that couldn't be automatically detected:</p>
+                    </div>
+                    
+                    <div id="unknown-photos-container" class="row">
+                        <!-- Unknown photos will be populated here -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" id="apply-labels-btn" class="btn btn-primary">
+                        <i class="fas fa-check me-2"></i>
+                        Apply Labels
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="feedbackModalLabel">
+                        <i class="fas fa-comment-alt me-2"></i>
+                        Send Feedback
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="feedbackForm">
+                        <div class="mb-3">
+                            <label for="feedbackType" class="form-label">Type of Feedback</label>
+                            <select class="form-select" id="feedbackType" required>
+                                <option value="">Select feedback type...</option>
+                                <option value="bug">🐛 Bug Report</option>
+                                <option value="suggestion">💡 Feature Suggestion</option>
+                                <option value="improvement">⚡ Improvement Idea</option>
+                                <option value="general">💬 General Feedback</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="feedbackTitle" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="feedbackTitle" 
+                                   placeholder="Brief description of your feedback" 
+                                   maxlength="100" required>
+                            <div class="form-text">Briefly describe the issue or suggestion</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="feedbackDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="feedbackDescription" rows="4" 
+                                      placeholder="Please provide details..." 
+                                      maxlength="1000" required></textarea>
+                            <div class="form-text">
+                                <span id="charCount">0</span>/1000 characters
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="feedbackEmail" class="form-label">Email (Optional)</label>
+                            <input type="email" class="form-control" id="feedbackEmail" 
+                                   placeholder="your@email.com">
+                            <div class="form-text">Leave your email if you'd like a response</div>
+                        </div>
+                        
+                        <!-- Browser/System Info (auto-filled) -->
+                        <div class="mb-3">
+                            <label class="form-label">System Information</label>
+                            <div class="bg-light p-2 rounded">
+                                <small class="text-muted" id="systemInfo">
+                                    Browser info will be automatically included to help with debugging
+                                </small>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="submitFeedbackBtn" class="btn btn-primary">
+                        <i class="fas fa-paper-plane me-2"></i>
+                        Send Feedback
+                    </button>
+                </div>
+            </div>
+        </div>
+        </div> <!-- End main-content -->
     </div>
 
     <!-- Bootstrap 5 JS -->

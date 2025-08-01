@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 
-from app.api import upload, process, download
+from app.api import upload, process, download, feedback, auth
 
 # Load environment variables from .env file
 env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -38,9 +38,11 @@ os.makedirs("exports", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/processed", StaticFiles(directory="processed"), name="processed")
 
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(process.router, prefix="/api/process", tags=["process"])
 app.include_router(download.router, prefix="/api/download", tags=["download"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 
 @app.get("/")
 async def root():
@@ -49,3 +51,12 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+@app.get("/auth-status")
+async def auth_status():
+    from app.api.auth import active_sessions
+    return {
+        "auth_system": "active",
+        "active_sessions": len(active_sessions),
+        "demo_users": ["admin", "user"]
+    }

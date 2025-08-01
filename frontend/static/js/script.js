@@ -6,10 +6,140 @@ class PhotoProcessor {
         this.selectedFiles = [];
         this.currentJobId = null;
         this.groupedPhotos = [];
+        this.filteredGroups = [];
         this.selectedGroups = [];
         this.modalSelectedFiles = []; // For upload more modal
+        this.currentFilter = 'all';
+        this.currentSort = 'bib-asc';
+        this.searchTerm = '';
+        this.confidenceFilter = 0;
+        this.photoCountFilter = 1;
+        this.isAuthenticated = false;
+        this.authToken = null;
         
         this.initializeEventListeners();
+        this.initializeSearchAndFilters();
+        this.checkAuthStatus(); // Check auth status after initialization
+    }
+
+    // Authentication Methods
+    async checkAuthStatus() {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            try {
+                // Validate token with backend
+                const response = await fetch(`${this.apiBase}/auth/validate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token })
+                });
+                
+                if (response.ok) {
+                    this.authToken = token;
+                    this.isAuthenticated = true;
+                    this.showMainContent();
+                } else {
+                    // Token is invalid or expired
+                    localStorage.removeItem('auth_token');
+                    this.showLoginScreen();
+                }
+            } catch (error) {
+                console.error('Token validation error:', error);
+                // On error, show login screen
+                localStorage.removeItem('auth_token');
+                this.showLoginScreen();
+            }
+        } else {
+            this.showLoginScreen();
+        }
+    }
+
+    showLoginScreen() {
+        document.getElementById('login-section').classList.remove('d-none');
+        document.getElementById('main-content').classList.add('d-none');
+        this.initializeLoginForm();
+    }
+
+    showMainContent() {
+        document.getElementById('login-section').classList.add('d-none');
+        document.getElementById('main-content').classList.remove('d-none');
+    }
+
+    initializeLoginForm() {
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm && !loginForm.hasEventListener) {
+            loginForm.addEventListener('submit', (e) => this.handleLogin(e));
+            loginForm.hasEventListener = true;
+        }
+    }
+
+    async handleLogin(e) {
+        e.preventDefault();
+        
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        
+        // Show loading state
+        const originalText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
+        
+        try {
+            const response = await fetch(`${this.apiBase}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                localStorage.setItem('auth_token', result.token);
+                this.authToken = result.token;
+                this.isAuthenticated = true;
+                this.showMainContent();
+                this.showSuccess(result.message);
+            } else {
+                const error = await response.json();
+                this.showError(error.detail || 'Login failed');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            this.showError('Login failed. Please try again.');
+        } finally {
+            // Restore button state
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    }
+
+    async logout() {
+        try {
+            // Call backend logout if we have a token
+            if (this.authToken) {
+                await fetch(`${this.apiBase}/auth/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: this.authToken })
+                });
+            }
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            // Always clear local session regardless of backend response
+            localStorage.removeItem('auth_token');
+            this.authToken = null;
+            this.isAuthenticated = false;
+            this.resetApp();
+            this.showLoginScreen();
+            this.showSuccess('Successfully logged out!');
+        }
     }
 
     initializeEventListeners() {
@@ -62,8 +192,484 @@ class PhotoProcessor {
         // Modal event listeners
         this.initializeModalEventListeners();
 
-        // Export button
-        document.getElementById('export-btn').addEventListener('click', this.exportPhotos.bind(this));
+        // Download All button (simplified)
+        document.getElementById('download-all-btn').addEventListener('click', this.downloadAllPhotos.bind(this));
+        
+        // Simplified - no bulk selection needed
+    }
+    
+    initializeBulkSelection() {
+        document.getElementById('selectAllGroups').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                this.selectAllGroups();
+            } else {
+                this.selectNone();
+            }
+        });
+        
+        document.getElementById('selectDetectedBtn').addEventListener('click', () => {
+            this.selectDetectedGroups();
+        });
+        
+        document.getElementById('selectUnknownBtn').addEventListener('click', () => {
+            this.selectUnknownGroups();
+        });
+        
+        document.getElementById('selectNoneBtn').addEventListener('click', () => {
+            this.selectNone();
+        });
+        
+        // Export options change handlers
+        document.getElementById('exportFormat').addEventListener('change', () => {
+            this.updateExportPreview();
+        });
+        
+        document.getElementById('filenamePattern').addEventListener('change', () => {
+            this.updateExportPreview();
+        });
+    }
+    
+    selectAllGroups() {
+        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
+        this.selectedGroups = groupsToShow.map(group => group.bib_number);
+        this.updateSelectionUI();
+        this.updateExportPreview();
+    }
+    
+    selectDetectedGroups() {
+        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
+        this.selectedGroups = groupsToShow
+            .filter(group => group.bib_number !== 'unknown')
+            .map(group => group.bib_number);
+        this.updateSelectionUI();
+        this.updateExportPreview();
+    }
+    
+    selectUnknownGroups() {
+        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
+        this.selectedGroups = groupsToShow
+            .filter(group => group.bib_number === 'unknown')
+            .map(group => group.bib_number);
+        this.updateSelectionUI();
+        this.updateExportPreview();
+    }
+    
+    selectNone() {
+        this.selectedGroups = [];
+        document.getElementById('selectAllGroups').checked = false;
+        this.updateSelectionUI();
+        this.updateExportPreview();
+    }
+    
+    updateSelectionUI() {
+        // Update checkboxes in export groups
+        document.querySelectorAll('.export-checkbox input[type="checkbox"]').forEach(checkbox => {
+            checkbox.checked = this.selectedGroups.includes(checkbox.value);
+            const label = checkbox.closest('.export-checkbox');
+            if (checkbox.checked) {
+                label.classList.add('selected');
+            } else {
+                label.classList.remove('selected');
+            }
+        });
+        
+        // Update selection count
+        const count = this.selectedGroups.length;
+        document.getElementById('selectionCount').textContent = `${count} group${count !== 1 ? 's' : ''} selected`;
+        document.getElementById('exportBtnCount').textContent = count;
+        
+        // Update select all checkbox
+        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
+        const allSelected = groupsToShow.length > 0 && this.selectedGroups.length === groupsToShow.length;
+        document.getElementById('selectAllGroups').checked = allSelected;
+        
+        // Enable/disable export button
+        document.getElementById('export-btn').disabled = this.selectedGroups.length === 0;
+    }
+    
+    updateExportPreview() {
+        const selectedGroupData = this.groupedPhotos.filter(group => 
+            this.selectedGroups.includes(group.bib_number)
+        );
+        
+        const exportPreview = document.getElementById('exportPreview');
+        const exportPreviewList = document.getElementById('exportPreviewList');
+        const exportPhotoCount = document.getElementById('exportPhotoCount');
+        
+        if (selectedGroupData.length === 0) {
+            exportPreview.style.display = 'none';
+            return;
+        }
+        
+        exportPreview.style.display = 'block';
+        
+        const totalPhotos = selectedGroupData.reduce((sum, group) => sum + group.count, 0);
+        exportPhotoCount.textContent = totalPhotos;
+        
+        exportPreviewList.innerHTML = selectedGroupData.map(group => `
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <small class="text-muted">
+                    ${group.bib_number === 'unknown' ? 'Unknown' : `Bib #${group.bib_number}`}
+                </small>
+                <small class="badge bg-secondary">${group.count}</small>
+            </div>
+        `).join('');
+    }
+    
+    initializeSearchAndFilters() {
+        // Search input - only initialize if elements exist
+        const searchInput = document.getElementById('searchBib');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const searchSuggestions = document.getElementById('searchSuggestions');
+        
+        if (searchInput && clearSearchBtn && searchSuggestions) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchTerm = e.target.value.toLowerCase();
+                this.showSearchSuggestions();
+                this.applyFilters();
+            });
+            
+            searchInput.addEventListener('focus', () => {
+                if (this.searchTerm === '') {
+                    this.showSearchSuggestions();
+                }
+            });
+            
+            searchInput.addEventListener('blur', () => {
+                // Delay hiding suggestions to allow clicking
+                setTimeout(() => {
+                    searchSuggestions.classList.remove('show');
+                }, 150);
+            });
+            
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                this.searchTerm = '';
+                this.applyFilters();
+                searchSuggestions.classList.remove('show');
+            });
+        }
+        
+        // Filter buttons - only initialize if they exist
+        const filterAll = document.getElementById('filterAll');
+        const filterDetected = document.getElementById('filterDetected');
+        const filterUnknown = document.getElementById('filterUnknown');
+        
+        if (filterAll) filterAll.addEventListener('click', () => this.setFilter('all'));
+        if (filterDetected) filterDetected.addEventListener('click', () => this.setFilter('detected'));
+        if (filterUnknown) filterUnknown.addEventListener('click', () => this.setFilter('unknown'));
+        
+        // Sort dropdown
+        document.querySelectorAll('[data-sort]').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.setSort(e.target.dataset.sort);
+            });
+        });
+        
+        // Advanced filters - only initialize if elements exist
+        const showAdvancedBtn = document.getElementById('showAdvancedFilters');
+        const hideAdvancedBtn = document.getElementById('toggleAdvancedFilters');
+        const advancedFilters = document.getElementById('advancedFilters');
+        
+        if (showAdvancedBtn && hideAdvancedBtn && advancedFilters) {
+            showAdvancedBtn.addEventListener('click', () => {
+                advancedFilters.style.display = 'block';
+                showAdvancedBtn.style.display = 'none';
+            });
+            
+            hideAdvancedBtn.addEventListener('click', () => {
+                advancedFilters.style.display = 'none';
+                showAdvancedBtn.style.display = 'block';
+            });
+        }
+        
+        // Range sliders - only initialize if elements exist
+        const confidenceRange = document.getElementById('confidenceRange');
+        const photoCountRange = document.getElementById('photoCountRange');
+        const confidenceValue = document.getElementById('confidenceValue');
+        const photoCountValue = document.getElementById('photoCountValue');
+        
+        if (confidenceRange && confidenceValue) {
+            confidenceRange.addEventListener('input', (e) => {
+                this.confidenceFilter = parseInt(e.target.value);
+                confidenceValue.textContent = `${this.confidenceFilter}%+`;
+                this.applyFilters();
+            });
+        }
+        
+        if (photoCountRange && photoCountValue) {
+            photoCountRange.addEventListener('input', (e) => {
+                this.photoCountFilter = parseInt(e.target.value);
+                photoCountValue.textContent = `${this.photoCountFilter}+`;
+                this.applyFilters();
+            });
+        }
+    }
+    
+    showSearchSuggestions() {
+        const searchSuggestions = document.getElementById('searchSuggestions');
+        if (!searchSuggestions) return; // Exit if element doesn't exist
+        
+        const bibNumbers = this.groupedPhotos
+            .map(group => group.bib_number)
+            .filter(bib => bib !== 'unknown')
+            .filter(bib => this.searchTerm === '' || bib.toLowerCase().includes(this.searchTerm))
+            .slice(0, 8);
+        
+        if (bibNumbers.length === 0 && this.searchTerm === '') {
+            searchSuggestions.classList.remove('show');
+            return;
+        }
+        
+        searchSuggestions.innerHTML = bibNumbers.map(bib => `
+            <div class="suggestion-item" onclick="photoProcessor.selectSuggestion('${bib}')">
+                Bib #${bib}
+            </div>
+        `).join('');
+        
+        if (bibNumbers.length > 0) {
+            searchSuggestions.classList.add('show');
+        } else {
+            searchSuggestions.classList.remove('show');
+        }
+    }
+    
+    selectSuggestion(bibNumber) {
+        const searchInput = document.getElementById('searchBib');
+        const searchSuggestions = document.getElementById('searchSuggestions');
+        
+        if (searchInput) {
+            searchInput.value = bibNumber;
+            this.searchTerm = bibNumber.toLowerCase();
+            this.applyFilters();
+        }
+        
+        if (searchSuggestions) {
+            searchSuggestions.classList.remove('show');
+        }
+    }
+    
+    setFilter(filter) {
+        // Update button states
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            if (btn.id === `filter${filter.charAt(0).toUpperCase() + filter.slice(1)}` || 
+                (filter === 'all' && btn.id === 'filterAll')) {
+                btn.classList.add('active');
+                btn.classList.remove('btn-outline-primary', 'btn-outline-success', 'btn-outline-warning');
+                if (filter === 'all') btn.classList.add('btn-primary');
+                else if (filter === 'detected') btn.classList.add('btn-success');
+                else if (filter === 'unknown') btn.classList.add('btn-warning');
+            } else {
+                btn.classList.remove('active', 'btn-primary', 'btn-success', 'btn-warning');
+                if (btn.id === 'filterAll') btn.classList.add('btn-outline-primary');
+                else if (btn.id === 'filterDetected') btn.classList.add('btn-outline-success');
+                else if (btn.id === 'filterUnknown') btn.classList.add('btn-outline-warning');
+            }
+        });
+        
+        this.currentFilter = filter;
+        this.applyFilters();
+    }
+    
+    setSort(sortType) {
+        this.currentSort = sortType;
+        this.applyFilters();
+        
+        // Update dropdown button text
+        const sortLabels = {
+            'bib-asc': 'Bib A-Z',
+            'bib-desc': 'Bib Z-A',
+            'count-desc': 'Most Photos',
+            'count-asc': 'Least Photos',
+            'confidence-desc': 'High Confidence',
+            'confidence-asc': 'Low Confidence'
+        };
+        
+        document.getElementById('sortDropdown').innerHTML = `
+            <i class="fas fa-sort me-1"></i>${sortLabels[sortType]}
+        `;
+    }
+    
+    applyFilters() {
+        if (!this.groupedPhotos || this.groupedPhotos.length === 0) {
+            this.filteredGroups = [];
+            this.updateResultsCount(0);
+            return;
+        }
+        
+        let filtered = [...this.groupedPhotos];
+        
+        // Apply search filter
+        if (this.searchTerm) {
+            filtered = filtered.filter(group => 
+                group.bib_number.toLowerCase().includes(this.searchTerm)
+            );
+        }
+        
+        // Apply category filter
+        if (this.currentFilter !== 'all') {
+            if (this.currentFilter === 'detected') {
+                filtered = filtered.filter(group => group.bib_number !== 'unknown');
+            } else if (this.currentFilter === 'unknown') {
+                filtered = filtered.filter(group => group.bib_number === 'unknown');
+            }
+        }
+        
+        // Apply confidence filter
+        if (this.confidenceFilter > 0) {
+            filtered = filtered.filter(group => {
+                if (group.bib_number === 'unknown') return false;
+                const avgConfidence = this.getGroupAverageConfidence(group);
+                return avgConfidence >= (this.confidenceFilter / 100);
+            });
+        }
+        
+        // Apply photo count filter
+        if (this.photoCountFilter > 1) {
+            filtered = filtered.filter(group => group.count >= this.photoCountFilter);
+        }
+        
+        // Apply sorting
+        filtered.sort((a, b) => {
+            switch (this.currentSort) {
+                case 'bib-asc':
+                    if (a.bib_number === 'unknown') return 1;
+                    if (b.bib_number === 'unknown') return -1;
+                    return a.bib_number.localeCompare(b.bib_number, undefined, { numeric: true });
+                case 'bib-desc':
+                    if (a.bib_number === 'unknown') return 1;
+                    if (b.bib_number === 'unknown') return -1;
+                    return b.bib_number.localeCompare(a.bib_number, undefined, { numeric: true });
+                case 'count-desc':
+                    return b.count - a.count;
+                case 'count-asc':
+                    return a.count - b.count;
+                case 'confidence-desc':
+                    const confA = this.getGroupAverageConfidence(a);
+                    const confB = this.getGroupAverageConfidence(b);
+                    return confB - confA;
+                case 'confidence-asc':
+                    const confA2 = this.getGroupAverageConfidence(a);
+                    const confB2 = this.getGroupAverageConfidence(b);
+                    return confA2 - confB2;
+                default:
+                    return 0;
+            }
+        });
+        
+        this.filteredGroups = filtered;
+        this.updateResultsCount(filtered.length);
+        this.displayFilteredPhotoGroups();
+    }
+    
+    getGroupAverageConfidence(group) {
+        const photosWithConfidence = group.photos.filter(photo => photo.detection_result);
+        if (photosWithConfidence.length === 0) return 0;
+        
+        const totalConfidence = photosWithConfidence.reduce((sum, photo) => 
+            sum + photo.detection_result.confidence, 0);
+        return totalConfidence / photosWithConfidence.length;
+    }
+    
+    updateResultsCount(count) {
+        const total = this.groupedPhotos.length;
+        const resultsCount = document.getElementById('resultsCount');
+        
+        if (count === total) {
+            resultsCount.textContent = `Showing all ${total} groups`;
+        } else {
+            resultsCount.textContent = `Showing ${count} of ${total} groups`;
+        }
+    }
+    
+    displayFilteredPhotoGroups() {
+        const photoGroupsDiv = document.getElementById('photo-groups');
+        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
+        
+        console.log('Displaying groups:', groupsToShow);
+        
+        if (groupsToShow.length === 0) {
+            photoGroupsDiv.innerHTML = `
+                <div class="col-12 text-center py-5">
+                    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No groups found</h5>
+                    <p class="text-muted">Try adjusting your search or filters</p>
+                </div>
+            `;
+            return;
+        }
+        
+        photoGroupsDiv.innerHTML = groupsToShow.map(group => `
+            <div class="col-lg-4 col-md-6 mb-4 fade-in-up">
+                <div class="card photo-group-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-user me-2"></i>
+                                ${group.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${group.bib_number}`}
+                            </h5>
+                            <span class="badge bg-secondary">${group.count} photo${group.count !== 1 ? 's' : ''}</span>
+                        </div>
+                        <p class="text-muted small mb-3">
+                            <i class="fas fa-mouse-pointer me-1"></i>
+                            Click photos to view full size
+                        </p>
+                        
+                        <div class="photo-grid">
+                            ${group.photos.slice(0, 4).map((photo, index) => `
+                                <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', '${group.bib_number}')">
+                                    <img src="${this.apiBase.replace('/api', '')}/uploads/${photo.filename}" 
+                                         alt="${photo.filename}" 
+                                         style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
+                                         onerror="console.error('Failed to load image:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="photo-placeholder" style="display: none;">
+                                        <i class="fas fa-image fa-2x"></i>
+                                    </div>
+                                    <div class="hover-overlay">
+                                        <i class="fas fa-expand-alt me-1"></i>
+                                        View
+                                    </div>
+                                    ${photo.detection_result ? `
+                                        <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
+                                            ${Math.round(photo.detection_result.confidence * 100)}%
+                                        </div>
+                                    ` : ''}
+                                    ${group.count > 4 && index === 3 ? `
+                                        <div class="more-photos-overlay">
+                                            <div class="more-photos-text">
+                                                <i class="fas fa-plus-circle mb-1"></i>
+                                                <div>+${group.count - 4} more</div>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div class="text-center mt-3">
+                            ${group.count > 4 ? `
+                                <button class="btn btn-primary btn-sm me-2" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
+                                    <i class="fas fa-expand-alt me-1"></i>
+                                    View All ${group.count} Photos
+                                </button>
+                            ` : group.count > 0 ? `
+                                <button class="btn btn-outline-primary btn-sm me-2" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
+                                    <i class="fas fa-eye me-1"></i>
+                                    View Photos
+                                </button>
+                            ` : ''}
+                            ${group.bib_number === 'unknown' ? `
+                                <button class="btn btn-warning btn-sm" onclick="photoProcessor.showManualLabelModal()">
+                                    <i class="fas fa-tag me-1"></i>
+                                    Label Photos
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
     }
 
     // Drag and Drop Handlers
@@ -252,7 +858,13 @@ class PhotoProcessor {
             this.updateProgress(job);
 
             if (job.status === 'completed') {
-                await this.fetchResults();
+                // Update progress to show completion
+                const progressText = document.getElementById('progress-text');
+                if (progressText) {
+                    progressText.textContent = 'Processing complete! Loading results...';
+                }
+                // Add a small delay to ensure backend results are ready
+                setTimeout(() => this.fetchResults(), 500);
             } else if (job.status === 'failed') {
                 this.showError('Processing failed. Please try again.');
             } else {
@@ -273,17 +885,43 @@ class PhotoProcessor {
         progressText.textContent = `Processing... ${job.completed_photos}/${job.total_photos} photos (${job.progress}%)`;
     }
 
-    async fetchResults() {
+    async fetchResults(retryCount = 0) {
         try {
             const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`);
-            if (!response.ok) throw new Error(`Results fetch failed: ${response.statusText}`);
+            if (!response.ok) {
+                // If results aren't ready yet and we haven't retried too many times, try again
+                if (response.status === 400 && retryCount < 3) {
+                    console.log(`Results not ready yet, retrying in 1 second... (attempt ${retryCount + 1})`);
+                    // Update progress text to show retry
+                    const progressText = document.getElementById('progress-text');
+                    if (progressText) {
+                        progressText.textContent = `Finalizing results... (attempt ${retryCount + 1})`;
+                    }
+                    setTimeout(() => this.fetchResults(retryCount + 1), 1000);
+                    return;
+                }
+                throw new Error(`Results fetch failed: ${response.statusText}`);
+            }
 
             this.groupedPhotos = await response.json();
+            console.log('Grouped photos received:', this.groupedPhotos);
             this.showResultsSection();
 
         } catch (error) {
             console.error('Results fetch error:', error);
-            this.showError('Failed to fetch results. Please try again.');
+            
+            // If this is the first attempt, try once more after a delay
+            if (retryCount === 0) {
+                console.log('Retrying results fetch after 2 seconds...');
+                // Update progress text to show retry
+                const progressText = document.getElementById('progress-text');
+                if (progressText) {
+                    progressText.textContent = 'Retrying to fetch results...';
+                }
+                setTimeout(() => this.fetchResults(1), 2000);
+            } else {
+                this.showError('Failed to fetch results. Please try again.');
+            }
         }
     }
 
@@ -308,11 +946,11 @@ class PhotoProcessor {
         document.getElementById('results-section').classList.add('d-none');
     }
 
-    // Results Display
+    // Results Display - Simplified
     displayResults() {
         this.updateStatsCards();
         this.displayPhotoGroups();
-        this.displayExportControls();
+        // No complex export controls needed - just simple download all button
     }
 
     updateStatsCards() {
@@ -328,67 +966,29 @@ class PhotoProcessor {
     }
 
     displayPhotoGroups() {
-        const photoGroupsDiv = document.getElementById('photo-groups');
-        
-        photoGroupsDiv.innerHTML = this.groupedPhotos.map(group => `
-            <div class="col-lg-4 col-md-6 mb-4">
-                <div class="card photo-group-card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="card-title mb-0">
-                                <i class="fas fa-user me-2"></i>
-                                ${group.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${group.bib_number}`}
-                            </h5>
-                            <span class="badge bg-secondary">${group.count} photos</span>
-                        </div>
-                        
-                        <div class="photo-grid">
-                            ${group.photos.slice(0, 4).map(photo => `
-                                <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')">
-                                    <img src="${this.apiBase}/photos/${photo.id}" 
-                                         alt="${photo.filename}" 
-                                         style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
-                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                    <div class="photo-placeholder" style="display: none;">
-                                        <i class="fas fa-image fa-2x"></i>
-                                    </div>
-                                    ${photo.detection_result ? `
-                                        <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
-                                            ${Math.round(photo.detection_result.confidence * 100)}%
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                        
-                        ${group.count > 4 ? `
-                            <div class="text-center mt-2">
-                                <button class="btn btn-outline-primary btn-sm" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
-                                    <i class="fas fa-eye me-1"></i>
-                                    View All ${group.count} Photos
-                                </button>
-                            </div>
-                        ` : ''}
-                    </div>
-                </div>
-            </div>
-        `).join('');
+        // Initialize filters and show all groups
+        this.applyFilters();
     }
 
     displayExportControls() {
         const exportGroupsDiv = document.getElementById('export-groups');
+        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
         
-        exportGroupsDiv.innerHTML = this.groupedPhotos.map(group => `
+        exportGroupsDiv.innerHTML = groupsToShow.map(group => `
             <div class="col-md-6 mb-2">
-                <label class="export-checkbox">
-                    <input type="checkbox" value="${group.bib_number}" onchange="photoProcessor.toggleGroupSelection('${group.bib_number}')">
+                <label class="export-checkbox ${this.selectedGroups.includes(group.bib_number) ? 'selected' : ''}">
+                    <input type="checkbox" value="${group.bib_number}" ${this.selectedGroups.includes(group.bib_number) ? 'checked' : ''} onchange="photoProcessor.toggleGroupSelection('${group.bib_number}')">
                     <div class="export-info">
                         <h6>${group.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${group.bib_number}`}</h6>
-                        <small>${group.count} photos</small>
+                        <small>${group.count} photos • ${group.bib_number !== 'unknown' ? Math.round(this.getGroupAverageConfidence(group) * 100) + '% confidence' : 'No detection'}</small>
                     </div>
                 </label>
             </div>
         `).join('');
+        
+        // Update selection UI after rendering
+        this.updateSelectionUI();
+        this.updateExportPreview();
     }
 
     getConfidenceClass(confidence) {
@@ -406,7 +1006,8 @@ class PhotoProcessor {
             this.selectedGroups.push(bibNumber);
         }
         
-        document.getElementById('export-btn').disabled = this.selectedGroups.length === 0;
+        this.updateSelectionUI();
+        this.updateExportPreview();
     }
 
     async exportPhotos() {
@@ -417,34 +1018,147 @@ class PhotoProcessor {
             .flatMap(group => group.photos);
         
         const photoIds = selectedPhotos.map(photo => photo.id);
+        
+        // Get export options
+        const exportFormat = document.getElementById('exportFormat').value;
+        const filenamePattern = document.getElementById('filenamePattern').value;
 
         try {
+            // Show progress
+            this.showExportProgress('Preparing export...');
+            
             document.getElementById('export-btn').disabled = true;
             document.getElementById('export-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Export...';
+
+            const exportData = {
+                photo_ids: photoIds,
+                export_options: {
+                    format: exportFormat,
+                    filename_pattern: filenamePattern,
+                    group_data: this.groupedPhotos.filter(group => 
+                        this.selectedGroups.includes(group.bib_number)
+                    )
+                }
+            };
 
             const response = await fetch(`${this.apiBase}/download/export`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ photo_ids: photoIds })
+                body: JSON.stringify(exportData)
             });
 
             if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
 
             const result = await response.json();
             
-            // Download the file
-            const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
-            window.open(downloadUrl, '_blank');
+            // Update progress
+            this.updateExportProgress(75, 'Generating ZIP file...');
+            
+            // Simulate additional progress steps
+            setTimeout(() => {
+                this.updateExportProgress(100, 'Download ready!');
+                
+                // Download the file
+                const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
+                window.open(downloadUrl, '_blank');
+                
+                this.showSuccess(`Successfully exported ${photoIds.length} photos from ${this.selectedGroups.length} groups!`);
+                
+                // Hide progress after a delay
+                setTimeout(() => {
+                    this.hideExportProgress();
+                }, 2000);
+            }, 1000);
 
         } catch (error) {
             console.error('Export error:', error);
             this.showError('Export failed. Please try again.');
+            this.hideExportProgress();
         } finally {
             document.getElementById('export-btn').disabled = false;
-            document.getElementById('export-btn').innerHTML = '<i class="fas fa-file-archive me-2"></i>Export Selected';
+            document.getElementById('export-btn').innerHTML = `<i class="fas fa-file-archive me-2"></i>Export Selected (<span id="exportBtnCount">${this.selectedGroups.length}</span>)`;
         }
+    }
+    
+    async downloadAllPhotos() {
+        // Get all photos from all groups
+        const allPhotos = this.groupedPhotos.flatMap(group => group.photos);
+        const photoIds = allPhotos.map(photo => photo.id);
+        
+        if (photoIds.length === 0) {
+            this.showError('No photos to download.');
+            return;
+        }
+        
+        try {
+            // Show progress
+            this.showExportProgress('Preparing download...');
+            
+            const downloadBtn = document.getElementById('download-all-btn');
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating ZIP...';
+            
+            const exportData = {
+                photo_ids: photoIds,
+                format: 'zip'
+            };
+            
+            const response = await fetch(`${this.apiBase}/download/export`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(exportData)
+            });
+            
+            if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
+            const result = await response.json();
+            
+            // Show completion and download
+            setTimeout(() => {
+                this.updateExportProgress(100, 'Download ready!');
+                
+                // Download the file
+                const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
+                window.open(downloadUrl, '_blank');
+                
+                this.showSuccess(`Successfully downloaded ${photoIds.length} photos organized by bib number!`);
+                
+                // Hide progress after a delay
+                setTimeout(() => {
+                    this.hideExportProgress();
+                }, 2000);
+                
+            }, 1000);
+        } catch (error) {
+            console.error('Download error:', error);
+            this.showError('Download failed. Please try again.');
+            this.hideExportProgress();
+        } finally {
+            const downloadBtn = document.getElementById('download-all-btn');
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = '<i class="fas fa-download me-2"></i>Download All Photos as ZIP';
+        }
+    }
+
+    showExportProgress(message) {
+        const progress = document.getElementById('exportProgress');
+        const progressBar = progress.querySelector('.progress-bar');
+        progress.style.display = 'block';
+        progressBar.style.width = '25%';
+        progressBar.innerHTML = `<small>${message}</small>`;
+    }
+    
+    updateExportProgress(percent, message) {
+        const progressBar = document.querySelector('#exportProgress .progress-bar');
+        progressBar.style.width = `${percent}%`;
+        progressBar.innerHTML = `<small>${message}</small>`;
+    }
+    
+    hideExportProgress() {
+        document.getElementById('exportProgress').style.display = 'none';
     }
 
     // Utility Functions
@@ -714,6 +1428,576 @@ class PhotoProcessor {
                 this.groupedPhotos.push(newGroup);
             }
         });
+    }
+
+    // Enhanced Photo Modal Functions
+    showPhotoModal(photoId, filename, groupBibNumber = null) {
+        // Find the group and photo
+        let currentGroup = null;
+        let currentPhotoIndex = 0;
+        
+        if (groupBibNumber) {
+            currentGroup = this.groupedPhotos.find(group => group.bib_number === groupBibNumber);
+        } else {
+            // Find which group contains this photo
+            for (const group of this.groupedPhotos) {
+                const photoIndex = group.photos.findIndex(photo => photo.id === photoId);
+                if (photoIndex !== -1) {
+                    currentGroup = group;
+                    currentPhotoIndex = photoIndex;
+                    break;
+                }
+            }
+        }
+        
+        if (!currentGroup) return;
+        
+        this.currentLightboxGroup = currentGroup;
+        this.currentPhotoIndex = currentPhotoIndex;
+        
+        this.initializeLightbox();
+        this.showPhotoInLightbox(this.currentPhotoIndex);
+        
+        const modal = new bootstrap.Modal(document.getElementById('photoModal'));
+        modal.show();
+        
+        // Initialize keyboard navigation
+        this.initializeLightboxKeyboard();
+    }
+    
+    initializeLightbox() {
+        const modal = document.getElementById('photoModal');
+        
+        // Navigation buttons
+        document.getElementById('prevPhotoBtn').onclick = () => this.previousPhoto();
+        document.getElementById('nextPhotoBtn').onclick = () => this.nextPhoto();
+        
+        // Zoom controls
+        document.getElementById('zoomInBtn').onclick = () => this.zoomIn();
+        document.getElementById('zoomOutBtn').onclick = () => this.zoomOut();
+        document.getElementById('zoomResetBtn').onclick = () => this.resetZoom();
+        
+        // Fullscreen toggle
+        document.getElementById('fullscreenBtn').onclick = () => this.toggleFullscreen();
+        
+        // Download button
+        document.getElementById('downloadPhotoBtn').onclick = () => this.downloadCurrentPhoto();
+        
+        // Initialize thumbnails
+        this.createThumbnailStrip();
+        
+        // Initialize zoom functionality
+        this.initializeZoom();
+        
+        // Reset zoom level
+        this.zoomLevel = 1;
+        this.panX = 0;
+        this.panY = 0;
+    }
+    
+    showPhotoInLightbox(index) {
+        if (!this.currentLightboxGroup || index < 0 || index >= this.currentLightboxGroup.photos.length) {
+            return;
+        }
+        
+        this.currentPhotoIndex = index;
+        const photo = this.currentLightboxGroup.photos[index];
+        
+        // Show loading spinner
+        document.getElementById('photoLoader').style.display = 'block';
+        
+        // Update image
+        const modalImage = document.getElementById('modalPhotoImage');
+        modalImage.onload = () => {
+            document.getElementById('photoLoader').style.display = 'none';
+        };
+        modalImage.src = `${this.apiBase.replace('/api', '')}/uploads/${photo.filename}`;
+        modalImage.alt = photo.filename;
+        
+        // Update metadata
+        document.getElementById('photoModalLabel').textContent = `${this.currentLightboxGroup.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${this.currentLightboxGroup.bib_number}`}`;
+        document.getElementById('photoPosition').textContent = `${index + 1} of ${this.currentLightboxGroup.photos.length}`;
+        document.getElementById('photoFilename').textContent = photo.filename;
+        document.getElementById('photoBibNumber').textContent = this.currentLightboxGroup.bib_number === 'unknown' ? 'Unknown' : this.currentLightboxGroup.bib_number;
+        
+        // Update confidence
+        if (photo.detection_result) {
+            const confidence = Math.round(photo.detection_result.confidence * 100);
+            document.getElementById('photoConfidence').textContent = `${confidence}%`;
+            document.getElementById('photoConfidenceDetail').textContent = `${confidence}%`;
+            
+            // Update confidence badge color
+            const badge = document.getElementById('photoConfidence');
+            badge.className = 'badge ' + this.getConfidenceBadgeClass(photo.detection_result.confidence);
+        } else {
+            document.getElementById('photoConfidence').textContent = 'N/A';
+            document.getElementById('photoConfidenceDetail').textContent = 'Not detected';
+            document.getElementById('photoConfidence').className = 'badge bg-secondary';
+        }
+        
+        // Update navigation buttons
+        document.getElementById('prevPhotoBtn').disabled = index === 0;
+        document.getElementById('nextPhotoBtn').disabled = index === this.currentLightboxGroup.photos.length - 1;
+        
+        // Update thumbnail selection
+        this.updateThumbnailSelection();
+        
+        // Reset zoom
+        this.resetZoom();
+    }
+    
+    createThumbnailStrip() {
+        const container = document.getElementById('thumbnailContainer');
+        container.innerHTML = '';
+        
+        this.currentLightboxGroup.photos.forEach((photo, index) => {
+            const thumbnailDiv = document.createElement('div');
+            thumbnailDiv.className = 'thumbnail-item';
+            thumbnailDiv.onclick = () => this.showPhotoInLightbox(index);
+            
+            const img = document.createElement('img');
+            img.src = `http://localhost:8000/uploads/${photo.filename}`;
+            img.alt = photo.filename;
+            
+            thumbnailDiv.appendChild(img);
+            container.appendChild(thumbnailDiv);
+        });
+    }
+    
+    updateThumbnailSelection() {
+        const thumbnails = document.querySelectorAll('.thumbnail-item');
+        thumbnails.forEach((thumb, index) => {
+            if (index === this.currentPhotoIndex) {
+                thumb.classList.add('active');
+            } else {
+                thumb.classList.remove('active');
+            }
+        });
+    }
+    
+    previousPhoto() {
+        if (this.currentPhotoIndex > 0) {
+            this.showPhotoInLightbox(this.currentPhotoIndex - 1);
+        }
+    }
+    
+    nextPhoto() {
+        if (this.currentPhotoIndex < this.currentLightboxGroup.photos.length - 1) {
+            this.showPhotoInLightbox(this.currentPhotoIndex + 1);
+        }
+    }
+    
+    initializeZoom() {
+        const modalImage = document.getElementById('modalPhotoImage');
+        const photoContainer = document.getElementById('photoContainer');
+        
+        // Mouse wheel zoom
+        photoContainer.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            this.adjustZoom(delta);
+        });
+        
+        // Touch zoom (pinch)
+        let initialDistance = 0;
+        let initialZoom = 1;
+        
+        photoContainer.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                initialDistance = this.getTouchDistance(e.touches);
+                initialZoom = this.zoomLevel;
+            }
+        });
+        
+        photoContainer.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const currentDistance = this.getTouchDistance(e.touches);
+                const scale = currentDistance / initialDistance;
+                this.zoomLevel = Math.max(0.5, Math.min(5, initialZoom * scale));
+                this.applyZoom();
+            }
+        });
+        
+        // Drag to pan when zoomed
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        modalImage.addEventListener('mousedown', (e) => {
+            if (this.zoomLevel > 1) {
+                e.preventDefault();
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                modalImage.classList.add('dragging');
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                e.preventDefault();
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+                this.panX += deltaX;
+                this.panY += deltaY;
+                this.applyZoom();
+                lastX = e.clientX;
+                lastY = e.clientY;
+            }
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                modalImage.classList.remove('dragging');
+            }
+        });
+    }
+    
+    getTouchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    adjustZoom(delta) {
+        this.zoomLevel = Math.max(0.5, Math.min(5, this.zoomLevel + delta));
+        this.applyZoom();
+    }
+    
+    zoomIn() {
+        this.adjustZoom(0.2);
+    }
+    
+    zoomOut() {
+        this.adjustZoom(-0.2);
+    }
+    
+    resetZoom() {
+        this.zoomLevel = 1;
+        this.panX = 0;
+        this.panY = 0;
+        this.applyZoom();
+    }
+    
+    applyZoom() {
+        const modalImage = document.getElementById('modalPhotoImage');
+        modalImage.style.transform = `scale(${this.zoomLevel}) translate(${this.panX / this.zoomLevel}px, ${this.panY / this.zoomLevel}px)`;
+        
+        if (this.zoomLevel > 1) {
+            modalImage.classList.add('zoomed');
+        } else {
+            modalImage.classList.remove('zoomed');
+        }
+    }
+    
+    toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.getElementById('photoModal').requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+    
+    downloadCurrentPhoto() {
+        if (this.currentLightboxGroup && this.currentPhotoIndex >= 0) {
+            const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
+            window.open(`http://localhost:8000/uploads/${photo.filename}`, '_blank');
+        }
+    }
+    
+    initializeLightboxKeyboard() {
+        document.addEventListener('keydown', this.handleLightboxKeyboard.bind(this));
+    }
+    
+    handleLightboxKeyboard(e) {
+        const modal = document.getElementById('photoModal');
+        if (!modal.classList.contains('show')) return;
+        
+        switch(e.key) {
+            case 'ArrowLeft':
+                e.preventDefault();
+                this.previousPhoto();
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                this.nextPhoto();
+                break;
+            case 'Escape':
+                bootstrap.Modal.getInstance(modal).hide();
+                break;
+            case '+':
+            case '=':
+                e.preventDefault();
+                this.zoomIn();
+                break;
+            case '-':
+                e.preventDefault();
+                this.zoomOut();
+                break;
+            case '0':
+                e.preventDefault();
+                this.resetZoom();
+                break;
+            case 'f':
+            case 'F11':
+                e.preventDefault();
+                this.toggleFullscreen();
+                break;
+        }
+    }
+    
+    getConfidenceBadgeClass(confidence) {
+        if (confidence >= 0.8) return 'bg-success';
+        if (confidence >= 0.6) return 'bg-warning';
+        return 'bg-danger';
+    }
+
+    showAllPhotos(bibNumber) {
+        const group = this.groupedPhotos.find(g => g.bib_number === bibNumber);
+        if (!group) return;
+
+        const galleryGrid = document.getElementById('galleryGrid');
+        const modalLabel = document.getElementById('galleryModalLabel');
+        const downloadBtn = document.getElementById('downloadGroupBtn');
+        
+        modalLabel.textContent = `All Photos - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
+        
+        galleryGrid.innerHTML = group.photos.map(photo => `
+            <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')">
+                <img src="http://localhost:8000/uploads/${photo.filename}" 
+                     alt="${photo.filename}" 
+                     style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="photo-placeholder" style="display: none;">
+                    <i class="fas fa-image fa-2x"></i>
+                </div>
+                ${photo.detection_result ? `
+                    <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
+                        ${Math.round(photo.detection_result.confidence * 100)}%
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+        
+        downloadBtn.onclick = () => {
+            // Export this specific group
+            this.selectedGroups = [bibNumber];
+            this.exportPhotos();
+        };
+        
+        const modal = new bootstrap.Modal(document.getElementById('galleryModal'));
+        modal.show();
+    }
+
+    showManualLabelModal() {
+        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
+        if (!unknownGroup || unknownGroup.photos.length === 0) {
+            this.showError('No unknown photos found.');
+            return;
+        }
+
+        const container = document.getElementById('unknown-photos-container');
+        container.innerHTML = unknownGroup.photos.map(photo => `
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <img src="http://localhost:8000/uploads/${photo.filename}" 
+                         class="card-img-top" 
+                         style="height: 150px; object-fit: cover;"
+                         alt="${photo.filename}">
+                    <div class="card-body p-2">
+                        <small class="text-muted d-block mb-2">${photo.filename}</small>
+                        <div class="input-group input-group-sm">
+                            <input type="text" 
+                                   class="form-control manual-label-input" 
+                                   data-photo-id="${photo.id}"
+                                   placeholder="Bib #" 
+                                   pattern="[0-9]+"
+                                   title="Enter bib number (numbers only)">
+                            <button class="btn btn-outline-success btn-sm" 
+                                    type="button" 
+                                    onclick="photoProcessor.applyLabelToPhoto('${photo.id}', this)">
+                                <i class="fas fa-check"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        // Add existing bib numbers as datalist for autocomplete
+        const existingBibs = [...new Set(this.groupedPhotos
+            .filter(group => group.bib_number !== 'unknown')
+            .map(group => group.bib_number)
+            .sort((a, b) => parseInt(a) - parseInt(b))
+        )];
+
+        if (existingBibs.length > 0) {
+            const datalist = document.createElement('datalist');
+            datalist.id = 'existing-bibs';
+            datalist.innerHTML = existingBibs.map(bib => `<option value="${bib}"></option>`).join('');
+            document.body.appendChild(datalist);
+
+            // Add datalist to all inputs
+            container.querySelectorAll('.manual-label-input').forEach(input => {
+                input.setAttribute('list', 'existing-bibs');
+            });
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('manualLabelModal'));
+        modal.show();
+    }
+
+    async applyLabelToPhoto(photoId, buttonElement) {
+        const input = buttonElement.parentElement.querySelector('.manual-label-input');
+        const bibNumber = input.value.trim();
+
+        if (!bibNumber) {
+            this.showError('Please enter a bib number.');
+            input.focus();
+            return;
+        }
+
+        if (!/^\d+$/.test(bibNumber)) {
+            this.showError('Bib number must contain only numbers.');
+            input.focus();
+            return;
+        }
+
+        try {
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            const response = await fetch(`${this.apiBase}/process/manual-label`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    photo_id: photoId,
+                    bib_number: bibNumber
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to label photo');
+            }
+
+            // Success - remove the photo from the unknown group and refresh display
+            input.parentElement.parentElement.parentElement.remove();
+            
+            // Refresh the grouped photos from backend
+            await this.refreshGroupedPhotos();
+            
+            this.showSuccess(`Photo labeled as bib #${bibNumber}!`);
+
+        } catch (error) {
+            console.error('Manual labeling error:', error);
+            this.showError(`Failed to label photo: ${error.message}`);
+        } finally {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="fas fa-check"></i>';
+        }
+    }
+
+    async refreshGroupedPhotos() {
+        if (!this.currentJobId) return;
+
+        try {
+            const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`);
+            if (response.ok) {
+                this.groupedPhotos = await response.json();
+                this.displayResults();
+            }
+        } catch (error) {
+            console.error('Failed to refresh grouped photos:', error);
+        }
+    }
+
+    showFeedbackModal() {
+        // Reset form
+        document.getElementById('feedbackForm').reset();
+        document.getElementById('charCount').textContent = '0';
+        
+        // Auto-fill system information
+        const systemInfo = this.getSystemInfo();
+        document.getElementById('systemInfo').textContent = systemInfo;
+        
+        // Set up character counter
+        const description = document.getElementById('feedbackDescription');
+        const charCount = document.getElementById('charCount');
+        
+        description.addEventListener('input', function() {
+            charCount.textContent = this.value.length;
+        });
+        
+        // Set up form submission
+        document.getElementById('submitFeedbackBtn').onclick = this.submitFeedback.bind(this);
+        
+        const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+        modal.show();
+    }
+
+    getSystemInfo() {
+        const nav = navigator;
+        const screen = window.screen;
+        
+        return `Browser: ${nav.userAgent} | Screen: ${screen.width}x${screen.height} | Language: ${nav.language} | Platform: ${nav.platform}`;
+    }
+
+    async submitFeedback() {
+        const form = document.getElementById('feedbackForm');
+        const submitBtn = document.getElementById('submitFeedbackBtn');
+        
+        // Validate form
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+        
+        const feedbackData = {
+            type: document.getElementById('feedbackType').value,
+            title: document.getElementById('feedbackTitle').value.trim(),
+            description: document.getElementById('feedbackDescription').value.trim(),
+            email: document.getElementById('feedbackEmail').value.trim() || null,
+            system_info: this.getSystemInfo()
+        };
+        
+        try {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+            
+            const response = await fetch(`${this.apiBase}/feedback/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(feedbackData)
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to submit feedback');
+            }
+            
+            const result = await response.json();
+            
+            // Close modal and show success
+            const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
+            modal.hide();
+            
+            this.showSuccess('Thank you for your feedback! We appreciate your input and will review it soon.');
+            
+        } catch (error) {
+            console.error('Feedback submission error:', error);
+            this.showError(`Failed to submit feedback: ${error.message}`);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Feedback';
+        }
     }
 }
 

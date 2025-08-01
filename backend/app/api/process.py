@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 import uuid
-from app.models.schemas import ProcessingJob, ProcessingStatus, GroupedPhotos
+from app.models.schemas import ProcessingJob, ProcessingStatus, GroupedPhotos, ManualLabelRequest
 from app.services.detector import NumberDetector
 import asyncio
 
@@ -39,6 +39,8 @@ async def process_photos_async(job_id: str):
             job.completed_photos = i + 1
             job.progress = int((job.completed_photos / job.total_photos) * 100)
         
+        # Ensure all detection results are fully processed
+        await asyncio.sleep(0.1)  # Small delay to ensure detector results are ready
         job.status = ProcessingStatus.COMPLETED
     except Exception as e:
         job.status = ProcessingStatus.FAILED
@@ -61,3 +63,26 @@ async def get_processing_results(job_id: str):
         raise HTTPException(status_code=400, detail="Processing not completed")
     
     return await detector.get_grouped_results(job.photo_ids)
+
+@router.put("/manual-label")
+async def manual_label_photo(request: ManualLabelRequest):
+    """Manually assign a bib number to a photo"""
+    if not request.photo_id or not request.bib_number:
+        raise HTTPException(status_code=400, detail="Photo ID and bib number are required")
+    
+    # Validate bib number format
+    if not detector._is_valid_bib_number(request.bib_number):
+        raise HTTPException(status_code=400, detail="Invalid bib number format")
+    
+    # Check if photo exists
+    photo_path = detector._find_photo_path(request.photo_id)
+    if not photo_path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    # Update the detection result with manual label
+    success = detector.update_manual_label(request.photo_id, request.bib_number)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update photo label")
+    
+    return {"message": f"Photo {request.photo_id} successfully labeled as bib #{request.bib_number}", "photo_id": request.photo_id, "bib_number": request.bib_number}
