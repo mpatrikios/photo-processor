@@ -2,14 +2,22 @@
 /* Enhanced Styling for Race Photo Processor */
 
 :root {
-    --primary-color: #3b82f6;
-    --primary-dark: #2563eb;
-    --secondary-color: #64748b;
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
+    /* RaceSort Brand Colors */
+    --racesort-black: #1a1a1a;
+    --racesort-red: #dc3545;
+    --racesort-red-hover: #bb2d3b;
+    --racesort-light-gray: #f8f9fa;
+    --racesort-dark-gray: #6c757d;
+    
+    /* Updated color variables to match brand */
+    --primary-color: var(--racesort-red);
+    --primary-dark: var(--racesort-red-hover);
+    --secondary-color: var(--racesort-dark-gray);
+    --success-color: #198754;
+    --warning-color: #ffc107;
+    --danger-color: var(--racesort-red);
     --light-color: #ffffff;
-    --dark-color: #1f2937;
+    --dark-color: var(--racesort-black);
     --gray-50: #f8fafc;
     --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;
@@ -476,7 +484,7 @@ header .lead {
 .progress-bar {
     background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
     border-radius: 1rem;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
 }
@@ -766,6 +774,188 @@ input[type="checkbox"]:focus {
     .upload-dropzone {
         border-width: 3px !important;
     }
+}
+
+/* RaceSort Landing Page Styles */
+.navbar-brand {
+    font-size: 1.75rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.025em;
+}
+
+.hero-section {
+    background: linear-gradient(135deg, #ffffff 0%, var(--racesort-light-gray) 100%);
+    padding-top: 80px; /* Account for fixed navbar */
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(45deg, transparent 30%, rgba(220, 53, 69, 0.05) 100%);
+    pointer-events: none;
+}
+
+.hero-demo-card {
+    max-width: 400px;
+    margin: 0 auto;
+    transition: transform 0.3s ease;
+    border: 1px solid var(--gray-200);
+}
+
+.hero-demo-card:hover {
+    transform: translateY(-5px);
+}
+
+.feature-icon i {
+    transition: transform 0.3s ease;
+}
+
+.card:hover .feature-icon i {
+    transform: scale(1.1);
+}
+
+.step-number .badge {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.step-icon i {
+    transition: transform 0.3s ease;
+}
+
+.text-center:hover .step-icon i {
+    transform: translateY(-5px);
+}
+
+/* RaceSort Brand Text Styling */
+.racesort-brand .text-dark {
+    color: var(--racesort-black) !important;
+    font-weight: 800;
+}
+
+.racesort-brand .text-danger {
+    color: var(--racesort-red) !important;
+    font-weight: 800;
+}
+
+/* Button Overrides for RaceSort */
+.btn-danger {
+    background: linear-gradient(135deg, var(--racesort-red), var(--racesort-red-hover));
+    border: none;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, var(--racesort-red-hover), #a02622);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+}
+
+.btn-outline-dark {
+    border: 2px solid var(--racesort-black);
+    color: var(--racesort-black);
+    font-weight: 600;
+    letter-spacing: 0.025em;
+}
+
+.btn-outline-dark:hover {
+    background: var(--racesort-black);
+    border-color: var(--racesort-black);
+    color: white;
+}
+
+/* Navigation Styles */
+.navbar-dark {
+    background: var(--racesort-black) !important;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover {
+    color: var(--racesort-red) !important;
+}
+
+/* Modal Styling for RaceSort */
+.modal-header .modal-title {
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.modal-header .modal-title .text-dark {
+    color: var(--racesort-black) !important;
+}
+
+.modal-header .modal-title .text-danger {
+    color: var(--racesort-red) !important;
+}
+
+/* Form Styling */
+.form-control:focus {
+    border-color: var(--racesort-red);
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.form-check-input:checked {
+    background-color: var(--racesort-red);
+    border-color: var(--racesort-red);
+}
+
+/* Authentication Form Enhancements */
+#signInModal .modal-content,
+#createAccountModal .modal-content {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+#signInModal .modal-header,
+#createAccountModal .modal-header {
+    border-bottom: 1px solid var(--gray-200);
+    background: linear-gradient(135deg, var(--racesort-light-gray) 0%, #ffffff 100%);
+    border-radius: 1rem 1rem 0 0;
+}
+
+/* Landing Page Section Spacing */
+section {
+    scroll-margin-top: 80px;
+}
+
+/* Smooth Scrolling */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Hero Text Styling */
+.display-2 {
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+}
+
+.lead {
+    font-weight: 400;
+    color: var(--racesort-dark-gray);
+}
+
+/* CTA Section Styling */
+.bg-dark {
+    background: linear-gradient(135deg, var(--racesort-black) 0%, #2d3748 100%) !important;
 }
 
 /* Animation for appearing elements */

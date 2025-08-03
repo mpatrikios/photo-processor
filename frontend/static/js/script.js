@@ -1,4 +1,215 @@
-// Race Photo Processor - Main JavaScript
+// RaceSort - Main JavaScript
+
+// Global functions for modal and authentication handling
+function showSignInModal() {
+    const modal = new bootstrap.Modal(document.getElementById('signInModal'));
+    modal.show();
+    
+    // Attach event listener when modal is shown
+    setTimeout(() => {
+        const signInForm = document.getElementById('signInForm');
+        if (signInForm) {
+            // Remove any existing listeners
+            signInForm.removeEventListener('submit', handleSignIn);
+            // Add new listener
+            signInForm.addEventListener('submit', handleSignIn);
+            console.log('Sign In form listener attached in modal'); // Debug log
+        }
+    }, 100);
+}
+
+function showCreateAccountModal() {
+    const modal = new bootstrap.Modal(document.getElementById('createAccountModal'));
+    modal.show();
+    
+    // Attach event listener when modal is shown
+    setTimeout(() => {
+        const createAccountForm = document.getElementById('createAccountForm');
+        if (createAccountForm) {
+            // Remove any existing listeners
+            createAccountForm.removeEventListener('submit', handleCreateAccount);
+            // Add new listener
+            createAccountForm.addEventListener('submit', handleCreateAccount);
+            console.log('Create Account form listener attached in modal'); // Debug log
+        }
+    }, 100);
+}
+
+function switchToCreateAccount() {
+    // Hide sign in modal and show create account modal
+    const signInModal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
+    if (signInModal) signInModal.hide();
+    
+    setTimeout(() => {
+        showCreateAccountModal();
+    }, 300);
+}
+
+function switchToSignIn() {
+    // Hide create account modal and show sign in modal  
+    const createAccountModal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
+    if (createAccountModal) createAccountModal.hide();
+    
+    setTimeout(() => {
+        showSignInModal();
+    }, 300);
+}
+
+function showLandingPage() {
+    document.getElementById('landing-page').classList.remove('d-none');
+    document.getElementById('app-section').classList.add('d-none');
+}
+
+function showAppSection() {
+    document.getElementById('landing-page').classList.add('d-none');
+    document.getElementById('app-section').classList.remove('d-none');
+}
+
+function logout() {
+    // Clear auth token and show landing page
+    localStorage.removeItem('auth_token');
+    showLandingPage();
+    
+    // Reset any app state
+    if (window.photoProcessor) {
+        window.photoProcessor.isAuthenticated = false;
+        window.photoProcessor.authToken = null;
+    }
+}
+
+// Handle authentication form submissions
+function handleSignIn(event) {
+    console.log('Sign In form submitted'); // Debug log
+    event.preventDefault();
+    const form = event.target;
+    
+    const emailElement = document.getElementById('signInEmail');
+    const passwordElement = document.getElementById('signInPassword');
+    
+    console.log('Email element:', emailElement); // Debug log
+    console.log('Password element:', passwordElement); // Debug log
+    
+    if (!emailElement || !passwordElement) {
+        console.error('Form elements not found!');
+        showNotification('Form error - please try again', 'error');
+        return;
+    }
+    
+    const email = emailElement.value;
+    const password = passwordElement.value;
+    
+    console.log('Email:', email, 'Password:', password); // Debug log
+    
+    // Basic validation
+    if (!email || !password) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
+    
+    // Simulate authentication (replace with actual API call)
+    setTimeout(() => {
+        // Store auth token
+        localStorage.setItem('auth_token', 'demo-token-' + Date.now());
+        
+        // Hide modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
+        modal.hide();
+        
+        // Show app section
+        showAppSection();
+        
+        showNotification('Welcome to RaceSort!', 'success');
+        
+        // Restore button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }, 1500);
+}
+
+function handleCreateAccount(event) {
+    event.preventDefault();
+    const form = event.target;
+    const name = document.getElementById('createName').value;
+    const email = document.getElementById('createEmail').value;
+    const password = document.getElementById('createPassword').value;
+    
+    // Validation
+    if (!name || !email || !password) {
+        showNotification('Please fill in all fields', 'error');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showNotification('Password must be at least 6 characters', 'error');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Account...';
+    
+    // Simulate account creation (replace with actual API call)
+    setTimeout(() => {
+        // Store auth token
+        localStorage.setItem('auth_token', 'demo-token-' + Date.now());
+        
+        // Hide modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
+        modal.hide();
+        
+        // Show app section
+        showAppSection();
+        
+        showNotification('Account created successfully! Welcome to RaceSort!', 'success');
+        
+        // Restore button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }, 1500);
+}
+
+function showNotification(message, type = 'info') {
+    const alertClass = type === 'error' ? 'alert-danger' : type === 'success' ? 'alert-success' : 'alert-info';
+    const iconClass = type === 'error' ? 'fa-exclamation-triangle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+    
+    const notification = document.createElement('div');
+    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        <i class="fas ${iconClass} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 4000);
+}
+
+// Check authentication status on page load
+function checkAuthOnLoad() {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+        // User is authenticated, show app section
+        showAppSection();
+    } else {
+        // User is not authenticated, show landing page
+        showLandingPage();
+    }
+}
 
 class PhotoProcessor {
     constructor() {
@@ -19,7 +230,13 @@ class PhotoProcessor {
         
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
-        this.checkAuthStatus(); // Check auth status after initialization
+        
+        // Check authentication status on initialization
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            this.isAuthenticated = true;
+            this.authToken = token;
+        }
     }
 
     // Authentication Methods
@@ -868,12 +1085,12 @@ class PhotoProcessor {
             } else if (job.status === 'failed') {
                 this.showError('Processing failed. Please try again.');
             } else {
-                setTimeout(() => this.pollProcessingStatus(), 2000);
+                setTimeout(() => this.pollProcessingStatus(), 500);
             }
 
         } catch (error) {
             console.error('Status check error:', error);
-            setTimeout(() => this.pollProcessingStatus(), 2000);
+            setTimeout(() => this.pollProcessingStatus(), 1000);
         }
     }
 
@@ -881,8 +1098,24 @@ class PhotoProcessor {
         const progressBar = document.getElementById('progress-bar');
         const progressText = document.getElementById('progress-text');
 
+        // Smooth progress bar transitions
+        progressBar.style.transition = 'width 0.3s ease-in-out';
         progressBar.style.width = `${job.progress}%`;
-        progressText.textContent = `Processing... ${job.completed_photos}/${job.total_photos} photos (${job.progress}%)`;
+        
+        // Enhanced progress text with phases
+        let statusText = '';
+        if (job.progress === 0 || job.completed_photos === 0) {
+            statusText = 'Initializing photo processing...';
+        } else if (job.progress < 100 && job.status === 'processing') {
+            const currentPhoto = Math.min(job.completed_photos + 1, job.total_photos);
+            statusText = `Processing photo ${currentPhoto} of ${job.total_photos} (${job.progress}%)`;
+        } else if (job.progress >= 95 && job.status === 'processing') {
+            statusText = 'Finalizing results and organizing photos...';
+        } else {
+            statusText = `Processing... ${job.completed_photos}/${job.total_photos} photos (${job.progress}%)`;
+        }
+        
+        progressText.textContent = statusText;
     }
 
     async fetchResults(retryCount = 0) {
@@ -2006,3 +2239,35 @@ const photoProcessor = new PhotoProcessor();
 
 // Make it globally accessible for onclick handlers
 window.photoProcessor = photoProcessor;
+
+// Make functions globally accessible for onclick handlers
+window.showSignInModal = showSignInModal;
+window.showCreateAccountModal = showCreateAccountModal;
+window.switchToCreateAccount = switchToCreateAccount;
+window.switchToSignIn = switchToSignIn;
+window.showLandingPage = showLandingPage;
+window.showAppSection = showAppSection;
+window.logout = logout;
+
+// Check authentication status when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM Content Loaded'); // Debug log
+    checkAuthOnLoad();
+    
+    // Set up authentication form handlers
+    const signInForm = document.getElementById('signInForm');
+    const createAccountForm = document.getElementById('createAccountForm');
+    
+    console.log('Sign In Form found:', !!signInForm); // Debug log
+    console.log('Create Account Form found:', !!createAccountForm); // Debug log
+    
+    if (signInForm) {
+        signInForm.addEventListener('submit', handleSignIn);
+        console.log('Sign In event listener attached'); // Debug log
+    }
+    
+    if (createAccountForm) {
+        createAccountForm.addEventListener('submit', handleCreateAccount);
+        console.log('Create Account event listener attached'); // Debug log
+    }
+});

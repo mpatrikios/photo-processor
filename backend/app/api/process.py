@@ -34,14 +34,32 @@ async def process_photos_async(job_id: str):
     job.status = ProcessingStatus.PROCESSING
     
     try:
-        for i, photo_id in enumerate(job.photo_ids):
-            await detector.process_photo(photo_id)
-            job.completed_photos = i + 1
-            job.progress = int((job.completed_photos / job.total_photos) * 100)
+        # Add initialization phase
+        await asyncio.sleep(0.2)  # Brief initialization delay
+        job.progress = 1  # Show 1% for initialization
         
-        # Ensure all detection results are fully processed
-        await asyncio.sleep(0.1)  # Small delay to ensure detector results are ready
+        for i, photo_id in enumerate(job.photo_ids):
+            # Update progress at start of each photo processing
+            job.completed_photos = i
+            job.progress = max(1, int(((i + 0.5) / job.total_photos) * 95))  # 1-95% range
+            
+            await detector.process_photo(photo_id)
+            
+            # Add small delay to make progress visible and prevent overwhelming the system
+            await asyncio.sleep(0.1)  # 100ms delay per photo for smoother UX
+            
+            # Update progress after completing each photo
+            job.completed_photos = i + 1
+            job.progress = max(1, int((job.completed_photos / job.total_photos) * 95))
+        
+        # Finalization phase
+        job.progress = 95
+        await asyncio.sleep(0.3)  # Brief finalization delay
+        
+        # Final completion
+        job.progress = 100
         job.status = ProcessingStatus.COMPLETED
+        
     except Exception as e:
         job.status = ProcessingStatus.FAILED
         print(f"Processing failed for job {job_id}: {str(e)}")
