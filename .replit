@@ -1,21 +1,17 @@
 modules = ["nodejs-18", "python-3.12", "web"]
-run = "npm run dev"
+run = "npm start"
 
 [nix]
 channel = "stable-25_05"
 packages = ["freetype", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tesseract", "tk", "zlib"]
 
 [deployment]
-run = ["sh", "-c", "cd backend && python3 -m uvicorn main:app --host 0.0.0.0 --port 8000"]
+run = ["sh", "-c", "npm start"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 5173
-externalPort = 80
-
-[[ports]]
 localPort = 8000
-externalPort = 8000
+externalPort = 80
 
 [workflows]
 runButton = "Dev Server"
