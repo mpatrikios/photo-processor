@@ -1366,3 +1366,291 @@ html {
         font-size: 0.75rem;
     }
 }
+
+/* Unknown Photos Page Styles */
+.unknown-photo-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--gray-200);
+}
+
+.unknown-photo-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.unknown-photo-card .position-absolute button {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.unknown-photo-card:hover .position-absolute button {
+    opacity: 1;
+}
+
+.unknown-photo-checkbox {
+    scale: 1.2;
+    border-radius: 4px;
+}
+
+.unknown-photo-checkbox:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+/* Manual Labeling Modal Styles */
+#labelPhotoPreview {
+    max-height: 250px;
+    object-fit: contain;
+    border: 1px solid var(--gray-200);
+}
+
+#batchPhotosPreviews img {
+    border: 2px solid var(--gray-200);
+    transition: border-color 0.2s ease;
+}
+
+#batchPhotosPreviews img:hover {
+    border-color: var(--primary-color);
+}
+
+/* Batch selection UI */
+.batch-selection-active {
+    background-color: var(--gray-50);
+    border: 2px dashed var(--primary-color);
+}
+
+/* Edit mode indicators */
+.edit-mode-active {
+    border: 2px solid var(--warning-color);
+    background-color: rgba(255, 193, 7, 0.1);
+}
+
+/* Status indicators for manual labeling */
+.manual-label-success {
+    border-left: 4px solid var(--success-color);
+}
+
+.manual-label-pending {
+    border-left: 4px solid var(--warning-color);
+}
+
+/* Unknown photos page specific styles */
+#unknown-photos-section {
+    min-height: 400px;
+}
+
+#unknown-photos-grid .col-lg-3 {
+    transition: all 0.3s ease;
+}
+
+#unknown-photos-grid .col-lg-3.selected {
+    transform: scale(0.98);
+    opacity: 0.8;
+}
+
+/* Action bar styling */
+#unknown-photos-section .card {
+    border-left: 4px solid var(--warning-color);
+    background: linear-gradient(135deg, #fff8e1 0%, #ffffff 100%);
+}
+
+/* Better button states */
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-success:not(:disabled):hover {
+    background-color: #157347;
+    transform: translateY(-1px);
+}
+
+.btn-primary:not(:disabled):hover {
+    background-color: var(--primary-dark);
+    transform: translateY(-1px);
+}
+
+/* Loading states */
+.labeling-progress {
+    position: relative;
+    overflow: hidden;
+}
+
+.labeling-progress::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* Inline Photo Labeling Styles */
+#photoMetadata {
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    z-index: 1050 !important;
+    position: relative;
+}
+
+#inlineLabelContainer {
+    animation: fadeInUp 0.3s ease;
+    display: block !important;
+    padding: 12px;
+    background: rgba(255, 193, 7, 0.9) !important;
+    border-radius: 8px;
+    border: 3px solid var(--warning-color);
+    position: relative;
+    z-index: 1060;
+    margin-top: 8px;
+}
+
+#inlineLabelContainer.d-none {
+    display: none !important;
+}
+
+/* Temporary debug styling */
+#photoBibNumber {
+    background: rgba(0, 255, 0, 0.2);
+    padding: 4px;
+    border-radius: 4px;
+}
+
+#photoBibNumber.d-none {
+    display: none !important;
+}
+
+/* Edit button styling */
+#editBibBtn {
+    transition: all 0.2s ease;
+    background: rgba(255, 193, 7, 0.8);
+    border-color: var(--warning-color);
+    color: var(--dark-color);
+}
+
+#editBibBtn:hover {
+    background: var(--warning-color);
+    transform: scale(1.1);
+}
+
+#photoBibNumberContainer {
+    align-items: center;
+    gap: 8px;
+}
+
+/* Ensure thumbnail strip stays below metadata */
+#thumbnailStrip {
+    z-index: 1040 !important;
+}
+
+/* Make sure photo metadata overlay is always on top */
+.modal-fullscreen #photoMetadata {
+    z-index: 1055 !important;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#inlineBibInput {
+    background: rgba(255, 255, 255, 1) !important;
+    border: 3px solid var(--primary-color) !important;
+    color: var(--dark-color) !important;
+    font-weight: 700 !important;
+    text-align: center;
+    transition: all 0.2s ease;
+    font-size: 1.1rem !important;
+    height: 40px !important;
+}
+
+#inlineBibInput:focus {
+    background: rgba(255, 255, 255, 1);
+    border-color: var(--warning-color);
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
+    transform: scale(1.05);
+}
+
+#inlineBibInput::placeholder {
+    color: var(--gray-600);
+    font-weight: normal;
+}
+
+#inlineSaveBtn {
+    background: var(--success-color);
+    border-color: var(--success-color);
+    transition: all 0.2s ease;
+}
+
+#inlineSaveBtn:hover:not(:disabled) {
+    background: #157347;
+    transform: scale(1.1);
+}
+
+#inlineSaveBtn:disabled {
+    opacity: 0.7;
+}
+
+#inlineCancelBtn {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+    transition: all 0.2s ease;
+}
+
+#inlineCancelBtn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+/* Quick labeling success animation */
+.labeling-success {
+    animation: successPulse 0.6s ease;
+}
+
+@keyframes successPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); background-color: rgba(25, 135, 84, 0.2); }
+    100% { transform: scale(1); }
+}
+
+/* Photo modal enhancements for labeling */
+.photo-modal-labeling-mode #photoMetadata {
+    border-top: 3px solid var(--warning-color);
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.9) 0%, rgba(0, 0, 0, 0.8) 100%);
+}
+
+/* Mobile responsiveness for inline labeling */
+@media (max-width: 768px) {
+    #photoMetadata .row {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    #photoMetadata .col-md-4 {
+        flex: none;
+        width: 100%;
+    }
+    
+    #inlineLabelContainer .input-group {
+        justify-content: center;
+    }
+    
+    #inlineBibInput {
+        max-width: 120px;
+        font-size: 1.1rem;
+    }
+}

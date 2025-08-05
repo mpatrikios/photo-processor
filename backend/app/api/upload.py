@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 from typing import List
 import uuid
 import os
@@ -67,4 +68,19 @@ async def get_photo_info(photo_id: str):
         original_path=file_path,
         status=ProcessingStatus.PENDING
     )
+
+@router.get("/serve/{photo_id}")
+async def serve_photo(photo_id: str):
+    """Serve photo file by ID"""
+    file_path = None
+    for ext in ALLOWED_EXTENSIONS:
+        test_path = os.path.join(UPLOAD_DIR, f"{photo_id}{ext}")
+        if os.path.exists(test_path):
+            file_path = test_path
+            break
+    
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    return FileResponse(file_path, media_type="image/jpeg")
 

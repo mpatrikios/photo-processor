@@ -877,11 +877,16 @@ class PhotoProcessor {
                                 </button>
                             ` : ''}
                             ${group.bib_number === 'unknown' ? `
-                                <button class="btn btn-warning btn-sm" onclick="photoProcessor.showManualLabelModal()">
+                                <button class="btn btn-warning btn-sm" onclick="photoProcessor.showUnknownPhotosPage()">
                                     <i class="fas fa-tag me-1"></i>
                                     Label Photos
                                 </button>
-                            ` : ''}
+                            ` : `
+                                <button class="btn btn-outline-secondary btn-sm" onclick="photoProcessor.showEditGroupModal('${group.bib_number}')">
+                                    <i class="fas fa-edit me-1"></i>
+                                    Edit Labels
+                                </button>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -1716,6 +1721,12 @@ class PhotoProcessor {
         // Download button
         document.getElementById('downloadPhotoBtn').onclick = () => this.downloadCurrentPhoto();
         
+        // Initialize inline labeling
+        this.initializeInlineLabeling();
+        
+        // Initialize edit button
+        document.getElementById('editBibBtn').onclick = () => this.enableEditMode();
+        
         // Initialize thumbnails
         this.createThumbnailStrip();
         
@@ -1744,7 +1755,7 @@ class PhotoProcessor {
         modalImage.onload = () => {
             document.getElementById('photoLoader').style.display = 'none';
         };
-        modalImage.src = `${this.apiBase.replace('/api', '')}/uploads/${photo.filename}`;
+        modalImage.src = `${this.apiBase}/upload/serve/${photo.id}`;
         modalImage.alt = photo.filename;
         
         // Update metadata
@@ -1772,11 +1783,248 @@ class PhotoProcessor {
         document.getElementById('prevPhotoBtn').disabled = index === 0;
         document.getElementById('nextPhotoBtn').disabled = index === this.currentLightboxGroup.photos.length - 1;
         
+        // Show/hide inline labeling for unknown photos
+        this.updateInlineLabeling(photo);
+        
         // Update thumbnail selection
         this.updateThumbnailSelection();
         
         // Reset zoom
         this.resetZoom();
+    }
+    
+    initializeInlineLabeling() {
+        console.log('initializeInlineLabeling called');
+        
+        const saveBtn = document.getElementById('inlineSaveBtn');
+        const cancelBtn = document.getElementById('inlineCancelBtn');
+        const input = document.getElementById('inlineBibInput');
+        
+        console.log('Inline labeling elements:', {
+            saveBtn: !!saveBtn,
+            cancelBtn: !!cancelBtn,
+            input: !!input
+        });
+        
+        if (!saveBtn || !cancelBtn || !input) {
+            console.error('Could not find inline labeling elements');
+            return;
+        }
+        
+        // Save button click
+        saveBtn.onclick = () => this.saveInlineLabel();
+        
+        // Cancel button click
+        cancelBtn.onclick = () => this.cancelInlineLabel();
+        
+        // Input keyboard events
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.saveInlineLabel();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                this.cancelInlineLabel();
+            }
+        });
+        
+        // Only allow numbers - use keypress for better control
+        input.addEventListener('keypress', (e) => {
+            // Allow numbers (0-9) and control keys
+            const char = String.fromCharCode(e.which);
+            console.log('Keypress event:', { key: e.key, char: char, which: e.which });
+            
+            if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.which != 8 && e.which != 0) {
+                console.log('Blocking non-numeric character:', char);
+                e.preventDefault();
+            }
+        });
+        
+        console.log('Inline labeling initialized successfully');
+    }
+    
+    updateInlineLabeling(photo) {
+        const staticContainer = document.getElementById('photoBibNumberContainer');
+        const staticDisplay = document.getElementById('photoBibNumber');
+        const editBtn = document.getElementById('editBibBtn'); 
+        const inlineContainer = document.getElementById('inlineLabelContainer');
+        const input = document.getElementById('inlineBibInput');
+        
+        console.log('updateInlineLabeling called', {
+            photo: photo,
+            groupBib: this.currentLightboxGroup?.bib_number,
+            photoDetection: photo.detection_result,
+            staticContainer: !!staticContainer,
+            staticDisplay: !!staticDisplay,
+            editBtn: !!editBtn,
+            inlineContainer: !!inlineContainer,
+            input: !!input
+        });
+        
+        if (!staticContainer || !staticDisplay || !editBtn || !inlineContainer || !input) {
+            console.error('Missing DOM elements for inline labeling');
+            return;
+        }
+        
+        const isUnknown = this.currentLightboxGroup.bib_number === 'unknown' || 
+                         (photo.detection_result && photo.detection_result.bib_number === 'unknown');
+        
+        console.log('isUnknown:', isUnknown);
+        
+        // Reset edit mode state
+        this.isEditMode = false;
+        
+        if (isUnknown) {
+            // Show inline labeling immediately for unknown photos
+            console.log('Showing inline labeling for unknown photo');
+            staticContainer.classList.add('d-none');
+            inlineContainer.classList.remove('d-none');
+            
+            // Auto-focus the input after a brief delay
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 100);
+            
+            // Clear any previous value
+            input.value = '';
+        } else {
+            // Show static display with edit button for detected photos
+            console.log('Showing static display with edit button');
+            staticContainer.classList.remove('d-none');
+            editBtn.classList.remove('d-none');
+            inlineContainer.classList.add('d-none');
+        }
+    }
+    
+    enableEditMode() {
+        console.log('enableEditMode called');
+        const staticContainer = document.getElementById('photoBibNumberContainer');
+        const inlineContainer = document.getElementById('inlineLabelContainer');
+        const input = document.getElementById('inlineBibInput');
+        
+        if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
+        
+        const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
+        
+        // Switch to edit mode
+        this.isEditMode = true;
+        staticContainer.classList.add('d-none');
+        inlineContainer.classList.remove('d-none');
+        
+        // Pre-fill with current bib number
+        if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
+            input.value = photo.detection_result.bib_number;
+        } else {
+            input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
+        }
+        
+        // Focus and select the input
+        setTimeout(() => {
+            input.focus();
+            input.select();
+        }, 100);
+    }
+    
+    async saveInlineLabel() {
+        const input = document.getElementById('inlineBibInput');
+        const bibNumber = input.value.trim();
+        
+        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
+            this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
+            input.focus();
+            return;
+        }
+        
+        if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
+        
+        const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
+        const saveBtn = document.getElementById('inlineSaveBtn');
+        const originalContent = saveBtn.innerHTML;
+        
+        try {
+            // Show loading state
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            // Save the label
+            await this.labelPhoto(photo.id, bibNumber);
+            
+            // Show success
+            this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
+            
+            // Refresh data
+            await this.refreshAfterLabeling();
+            
+            // Smart navigation based on mode
+            if (this.isEditMode) {
+                // For editing detected photos: stay in current group, just refresh
+                this.isEditMode = false;
+                const staticContainer = document.getElementById('photoBibNumberContainer');
+                const inlineContainer = document.getElementById('inlineLabelContainer');
+                staticContainer.classList.remove('d-none');
+                inlineContainer.classList.add('d-none');
+            } else {
+                // For unknown photos: advance to next unknown for rapid labeling
+                this.advanceToNextUnknownPhoto();
+            }
+            
+        } catch (error) {
+            this.showError(`Failed to label photo: ${error.message}`);
+            input.focus();
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = originalContent;
+        }
+    }
+    
+    cancelInlineLabel() {
+        const input = document.getElementById('inlineBibInput');
+        const staticContainer = document.getElementById('photoBibNumberContainer');
+        const inlineContainer = document.getElementById('inlineLabelContainer');
+        
+        input.value = '';
+        input.blur();
+        
+        // If we were in edit mode, go back to static display
+        if (this.isEditMode) {
+            this.isEditMode = false;
+            staticContainer.classList.remove('d-none');
+            inlineContainer.classList.add('d-none');
+        }
+        // For unknown photos, keep the inline input visible
+    }
+    
+    advanceToNextUnknownPhoto() {
+        if (!this.currentLightboxGroup) return;
+        
+        // Find next unknown photo in current group
+        for (let i = this.currentPhotoIndex + 1; i < this.currentLightboxGroup.photos.length; i++) {
+            const photo = this.currentLightboxGroup.photos[i];
+            if (!photo.detection_result || photo.detection_result.bib_number === 'unknown') {
+                this.showPhotoInLightbox(i);
+                return;
+            }
+        }
+        
+        // If no more unknown in current group, look for next unknown in all groups
+        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
+        if (unknownGroup && unknownGroup.photos.length > 0) {
+            // Switch to unknown group and show first photo
+            this.currentLightboxGroup = unknownGroup;
+            this.currentPhotoIndex = 0;
+            this.showPhotoInLightbox(0);
+            this.createThumbnailStrip(); // Refresh thumbnails
+        } else {
+            // No more unknown photos - show success message
+            this.showSuccess('All photos have been labeled! 🎉');
+            
+            // Close modal after a brief delay
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('photoModal'));
+                if (modal) modal.hide();
+            }, 1500);
+        }
     }
     
     createThumbnailStrip() {
@@ -1789,7 +2037,7 @@ class PhotoProcessor {
             thumbnailDiv.onclick = () => this.showPhotoInLightbox(index);
             
             const img = document.createElement('img');
-            img.src = `http://localhost:8000/uploads/${photo.filename}`;
+            img.src = `${this.apiBase}/upload/serve/${photo.id}`;
             img.alt = photo.filename;
             
             thumbnailDiv.appendChild(img);
@@ -1937,7 +2185,7 @@ class PhotoProcessor {
     downloadCurrentPhoto() {
         if (this.currentLightboxGroup && this.currentPhotoIndex >= 0) {
             const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
-            window.open(`http://localhost:8000/uploads/${photo.filename}`, '_blank');
+            window.open(`${this.apiBase}/upload/serve/${photo.id}`, '_blank');
         }
     }
     
@@ -1988,7 +2236,7 @@ class PhotoProcessor {
         return 'bg-danger';
     }
 
-    showAllPhotos(bibNumber) {
+    showAllPhotos(bibNumber, editMode = false) {
         const group = this.groupedPhotos.find(g => g.bib_number === bibNumber);
         if (!group) return;
 
@@ -1996,11 +2244,17 @@ class PhotoProcessor {
         const modalLabel = document.getElementById('galleryModalLabel');
         const downloadBtn = document.getElementById('downloadGroupBtn');
         
-        modalLabel.textContent = `All Photos - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
+        if (editMode) {
+            modalLabel.textContent = `Edit Labels - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
+            downloadBtn.style.display = 'none';
+        } else {
+            modalLabel.textContent = `All Photos - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
+            downloadBtn.style.display = 'block';
+        }
         
         galleryGrid.innerHTML = group.photos.map(photo => `
-            <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')">
-                <img src="http://localhost:8000/uploads/${photo.filename}" 
+            <div class="photo-item position-relative" ${editMode ? '' : `onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')"`}>
+                <img src="${this.apiBase}/upload/serve/${photo.id}" 
                      alt="${photo.filename}" 
                      style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -2012,14 +2266,28 @@ class PhotoProcessor {
                         ${Math.round(photo.detection_result.confidence * 100)}%
                     </div>
                 ` : ''}
+                ${editMode ? `
+                    <div class="position-absolute top-0 end-0 p-1">
+                        <button class="btn btn-primary btn-sm" 
+                                onclick="photoProcessor.showSinglePhotoLabelModal('${photo.id}')"
+                                title="Edit label">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                    <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white text-center py-1">
+                        <small>${photo.filename}</small>
+                    </div>
+                ` : ''}
             </div>
         `).join('');
         
-        downloadBtn.onclick = () => {
-            // Export this specific group
-            this.selectedGroups = [bibNumber];
-            this.exportPhotos();
-        };
+        if (!editMode) {
+            downloadBtn.onclick = () => {
+                // Export this specific group
+                this.selectedGroups = [bibNumber];
+                this.exportPhotos();
+            };
+        }
         
         const modal = new bootstrap.Modal(document.getElementById('galleryModal'));
         modal.show();
@@ -2036,7 +2304,7 @@ class PhotoProcessor {
         container.innerHTML = unknownGroup.photos.map(photo => `
             <div class="col-md-4 mb-3">
                 <div class="card">
-                    <img src="http://localhost:8000/uploads/${photo.filename}" 
+                    <img src="${this.apiBase}/upload/serve/${photo.id}" 
                          class="card-img-top" 
                          style="height: 150px; object-fit: cover;"
                          alt="${photo.filename}">
@@ -2231,6 +2499,402 @@ class PhotoProcessor {
             submitBtn.disabled = false;
             submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Feedback';
         }
+    }
+
+    // Unknown Photos Page Methods
+    showUnknownPhotosPage() {
+        document.getElementById('results-section').classList.add('d-none');
+        document.getElementById('unknown-photos-section').classList.remove('d-none');
+        this.displayUnknownPhotos();
+    }
+
+    showMainResults() {
+        document.getElementById('unknown-photos-section').classList.add('d-none');
+        document.getElementById('results-section').classList.remove('d-none');
+        this.selectedUnknownPhotos = []; // Clear selection
+    }
+
+    displayUnknownPhotos() {
+        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
+        const unknownPhotos = unknownGroup ? unknownGroup.photos : [];
+        
+        document.getElementById('unknown-count-display').textContent = unknownPhotos.length;
+        
+        if (unknownPhotos.length === 0) {
+            document.getElementById('unknown-photos-grid').classList.add('d-none');
+            document.getElementById('no-unknown-message').classList.remove('d-none');
+            return;
+        }
+
+        document.getElementById('unknown-photos-grid').classList.remove('d-none');
+        document.getElementById('no-unknown-message').classList.add('d-none');
+
+        const gridHtml = unknownPhotos.map(photo => `
+            <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+                <div class="card h-100 unknown-photo-card" data-photo-id="${photo.id}">
+                    <div class="position-relative">
+                        <img src="${this.apiBase}/upload/serve/${photo.id}" 
+                             class="card-img-top" 
+                             style="height: 200px; object-fit: cover; cursor: pointer;"
+                             onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', 'unknown')"
+                             loading="lazy">
+                        
+                        <!-- Selection checkbox -->
+                        <div class="position-absolute top-0 start-0 p-2">
+                            <input class="form-check-input unknown-photo-checkbox" 
+                                   type="checkbox" 
+                                   data-photo-id="${photo.id}"
+                                   onchange="photoProcessor.toggleUnknownPhotoSelection('${photo.id}')">
+                        </div>
+                        
+                        <!-- Edit button -->
+                        <div class="position-absolute top-0 end-0 p-2">
+                            <button class="btn btn-primary btn-sm" 
+                                    onclick="photoProcessor.showSinglePhotoLabelModal('${photo.id}')"
+                                    title="Label this photo">
+                                <i class="fas fa-tag"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body p-2">
+                        <p class="card-text small text-muted mb-1" title="${photo.filename}">
+                            ${photo.filename.length > 20 ? photo.filename.substring(0, 20) + '...' : photo.filename}
+                        </p>
+                        <small class="text-warning">
+                            <i class="fas fa-question-circle me-1"></i>
+                            No bib detected
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        document.getElementById('unknown-photos-grid').innerHTML = gridHtml;
+        
+        // Initialize selection state
+        this.selectedUnknownPhotos = [];
+        this.updateBatchLabelButton();
+    }
+
+    // Selection Management
+    selectedUnknownPhotos = [];
+
+    toggleUnknownPhotoSelection(photoId) {
+        const index = this.selectedUnknownPhotos.indexOf(photoId);
+        if (index > -1) {
+            this.selectedUnknownPhotos.splice(index, 1);
+        } else {
+            this.selectedUnknownPhotos.push(photoId);
+        }
+        this.updateBatchLabelButton();
+    }
+
+    selectAllUnknown() {
+        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
+        const unknownPhotos = unknownGroup ? unknownGroup.photos : [];
+        
+        const allSelected = this.selectedUnknownPhotos.length === unknownPhotos.length;
+        
+        if (allSelected) {
+            // Deselect all
+            this.selectedUnknownPhotos = [];
+            document.querySelectorAll('.unknown-photo-checkbox').forEach(cb => cb.checked = false);
+            document.getElementById('select-all-unknown-btn').innerHTML = '<i class="fas fa-check-square me-2"></i>Select All';
+        } else {
+            // Select all
+            this.selectedUnknownPhotos = unknownPhotos.map(photo => photo.id);
+            document.querySelectorAll('.unknown-photo-checkbox').forEach(cb => cb.checked = true);
+            document.getElementById('select-all-unknown-btn').innerHTML = '<i class="fas fa-minus-square me-2"></i>Deselect All';
+        }
+        
+        this.updateBatchLabelButton();
+    }
+
+    updateBatchLabelButton() {
+        const batchBtn = document.getElementById('batch-label-btn');
+        const selectAllBtn = document.getElementById('select-all-unknown-btn');
+        
+        if (this.selectedUnknownPhotos.length > 0) {
+            batchBtn.disabled = false;
+            batchBtn.innerHTML = `<i class="fas fa-tags me-2"></i>Batch Label Selected (${this.selectedUnknownPhotos.length})`;
+        } else {
+            batchBtn.disabled = true;
+            batchBtn.innerHTML = '<i class="fas fa-tags me-2"></i>Batch Label Selected';
+        }
+
+        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
+        const totalUnknown = unknownGroup ? unknownGroup.photos.length : 0;
+        
+        if (this.selectedUnknownPhotos.length === totalUnknown && totalUnknown > 0) {
+            selectAllBtn.innerHTML = '<i class="fas fa-minus-square me-2"></i>Deselect All';
+        } else {
+            selectAllBtn.innerHTML = '<i class="fas fa-check-square me-2"></i>Select All';
+        }
+    }
+
+    // Manual Labeling Methods
+    currentPhotoToLabel = null;
+
+    showSinglePhotoLabelModal(photoId) {
+        this.currentPhotoToLabel = photoId;
+        const photo = this.findPhotoById(photoId);
+        
+        if (!photo) return;
+
+        // Set up modal content
+        document.getElementById('labelPhotoPreview').src = `${this.apiBase}/upload/serve/${photoId}`;
+        document.getElementById('labelPhotoFilename').textContent = photo.filename;
+        document.getElementById('manualBibNumber').value = '';
+        
+        // Set current status
+        const statusEl = document.getElementById('currentPhotoStatus');
+        if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
+            statusEl.innerHTML = `Currently labeled as Bib #${photo.detection_result.bib_number}`;
+            statusEl.parentElement.className = 'alert alert-info mb-0';
+        } else {
+            statusEl.innerHTML = 'No bib number detected';
+            statusEl.parentElement.className = 'alert alert-warning mb-0';
+        }
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('manualLabelModal'));
+        modal.show();
+
+        // Set up event listener
+        this.setupSingleLabelEventListener();
+    }
+
+    setupSingleLabelEventListener() {
+        const btn = document.getElementById('apply-single-label-btn');
+        const input = document.getElementById('manualBibNumber');
+        
+        // Remove existing listeners
+        btn.replaceWith(btn.cloneNode(true));
+        const newBtn = document.getElementById('apply-single-label-btn');
+        
+        newBtn.addEventListener('click', () => this.applySingleLabel());
+        
+        // Allow Enter key to submit
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.applySingleLabel();
+            }
+        });
+    }
+
+    async applySingleLabel() {
+        const bibNumber = document.getElementById('manualBibNumber').value.trim();
+        
+        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
+            this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
+            return;
+        }
+
+        try {
+            await this.labelPhoto(this.currentPhotoToLabel, bibNumber);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('manualLabelModal'));
+            modal.hide();
+            
+            this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
+            
+            // Refresh displays
+            await this.refreshAfterLabeling();
+            
+        } catch (error) {
+            this.showError(`Failed to label photo: ${error.message}`);
+        }
+    }
+
+    showBatchLabelModal() {
+        if (this.selectedUnknownPhotos.length === 0) {
+            this.showError('Please select photos to label first');
+            return;
+        }
+
+        // Update count
+        document.getElementById('selectedPhotoCount').textContent = this.selectedUnknownPhotos.length;
+        document.getElementById('batchBibNumber').value = '';
+        
+        // Show preview thumbnails
+        this.displayBatchPhotoPreviews();
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('batchLabelModal'));
+        modal.show();
+
+        // Set up event listener
+        this.setupBatchLabelEventListener();
+    }
+
+    displayBatchPhotoPreviews() {
+        const previewsHtml = this.selectedUnknownPhotos.map(photoId => {
+            const photo = this.findPhotoById(photoId);
+            return `
+                <div class="position-relative">
+                    <img src="${this.apiBase}/upload/serve/${photoId}" 
+                         class="rounded" 
+                         style="width: 60px; height: 60px; object-fit: cover;">
+                    <button class="btn btn-danger btn-sm position-absolute top-0 end-0" 
+                            style="transform: translate(50%, -50%); width: 20px; height: 20px; border-radius: 50%; padding: 0; font-size: 10px;"
+                            onclick="photoProcessor.removeFromBatchSelection('${photoId}')"
+                            title="Remove from selection">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+        }).join('');
+        
+        document.getElementById('batchPhotosPreviews').innerHTML = previewsHtml;
+    }
+
+    removeFromBatchSelection(photoId) {
+        const index = this.selectedUnknownPhotos.indexOf(photoId);
+        if (index > -1) {
+            this.selectedUnknownPhotos.splice(index, 1);
+            
+            // Update checkbox
+            const checkbox = document.querySelector(`input[data-photo-id="${photoId}"]`);
+            if (checkbox) checkbox.checked = false;
+            
+            // Update count and previews
+            document.getElementById('selectedPhotoCount').textContent = this.selectedUnknownPhotos.length;
+            this.displayBatchPhotoPreviews();
+            this.updateBatchLabelButton();
+            
+            // Close modal if no photos left
+            if (this.selectedUnknownPhotos.length === 0) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('batchLabelModal'));
+                modal.hide();
+            }
+        }
+    }
+
+    setupBatchLabelEventListener() {
+        const btn = document.getElementById('apply-batch-labels-btn');
+        const input = document.getElementById('batchBibNumber');
+        
+        // Remove existing listeners
+        btn.replaceWith(btn.cloneNode(true));
+        const newBtn = document.getElementById('apply-batch-labels-btn');
+        
+        newBtn.addEventListener('click', () => this.applyBatchLabels());
+        
+        // Allow Enter key to submit
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.applyBatchLabels();
+            }
+        });
+    }
+
+    async applyBatchLabels() {
+        const bibNumber = document.getElementById('batchBibNumber').value.trim();
+        
+        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
+            this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
+            return;
+        }
+
+        const btn = document.getElementById('apply-batch-labels-btn');
+        const originalText = btn.innerHTML;
+        
+        try {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Labeling...';
+            
+            // Label all selected photos
+            const promises = this.selectedUnknownPhotos.map(photoId => 
+                this.labelPhoto(photoId, bibNumber)
+            );
+            
+            await Promise.all(promises);
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('batchLabelModal'));
+            modal.hide();
+            
+            this.showSuccess(`${this.selectedUnknownPhotos.length} photos labeled as Bib #${bibNumber}`);
+            
+            // Clear selection
+            this.selectedUnknownPhotos = [];
+            
+            // Refresh displays
+            await this.refreshAfterLabeling();
+            
+        } catch (error) {
+            this.showError(`Failed to label photos: ${error.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    // Helper Methods
+    validateBibNumber(bibNumber) {
+        const num = parseInt(bibNumber);
+        return /^\d{1,6}$/.test(bibNumber) && num >= 1 && num <= 99999;
+    }
+
+    findPhotoById(photoId) {
+        for (const group of this.groupedPhotos) {
+            const photo = group.photos.find(p => p.id === photoId);
+            if (photo) return photo;
+        }
+        return null;
+    }
+
+    async labelPhoto(photoId, bibNumber) {
+        const response = await fetch(`${this.apiBase}/process/manual-label`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                photo_id: photoId,
+                bib_number: bibNumber
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to label photo');
+        }
+
+        return await response.json();
+    }
+
+    async refreshAfterLabeling() {
+        // Refresh the grouped photos data
+        if (this.currentJobId) {
+            try {
+                const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`);
+                if (response.ok) {
+                    this.groupedPhotos = await response.json();
+                    this.updateStatsCards();
+                    this.displayResults();
+                    
+                    // If we're on unknown photos page, refresh it
+                    if (!document.getElementById('unknown-photos-section').classList.contains('d-none')) {
+                        this.displayUnknownPhotos();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to refresh data:', error);
+            }
+        }
+    }
+
+    // Group Editing Methods
+    showEditGroupModal(bibNumber) {
+        const group = this.groupedPhotos.find(g => g.bib_number === bibNumber);
+        if (!group) return;
+
+        // For now, let's show the individual photos in the group for editing
+        // We'll use the gallery modal but with edit functionality
+        this.showAllPhotos(bibNumber, true); // true for edit mode
     }
 }
 
