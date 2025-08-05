@@ -1881,6 +1881,23 @@ class PhotoProcessor {
     setupEnhancedInlineLabeling(photo) {
         const inlineContainer = document.getElementById('inlineLabelContainer');
         
+        // Determine the current bib number for pre-filling
+        let currentBibNumber = '';
+        let detectionNote = '';
+        
+        if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
+            currentBibNumber = photo.detection_result.bib_number;
+            const confidence = Math.round(photo.detection_result.confidence * 100);
+            detectionNote = `<div class="detection-note mb-2">
+                <small class="text-info">
+                    <i class="fas fa-robot me-1"></i>
+                    AI detected: Bib #${currentBibNumber} (${confidence}% confidence)
+                </small>
+            </div>`;
+        } else if (this.currentLightboxGroup.bib_number !== 'unknown') {
+            currentBibNumber = this.currentLightboxGroup.bib_number;
+        }
+        
         // Create enhanced labeling interface
         inlineContainer.innerHTML = `
             <div class="inline-labeling-form">
@@ -1892,6 +1909,8 @@ class PhotoProcessor {
                     <p>Enter the bib number you can see in this image</p>
                 </div>
                 
+                ${detectionNote}
+                
                 <div class="bib-input-group">
                     <input type="text" 
                            class="form-control" 
@@ -1900,7 +1919,8 @@ class PhotoProcessor {
                            maxlength="6" 
                            pattern="[0-9]{1,6}"
                            autocomplete="off"
-                           spellcheck="false">
+                           spellcheck="false"
+                           value="${currentBibNumber}">
                 </div>
                 
                 <div class="labeling-hints">
@@ -1922,6 +1942,15 @@ class PhotoProcessor {
         
         // Re-initialize event listeners for the new elements
         this.initializeInlineLabeling();
+        
+        // Focus and select the input after a brief delay
+        setTimeout(() => {
+            const input = document.getElementById('inlineBibInput');
+            if (input && currentBibNumber) {
+                input.focus();
+                input.select();
+            }
+        }, 100);
     }
 
     enableEditMode() {
@@ -1935,23 +1964,8 @@ class PhotoProcessor {
         this.isEditMode = true;
         
         // Trigger the UI update using the existing updateInlineLabeling function
+        // The setupEnhancedInlineLabeling function will handle pre-filling and focus
         this.updateInlineLabeling(photo);
-
-        // Pre-fill with current bib number after a brief delay to ensure elements are created
-        setTimeout(() => {
-            const input = document.getElementById('inlineBibInput');
-            if (input) {
-                if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
-                    input.value = photo.detection_result.bib_number;
-                } else {
-                    input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
-                }
-
-                // Focus and select the input
-                input.focus();
-                input.select();
-            }
-        }, 100);
     }
 
     async saveInlineLabel() {

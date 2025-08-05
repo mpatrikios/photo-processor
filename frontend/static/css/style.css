@@ -1874,6 +1874,19 @@ html {
     background: linear-gradient(135deg, rgba(255, 193, 7, 0.9) 0%, rgba(0, 0, 0, 0.8) 100%);
 }
 
+/* Detection note styling */
+.detection-note {
+    background-color: rgba(13, 202, 240, 0.1);
+    border: 1px solid rgba(13, 202, 240, 0.3);
+    border-radius: 4px;
+    padding: 0.5rem;
+    text-align: center;
+}
+
+.detection-note .text-info {
+    margin: 0;
+}
+
 /* Mobile responsiveness for inline labeling */
 @media (max-width: 768px) {
     #photoMetadata .row {
