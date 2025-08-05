@@ -1542,6 +1542,45 @@ html {
     gap: 0.5rem;
 }
 
+/* Enhanced metadata layout */
+.photo-metadata-enhanced {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.5rem;
+}
+
+.photo-info-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    color: white;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.info-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.info-value {
+    font-size: 1rem;
+    color: white;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 /* Enhanced inline labeling container */
 #inlineLabelContainer {
     animation: slideInFromBottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
