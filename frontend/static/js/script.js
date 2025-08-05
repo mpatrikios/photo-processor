@@ -1696,28 +1696,22 @@ class PhotoProcessor {
 
     // Enhanced Photo Modal Functions
     showPhotoModal(photoId, filename, groupBibNumber = null) {
-        // Find the group and photo
-        let currentGroup = null;
-        let currentPhotoIndex = 0;
+        // Create a flat list of all photos from all groups for navigation
+        this.allPhotosFlat = [];
+        this.groupedPhotos.forEach(group => {
+            group.photos.forEach(photo => {
+                this.allPhotosFlat.push({
+                    ...photo,
+                    groupBibNumber: group.bib_number,
+                    groupCount: group.count
+                });
+            });
+        });
 
-        if (groupBibNumber) {
-            currentGroup = this.groupedPhotos.find(group => group.bib_number === groupBibNumber);
-        } else {
-            // Find which group contains this photo
-            for (const group of this.groupedPhotos) {
-                const photoIndex = group.photos.findIndex(photo => photo.id === photoId);
-                if (photoIndex !== -1) {
-                    currentGroup = group;
-                    currentPhotoIndex = photoIndex;
-                    break;
-                }
-            }
-        }
-
-        if (!currentGroup) return;
-
-        this.currentLightboxGroup = currentGroup;
-        this.currentPhotoIndex = currentPhotoIndex;
+        // Find the current photo index in the flat list
+        this.currentPhotoIndex = this.allPhotosFlat.findIndex(photo => photo.id === photoId);
+        
+        if (this.currentPhotoIndex === -1) return;
 
         this.initializeLightbox();
         this.showPhotoInLightbox(this.currentPhotoIndex);
@@ -1766,12 +1760,12 @@ class PhotoProcessor {
     }
 
     showPhotoInLightbox(index) {
-        if (!this.currentLightboxGroup || index < 0 || index >= this.currentLightboxGroup.photos.length) {
+        if (!this.allPhotosFlat || index < 0 || index >= this.allPhotosFlat.length) {
             return;
         }
 
         this.currentPhotoIndex = index;
-        const photo = this.currentLightboxGroup.photos[index];
+        const photo = this.allPhotosFlat[index];
 
         // Show loading spinner
         document.getElementById('photoLoader').style.display = 'block';
@@ -1785,10 +1779,10 @@ class PhotoProcessor {
         modalImage.alt = photo.filename;
 
         // Update metadata
-        document.getElementById('photoModalLabel').textContent = `${this.currentLightboxGroup.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${this.currentLightboxGroup.bib_number}`}`;
-        document.getElementById('photoPosition').textContent = `${index + 1} of ${this.currentLightboxGroup.photos.length}`;
+        document.getElementById('photoModalLabel').textContent = `${photo.groupBibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${photo.groupBibNumber}`}`;
+        document.getElementById('photoPosition').textContent = `${index + 1} of ${this.allPhotosFlat.length}`;
         document.getElementById('photoFilename').textContent = photo.filename;
-        document.getElementById('photoBibNumber').textContent = this.currentLightboxGroup.bib_number === 'unknown' ? 'Unknown' : this.currentLightboxGroup.bib_number;
+        document.getElementById('photoBibNumber').textContent = photo.groupBibNumber === 'unknown' ? 'Unknown' : photo.groupBibNumber;
 
         // Update confidence
         if (photo.detection_result) {
@@ -1807,7 +1801,7 @@ class PhotoProcessor {
 
         // Update navigation buttons
         document.getElementById('prevPhotoBtn').disabled = index === 0;
-        document.getElementById('nextPhotoBtn').disabled = index === this.currentLightboxGroup.photos.length - 1;
+        document.getElementById('nextPhotoBtn').disabled = index === this.allPhotosFlat.length - 1;
 
         // Show/hide inline labeling for unknown photos
         this.updateInlineLabeling(photo);
@@ -1868,7 +1862,7 @@ class PhotoProcessor {
             return;
         }
 
-        const isUnknown = this.currentLightboxGroup.bib_number === 'unknown' || 
+        const isUnknown = photo.groupBibNumber === 'unknown' || 
                          (photo.detection_result && photo.detection_result.bib_number === 'unknown');
 
         // Always show the enhanced inline labeling interface for ALL photos
@@ -2038,45 +2032,41 @@ class PhotoProcessor {
     }
 
     advanceToNextUnknownPhoto() {
-        if (!this.currentLightboxGroup) return;
+        if (!this.allPhotosFlat) return;
 
-        // Find next unknown photo in current group
-        for (let i = this.currentPhotoIndex + 1; i < this.currentLightboxGroup.photos.length; i++) {
-            const photo = this.currentLightboxGroup.photos[i];
-            if (!photo.detection_result || photo.detection_result.bib_number === 'unknown') {
+        // Find next unknown photo in the flat list starting from current position
+        for (let i = this.currentPhotoIndex + 1; i < this.allPhotosFlat.length; i++) {
+            const photo = this.allPhotosFlat[i];
+            if (photo.groupBibNumber === 'unknown' || !photo.detection_result || photo.detection_result.bib_number === 'unknown') {
                 this.showPhotoInLightbox(i);
                 return;
             }
         }
 
-        // If no more unknown in current group, look for next unknown in all groups
-        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
-        if (unknownGroup && unknownGroup.photos.length > 0) {
-            // Switch to unknown group and show first photo
-            this.currentLightboxGroup = unknownGroup;
-            this.currentPhotoIndex = 0;
-            this.showPhotoInLightbox(0);
-            this.createThumbnailStrip(); // Refresh thumbnails
-        } else {
-            // No more unknown photos - show success message
-            this.showSuccess('All photos have been labeled! 🎉');
+        // If no more unknown photos found, show success message
+        this.showSuccess('All photos have been labeled! 🎉');
 
-            // Close modal after a brief delay
-            setTimeout(() => {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('photoModal'));
-                if (modal) modal.hide();
-            }, 1500);
-        }
+        // Close modal after a brief delay
+        setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('photoModal'));
+            if (modal) modal.hide();
+        }, 1500);
     }
 
     createThumbnailStrip() {
         const container = document.getElementById('thumbnailContainer');
         container.innerHTML = '';
 
-        this.currentLightboxGroup.photos.forEach((photo, index) => {
+        // Show thumbnails for all photos, but highlight current group
+        const currentPhoto = this.allPhotosFlat[this.currentPhotoIndex];
+        const currentGroupPhotos = this.allPhotosFlat.filter(photo => photo.groupBibNumber === currentPhoto.groupBibNumber);
+
+        currentGroupPhotos.forEach((photo, localIndex) => {
+            const globalIndex = this.allPhotosFlat.findIndex(p => p.id === photo.id);
+            
             const thumbnailDiv = document.createElement('div');
             thumbnailDiv.className = 'thumbnail-item';
-            thumbnailDiv.onclick = () => this.showPhotoInLightbox(index);
+            thumbnailDiv.onclick = () => this.showPhotoInLightbox(globalIndex);
 
             const img = document.createElement('img');
             img.src = `${this.apiBase}/upload/serve/${photo.id}`;
@@ -2089,13 +2079,20 @@ class PhotoProcessor {
 
     updateThumbnailSelection() {
         const thumbnails = document.querySelectorAll('.thumbnail-item');
-        thumbnails.forEach((thumb, index) => {
-            if (index === this.currentPhotoIndex) {
-                thumb.classList.add('active');
-            } else {
-                thumb.classList.remove('active');
-            }
+        const currentPhoto = this.allPhotosFlat[this.currentPhotoIndex];
+        
+        thumbnails.forEach((thumb) => {
+            thumb.classList.remove('active');
         });
+        
+        // Find and highlight the current photo's thumbnail
+        const currentPhotoThumbnails = Array.from(thumbnails);
+        const currentGroupPhotos = this.allPhotosFlat.filter(photo => photo.groupBibNumber === currentPhoto.groupBibNumber);
+        const localIndex = currentGroupPhotos.findIndex(photo => photo.id === currentPhoto.id);
+        
+        if (currentPhotoThumbnails[localIndex]) {
+            currentPhotoThumbnails[localIndex].classList.add('active');
+        }
     }
 
     previousPhoto() {
@@ -2105,7 +2102,7 @@ class PhotoProcessor {
     }
 
     nextPhoto() {
-        if (this.currentPhotoIndex < this.currentLightboxGroup.photos.length - 1) {
+        if (this.currentPhotoIndex < this.allPhotosFlat.length - 1) {
             this.showPhotoInLightbox(this.currentPhotoIndex + 1);
         }
     }
