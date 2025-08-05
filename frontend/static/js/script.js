@@ -254,6 +254,7 @@ class PhotoProcessor {
     async checkAuthStatus() {
         const token = localStorage.getItem('auth_token');
         if (!token) {
+            this.showLoginScreen();
             return false;
         }
 
@@ -268,18 +269,21 @@ class PhotoProcessor {
 
             if (response.ok) {
                 const data = await response.json();
-                return data.valid;
-            } else {
-                console.error('Auth validation failed:', response.status, response.statusText);
-                // Try to get more details about the error
-                const errorText = await response.text();
-                console.error('Error details:', errorText);
+                if (data.valid) {
+                    this.isAuthenticated = true;
+                    this.authToken = token;
+                    showAppSection();
+                    return true;
+                }
             }
-            return false;
         } catch (error) {
             console.error('Auth check failed:', error);
-            return false;
         }
+        
+        // If we get here, auth failed - clear token and show login
+        localStorage.removeItem('auth_token');
+        this.showLoginScreen();
+        return false;
     }
 
     showLoginScreen() {
@@ -347,7 +351,10 @@ class PhotoProcessor {
         const token = localStorage.getItem('auth_token');
         if (token) {
             this.authToken = token;
-            await this.checkAuthStatus();
+            const isValid = await this.checkAuthStatus();
+            if (!isValid) {
+                this.showLoginScreen();
+            }
         } else {
             this.showLoginScreen();
         }
@@ -1867,20 +1874,8 @@ class PhotoProcessor {
         const staticDisplay = document.getElementById('photoBibNumber');
         const editBtn = document.getElementById('editBibBtn'); 
         const inlineContainer = document.getElementById('inlineLabelContainer');
-        const input = document.getElementById('inlineBibInput');
 
-        console.log('updateInlineLabeling called', {
-            photo: photo,
-            groupBib: this.currentLightboxGroup?.bib_number,
-            photoDetection: photo.detection_result,
-            staticContainer: !!staticContainer,
-            staticDisplay: !!staticDisplay,
-            editBtn: !!editBtn,
-            inlineContainer: !!inlineContainer,
-            input: !!input
-        });
-
-        if (!staticContainer || !staticDisplay || !editBtn || !inlineContainer || !input) {
+        if (!staticContainer || !staticDisplay || !editBtn || !inlineContainer) {
             console.error('Missing DOM elements for inline labeling');
             return;
         }
@@ -1888,31 +1883,16 @@ class PhotoProcessor {
         const isUnknown = this.currentLightboxGroup.bib_number === 'unknown' || 
                          (photo.detection_result && photo.detection_result.bib_number === 'unknown');
 
-        console.log('isUnknown:', isUnknown);
-
         // Reset edit mode state
         this.isEditMode = false;
 
         if (isUnknown) {
-            // Show enhanced inline labeling for unknown photos
-            console.log('Showing inline labeling for unknown photo');
+            // For unknown photos, show the inline labeling interface immediately
             staticContainer.classList.add('d-none');
             inlineContainer.classList.remove('d-none');
-            
-            // Update the inline container with enhanced content
             this.setupEnhancedInlineLabeling(photo);
-
-            // Auto-focus the input after a brief delay
-            setTimeout(() => {
-                input.focus();
-                input.select();
-            }, 100);
-
-            // Clear any previous value
-            input.value = '';
         } else {
-            // Show enhanced static display with edit button for detected photos
-            console.log('Showing static display with edit button');
+            // For detected photos, show static display with edit button
             staticContainer.classList.remove('d-none');
             editBtn.classList.remove('d-none');
             inlineContainer.classList.add('d-none');
@@ -1992,7 +1972,6 @@ class PhotoProcessor {
         console.log('enableEditMode called');
         const staticContainer = document.getElementById('photoBibNumberContainer');
         const inlineContainer = document.getElementById('inlineLabelContainer');
-        const input = document.getElementById('inlineBibInput');
 
         if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
 
@@ -2003,18 +1982,24 @@ class PhotoProcessor {
         staticContainer.classList.add('d-none');
         inlineContainer.classList.remove('d-none');
 
-        // Pre-fill with current bib number
-        if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
-            input.value = photo.detection_result.bib_number;
-        } else {
-            input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
-        }
+        // Use the same enhanced labeling interface
+        this.setupEnhancedInlineLabeling(photo);
 
-        // Focus and select the input
-        setTimeout(() => {
-            input.focus();
-            input.select();
-        }, 100);
+        // Pre-fill with current bib number
+        const input = document.getElementById('inlineBibInput');
+        if (input) {
+            if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
+                input.value = photo.detection_result.bib_number;
+            } else {
+                input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
+            }
+
+            // Focus and select the input
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 100);
+        }
     }
 
     async saveInlineLabel() {
