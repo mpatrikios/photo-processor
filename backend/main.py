@@ -42,20 +42,22 @@ os.makedirs(exports_dir, exist_ok=True)
 
 print(f"Created directories: {upload_dir}, {processed_dir}, {exports_dir}")
 
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/processed", StaticFiles(directory="processed"), name="processed")
-
-# Serve frontend static files
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "static")), name="static")
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-
+# Include API routers FIRST - before static file mounts
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(process.router, prefix="/api/process", tags=["process"])
 app.include_router(download.router, prefix="/api/download", tags=["download"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
+
+# Mount upload/processed directories for serving files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/processed", StaticFiles(directory="processed"), name="processed")
+
+# Serve frontend static files LAST - so they don't override API routes
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "static")), name="static")
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
 print("✅ API routers registered:")
 print("  - /api/auth")
