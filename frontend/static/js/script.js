@@ -871,9 +871,9 @@ class PhotoProcessor {
                                     </div>
                                     <div class="hover-overlay">
                                         <i class="fas fa-expand-alt me-1"></i>
-                                        View
+                                        ${group.bib_number === 'unknown' ? 'View & Label' : 'View'}
                                     </div>
-                                    ${photo.detection_result ? `
+                                    ${photo.detection_result && photo.detection_result.confidence > 0 ? `
                                         <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
                                             ${Math.round(photo.detection_result.confidence * 100)}%
                                         </div>
@@ -899,7 +899,7 @@ class PhotoProcessor {
                             ` : group.count > 0 ? `
                                 <button class="btn btn-outline-primary btn-sm me-2" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
                                     <i class="fas fa-eye me-1"></i>
-                                    View Photos
+                                    ${group.bib_number === 'unknown' ? 'View & Label Photos' : 'View Photos'}
                                 </button>
                             ` : ''}
                             ${group.bib_number === 'unknown' ? `
@@ -1711,8 +1711,13 @@ class PhotoProcessor {
         // Find the current photo index in the flat list
         this.currentPhotoIndex = this.allPhotosFlat.findIndex(photo => photo.id === photoId);
         
-        if (this.currentPhotoIndex === -1) return;
+        if (this.currentPhotoIndex === -1) {
+            console.error('Photo not found in flat list:', photoId);
+            return;
+        }
 
+        console.log('Opening photo modal for:', photoId, 'Group:', groupBibNumber);
+        
         this.initializeLightbox();
         this.showPhotoInLightbox(this.currentPhotoIndex);
 
