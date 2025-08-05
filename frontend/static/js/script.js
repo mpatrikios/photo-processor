@@ -213,7 +213,15 @@ function checkAuthOnLoad() {
 
 class PhotoProcessor {
     constructor() {
-        this.apiBase = window.location.protocol + '//' + window.location.hostname + ':8000/api';
+        // In development, frontend runs on 5173 and backend on 8000
+        // In production, both will be served from the same domain
+        const isDevelopment = window.location.port === '5173';
+        if (isDevelopment) {
+            this.apiBase = window.location.protocol + '//' + window.location.hostname + ':8000/api';
+        } else {
+            // Production deployment will serve everything from the same port
+            this.apiBase = window.location.protocol + '//' + window.location.host + '/api';
+        }
         this.selectedFiles = [];
         this.currentJobId = null;
         this.groupedPhotos = [];
@@ -837,7 +845,7 @@ class PhotoProcessor {
                         <div class="photo-grid">
                             ${group.photos.slice(0, 4).map((photo, index) => `
                                 <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', '${group.bib_number}')">
-                                    <img src="${this.apiBase.replace('/api', '')}/uploads/${photo.filename}" 
+                                    <img src="${this.apiBase}/upload/serve/${photo.id}" 
                                          alt="${photo.filename}" 
                                          style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
                                          onerror="console.error('Failed to load image:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';">
