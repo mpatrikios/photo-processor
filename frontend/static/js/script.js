@@ -1825,23 +1825,39 @@ class PhotoProcessor {
             return;
         }
 
+        // Remove any existing event listeners to prevent duplicates
+        const newInput = input.cloneNode(true);
+        input.parentNode.replaceChild(newInput, input);
+        const freshInput = document.getElementById('inlineBibInput');
+
         // Input keyboard events
-        input.addEventListener('keydown', (e) => {
+        freshInput.addEventListener('keydown', (e) => {
+            console.log('Keydown event:', e.key);
             if (e.key === 'Enter') {
                 e.preventDefault();
+                console.log('Enter pressed, calling saveInlineLabel');
                 this.saveInlineLabel();
             } else if (e.key === 'Escape') {
                 e.preventDefault();
+                console.log('Escape pressed, calling cancelInlineLabel');
                 this.cancelInlineLabel();
             }
         });
 
-        // Only allow numbers - use keypress for better control
-        input.addEventListener('keypress', (e) => {
+        // Only allow numbers - use input event for better control
+        freshInput.addEventListener('input', (e) => {
+            // Remove any non-numeric characters
+            const value = e.target.value;
+            const numericValue = value.replace(/[^0-9]/g, '');
+            if (value !== numericValue) {
+                e.target.value = numericValue;
+            }
+        });
+
+        // Also prevent non-numeric input on keypress
+        freshInput.addEventListener('keypress', (e) => {
             // Allow numbers (0-9) and control keys
             const char = String.fromCharCode(e.which);
-            console.log('Keypress event:', { key: e.key, char: char, which: e.which });
-
             if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.which != 8 && e.which != 0) {
                 console.log('Blocking non-numeric character:', char);
                 e.preventDefault();
@@ -1934,17 +1950,19 @@ class PhotoProcessor {
             </div>
         `;
         
-        // Re-initialize event listeners for the new elements
-        this.initializeInlineLabeling();
-        
-        // Focus and select the input after a brief delay
+        // Re-initialize event listeners for the new elements after DOM update
         setTimeout(() => {
+            this.initializeInlineLabeling();
+            
+            // Focus and select the input
             const input = document.getElementById('inlineBibInput');
-            if (input && currentBibNumber) {
+            if (input) {
                 input.focus();
-                input.select();
+                if (currentBibNumber) {
+                    input.select();
+                }
             }
-        }, 100);
+        }, 50);
     }
 
     enableEditMode() {
@@ -1964,6 +1982,11 @@ class PhotoProcessor {
 
     async saveInlineLabel() {
         const input = document.getElementById('inlineBibInput');
+        if (!input) {
+            console.error('Inline bib input not found');
+            return;
+        }
+
         const bibNumber = input.value.trim();
 
         if (!bibNumber || !this.validateBibNumber(bibNumber)) {
@@ -1972,15 +1995,20 @@ class PhotoProcessor {
             return;
         }
 
-        if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
+        if (!this.allPhotosFlat || this.currentPhotoIndex < 0 || this.currentPhotoIndex >= this.allPhotosFlat.length) {
+            this.showError('No photo selected for labeling');
+            return;
+        }
 
-        const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
+        const photo = this.allPhotosFlat[this.currentPhotoIndex];
 
         try {
             // Show loading state in input
             input.disabled = true;
             input.style.opacity = '0.6';
             input.value = 'Saving...';
+
+            console.log(`Attempting to label photo ${photo.id} as bib #${bibNumber}`);
 
             // Save the label
             await this.labelPhoto(photo.id, bibNumber);
@@ -1997,14 +2025,17 @@ class PhotoProcessor {
                 this.isEditMode = false;
                 const staticContainer = document.getElementById('photoBibNumberContainer');
                 const inlineContainer = document.getElementById('inlineLabelContainer');
-                staticContainer.classList.remove('d-none');
-                inlineContainer.classList.add('d-none');
+                if (staticContainer && inlineContainer) {
+                    staticContainer.classList.remove('d-none');
+                    inlineContainer.classList.add('d-none');
+                }
             } else {
                 // For unknown photos: advance to next unknown for rapid labeling
                 this.advanceToNextUnknownPhoto();
             }
 
         } catch (error) {
+            console.error('Failed to label photo:', error);
             this.showError(`Failed to label photo: ${error.message}`);
             // Restore input state
             input.disabled = false;
