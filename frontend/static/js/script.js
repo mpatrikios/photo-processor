@@ -235,6 +235,13 @@ class PhotoProcessor {
         this.photoCountFilter = 1;
         this.isAuthenticated = false;
         this.authToken = null;
+        this.isEditMode = false; // For inline labeling
+        this.zoomLevel = 1;
+        this.panX = 0;
+        this.panY = 0;
+        this.currentLightboxGroup = null;
+        this.currentPhotoIndex = 0;
+        this.selectedUnknownPhotos = []; // For unknown photos selection
 
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
@@ -245,30 +252,33 @@ class PhotoProcessor {
 
     // Authentication Methods
     async checkAuthStatus() {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            return false;
+        }
+
         try {
             const response = await fetch(`${this.apiBase}/auth/validate`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ token: this.authToken })
+                body: JSON.stringify({ token: token })
             });
 
             if (response.ok) {
                 const data = await response.json();
-                this.isAuthenticated = true;
-                showAppSection();
+                return data.valid;
             } else {
-                // Token invalid, clear it and show login
-                localStorage.removeItem('auth_token');
-                this.authToken = null;
-                this.isAuthenticated = false;
-                this.showLoginScreen();
+                console.error('Auth validation failed:', response.status, response.statusText);
+                // Try to get more details about the error
+                const errorText = await response.text();
+                console.error('Error details:', errorText);
             }
+            return false;
         } catch (error) {
             console.error('Auth check failed:', error);
-            this.isAuthenticated = false;
-            this.showLoginScreen();
+            return false;
         }
     }
 
@@ -1742,7 +1752,7 @@ class PhotoProcessor {
         // Initialize zoom functionality
         this.initializeZoom();
 
-        // Reset zoom level
+        // Reset zoom
         this.zoomLevel = 1;
         this.panX = 0;
         this.panY = 0;
@@ -2587,8 +2597,6 @@ class PhotoProcessor {
     }
 
     // Selection Management
-    selectedUnknownPhotos = [];
-
     toggleUnknownPhotoSelection(photoId) {
         const index = this.selectedUnknownPhotos.indexOf(photoId);
         if (index > -1) {

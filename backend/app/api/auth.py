@@ -10,6 +10,11 @@ router = APIRouter()
 # Simple in-memory session storage (use Redis or database in production)
 active_sessions = {}
 
+@router.get("/test")
+async def test_auth_route():
+    """Test endpoint to verify auth routing is working"""
+    return {"message": "Auth routes are working", "demo_credentials": "admin/admin or user/password"}
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -68,6 +73,25 @@ async def validate_token(request: TokenValidation):
     """Validate if token is still active"""
     token = request.token
     
+    if token not in active_sessions:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    session = active_sessions[token]
+    
+    # Check if token is expired
+    if datetime.now() > session["expires_at"]:
+        del active_sessions[token]
+        raise HTTPException(status_code=401, detail="Token expired")
+    
+    return {
+        "valid": True,
+        "username": session["username"],
+        "expires_at": session["expires_at"].isoformat()
+    }
+
+@router.get("/validate/{token}")
+async def validate_token_get(token: str):
+    """GET endpoint for token validation - for debugging"""
     if token not in active_sessions:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
