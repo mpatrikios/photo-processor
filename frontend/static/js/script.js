@@ -4,7 +4,7 @@
 function showSignInModal() {
     const modal = new bootstrap.Modal(document.getElementById('signInModal'));
     modal.show();
-    
+
     // Attach event listener when modal is shown
     setTimeout(() => {
         const signInForm = document.getElementById('signInForm');
@@ -21,7 +21,7 @@ function showSignInModal() {
 function showCreateAccountModal() {
     const modal = new bootstrap.Modal(document.getElementById('createAccountModal'));
     modal.show();
-    
+
     // Attach event listener when modal is shown
     setTimeout(() => {
         const createAccountForm = document.getElementById('createAccountForm');
@@ -39,7 +39,7 @@ function switchToCreateAccount() {
     // Hide sign in modal and show create account modal
     const signInModal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
     if (signInModal) signInModal.hide();
-    
+
     setTimeout(() => {
         showCreateAccountModal();
     }, 300);
@@ -49,7 +49,7 @@ function switchToSignIn() {
     // Hide create account modal and show sign in modal  
     const createAccountModal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
     if (createAccountModal) createAccountModal.hide();
-    
+
     setTimeout(() => {
         showSignInModal();
     }, 300);
@@ -69,7 +69,7 @@ function logout() {
     // Clear auth token and show landing page
     localStorage.removeItem('auth_token');
     showLandingPage();
-    
+
     // Reset any app state
     if (window.photoProcessor) {
         window.photoProcessor.isAuthenticated = false;
@@ -82,50 +82,50 @@ function handleSignIn(event) {
     console.log('Sign In form submitted'); // Debug log
     event.preventDefault();
     const form = event.target;
-    
+
     const emailElement = document.getElementById('signInEmail');
     const passwordElement = document.getElementById('signInPassword');
-    
+
     console.log('Email element:', emailElement); // Debug log
     console.log('Password element:', passwordElement); // Debug log
-    
+
     if (!emailElement || !passwordElement) {
         console.error('Form elements not found!');
         showNotification('Form error - please try again', 'error');
         return;
     }
-    
+
     const email = emailElement.value;
     const password = passwordElement.value;
-    
+
     console.log('Email:', email, 'Password:', password); // Debug log
-    
+
     // Basic validation
     if (!email || !password) {
         showNotification('Please fill in all fields', 'error');
         return;
     }
-    
+
     // Show loading state
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
-    
+
     // Simulate authentication (replace with actual API call)
     setTimeout(() => {
         // Store auth token
         localStorage.setItem('auth_token', 'demo-token-' + Date.now());
-        
+
         // Hide modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
         modal.hide();
-        
+
         // Show app section
         showAppSection();
-        
+
         showNotification('Welcome to RaceSort!', 'success');
-        
+
         // Restore button
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
@@ -138,38 +138,38 @@ function handleCreateAccount(event) {
     const name = document.getElementById('createName').value;
     const email = document.getElementById('createEmail').value;
     const password = document.getElementById('createPassword').value;
-    
+
     // Validation
     if (!name || !email || !password) {
         showNotification('Please fill in all fields', 'error');
         return;
     }
-    
+
     if (password.length < 6) {
         showNotification('Password must be at least 6 characters', 'error');
         return;
     }
-    
+
     // Show loading state
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Account...';
-    
+
     // Simulate account creation (replace with actual API call)
     setTimeout(() => {
         // Store auth token
         localStorage.setItem('auth_token', 'demo-token-' + Date.now());
-        
+
         // Hide modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
         modal.hide();
-        
+
         // Show app section
         showAppSection();
-        
+
         showNotification('Account created successfully! Welcome to RaceSort!', 'success');
-        
+
         // Restore button
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
@@ -179,7 +179,7 @@ function handleCreateAccount(event) {
 function showNotification(message, type = 'info') {
     const alertClass = type === 'error' ? 'alert-danger' : type === 'success' ? 'alert-success' : 'alert-info';
     const iconClass = type === 'error' ? 'fa-exclamation-triangle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
-    
+
     const notification = document.createElement('div');
     notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
     notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
@@ -188,9 +188,9 @@ function showNotification(message, type = 'info') {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     // Auto-remove after 4 seconds
     setTimeout(() => {
         if (notification.parentNode) {
@@ -227,52 +227,46 @@ class PhotoProcessor {
         this.photoCountFilter = 1;
         this.isAuthenticated = false;
         this.authToken = null;
-        
+
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
-        
+
         // Initialize authentication and UI
         this.initializeApp();
     }
 
     // Authentication Methods
     async checkAuthStatus() {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-            try {
-                // Validate token with backend
-                const response = await fetch(`${this.apiBase}/auth/validate`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ token })
-                });
-                
-                if (response.ok) {
-                    this.authToken = token;
-                    this.isAuthenticated = true;
-                    this.showMainContent();
-                } else {
-                    // Token is invalid or expired
-                    localStorage.removeItem('auth_token');
-                    this.showLoginScreen();
-                }
-            } catch (error) {
-                console.error('Token validation error:', error);
-                // On error, show login screen
+        try {
+            const response = await fetch(`${this.apiBase}/auth/validate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ token: this.authToken })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                this.isAuthenticated = true;
+                showAppSection();
+            } else {
+                // Token invalid, clear it and show login
                 localStorage.removeItem('auth_token');
+                this.authToken = null;
+                this.isAuthenticated = false;
                 this.showLoginScreen();
             }
-        } else {
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            this.isAuthenticated = false;
             this.showLoginScreen();
         }
     }
 
     showLoginScreen() {
-        document.getElementById('login-section').classList.remove('d-none');
-        document.getElementById('main-content').classList.add('d-none');
-        this.initializeLoginForm();
+        // Make sure we're on the landing page, not showing API response
+        showLandingPage();
     }
 
     showMainContent() {
@@ -290,16 +284,16 @@ class PhotoProcessor {
 
     async handleLogin(e) {
         e.preventDefault();
-        
+
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         const submitBtn = e.target.querySelector('button[type="submit"]');
-        
+
         // Show loading state
         const originalText = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
-        
+
         try {
             const response = await fetch(`${this.apiBase}/auth/login`, {
                 method: 'POST',
@@ -308,7 +302,7 @@ class PhotoProcessor {
                 },
                 body: JSON.stringify({ username, password })
             });
-            
+
             if (response.ok) {
                 const result = await response.json();
                 localStorage.setItem('auth_token', result.token);
@@ -418,10 +412,10 @@ class PhotoProcessor {
 
         // Download All button (simplified)
         document.getElementById('download-all-btn').addEventListener('click', this.downloadAllPhotos.bind(this));
-        
+
         // Simplified - no bulk selection needed
     }
-    
+
     initializeBulkSelection() {
         document.getElementById('selectAllGroups').addEventListener('change', (e) => {
             if (e.target.checked) {
@@ -430,36 +424,36 @@ class PhotoProcessor {
                 this.selectNone();
             }
         });
-        
+
         document.getElementById('selectDetectedBtn').addEventListener('click', () => {
             this.selectDetectedGroups();
         });
-        
+
         document.getElementById('selectUnknownBtn').addEventListener('click', () => {
             this.selectUnknownGroups();
         });
-        
+
         document.getElementById('selectNoneBtn').addEventListener('click', () => {
             this.selectNone();
         });
-        
+
         // Export options change handlers
         document.getElementById('exportFormat').addEventListener('change', () => {
             this.updateExportPreview();
         });
-        
+
         document.getElementById('filenamePattern').addEventListener('change', () => {
             this.updateExportPreview();
         });
     }
-    
+
     selectAllGroups() {
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
         this.selectedGroups = groupsToShow.map(group => group.bib_number);
         this.updateSelectionUI();
         this.updateExportPreview();
     }
-    
+
     selectDetectedGroups() {
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
         this.selectedGroups = groupsToShow
@@ -468,7 +462,7 @@ class PhotoProcessor {
         this.updateSelectionUI();
         this.updateExportPreview();
     }
-    
+
     selectUnknownGroups() {
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
         this.selectedGroups = groupsToShow
@@ -477,14 +471,14 @@ class PhotoProcessor {
         this.updateSelectionUI();
         this.updateExportPreview();
     }
-    
+
     selectNone() {
         this.selectedGroups = [];
         document.getElementById('selectAllGroups').checked = false;
         this.updateSelectionUI();
         this.updateExportPreview();
     }
-    
+
     updateSelectionUI() {
         // Update checkboxes in export groups
         document.querySelectorAll('.export-checkbox input[type="checkbox"]').forEach(checkbox => {
@@ -496,40 +490,40 @@ class PhotoProcessor {
                 label.classList.remove('selected');
             }
         });
-        
+
         // Update selection count
         const count = this.selectedGroups.length;
         document.getElementById('selectionCount').textContent = `${count} group${count !== 1 ? 's' : ''} selected`;
         document.getElementById('exportBtnCount').textContent = count;
-        
+
         // Update select all checkbox
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
         const allSelected = groupsToShow.length > 0 && this.selectedGroups.length === groupsToShow.length;
         document.getElementById('selectAllGroups').checked = allSelected;
-        
+
         // Enable/disable export button
         document.getElementById('export-btn').disabled = this.selectedGroups.length === 0;
     }
-    
+
     updateExportPreview() {
         const selectedGroupData = this.groupedPhotos.filter(group => 
             this.selectedGroups.includes(group.bib_number)
         );
-        
+
         const exportPreview = document.getElementById('exportPreview');
         const exportPreviewList = document.getElementById('exportPreviewList');
         const exportPhotoCount = document.getElementById('exportPhotoCount');
-        
+
         if (selectedGroupData.length === 0) {
             exportPreview.style.display = 'none';
             return;
         }
-        
+
         exportPreview.style.display = 'block';
-        
+
         const totalPhotos = selectedGroupData.reduce((sum, group) => sum + group.count, 0);
         exportPhotoCount.textContent = totalPhotos;
-        
+
         exportPreviewList.innerHTML = selectedGroupData.map(group => `
             <div class="d-flex justify-content-between align-items-center mb-1">
                 <small class="text-muted">
@@ -539,33 +533,33 @@ class PhotoProcessor {
             </div>
         `).join('');
     }
-    
+
     initializeSearchAndFilters() {
         // Search input - only initialize if elements exist
         const searchInput = document.getElementById('searchBib');
         const clearSearchBtn = document.getElementById('clearSearchBtn');
         const searchSuggestions = document.getElementById('searchSuggestions');
-        
+
         if (searchInput && clearSearchBtn && searchSuggestions) {
             searchInput.addEventListener('input', (e) => {
                 this.searchTerm = e.target.value.toLowerCase();
                 this.showSearchSuggestions();
                 this.applyFilters();
             });
-            
+
             searchInput.addEventListener('focus', () => {
                 if (this.searchTerm === '') {
                     this.showSearchSuggestions();
                 }
             });
-            
+
             searchInput.addEventListener('blur', () => {
                 // Delay hiding suggestions to allow clicking
                 setTimeout(() => {
                     searchSuggestions.classList.remove('show');
                 }, 150);
             });
-            
+
             clearSearchBtn.addEventListener('click', () => {
                 searchInput.value = '';
                 this.searchTerm = '';
@@ -573,16 +567,16 @@ class PhotoProcessor {
                 searchSuggestions.classList.remove('show');
             });
         }
-        
+
         // Filter buttons - only initialize if they exist
         const filterAll = document.getElementById('filterAll');
         const filterDetected = document.getElementById('filterDetected');
         const filterUnknown = document.getElementById('filterUnknown');
-        
+
         if (filterAll) filterAll.addEventListener('click', () => this.setFilter('all'));
         if (filterDetected) filterDetected.addEventListener('click', () => this.setFilter('detected'));
         if (filterUnknown) filterUnknown.addEventListener('click', () => this.setFilter('unknown'));
-        
+
         // Sort dropdown
         document.querySelectorAll('[data-sort]').forEach(item => {
             item.addEventListener('click', (e) => {
@@ -590,30 +584,30 @@ class PhotoProcessor {
                 this.setSort(e.target.dataset.sort);
             });
         });
-        
+
         // Advanced filters - only initialize if elements exist
         const showAdvancedBtn = document.getElementById('showAdvancedFilters');
         const hideAdvancedBtn = document.getElementById('toggleAdvancedFilters');
         const advancedFilters = document.getElementById('advancedFilters');
-        
+
         if (showAdvancedBtn && hideAdvancedBtn && advancedFilters) {
             showAdvancedBtn.addEventListener('click', () => {
                 advancedFilters.style.display = 'block';
                 showAdvancedBtn.style.display = 'none';
             });
-            
+
             hideAdvancedBtn.addEventListener('click', () => {
                 advancedFilters.style.display = 'none';
                 showAdvancedBtn.style.display = 'block';
             });
         }
-        
+
         // Range sliders - only initialize if elements exist
         const confidenceRange = document.getElementById('confidenceRange');
         const photoCountRange = document.getElementById('photoCountRange');
         const confidenceValue = document.getElementById('confidenceValue');
         const photoCountValue = document.getElementById('photoCountValue');
-        
+
         if (confidenceRange && confidenceValue) {
             confidenceRange.addEventListener('input', (e) => {
                 this.confidenceFilter = parseInt(e.target.value);
@@ -621,7 +615,7 @@ class PhotoProcessor {
                 this.applyFilters();
             });
         }
-        
+
         if (photoCountRange && photoCountValue) {
             photoCountRange.addEventListener('input', (e) => {
                 this.photoCountFilter = parseInt(e.target.value);
@@ -630,50 +624,50 @@ class PhotoProcessor {
             });
         }
     }
-    
+
     showSearchSuggestions() {
         const searchSuggestions = document.getElementById('searchSuggestions');
         if (!searchSuggestions) return; // Exit if element doesn't exist
-        
+
         const bibNumbers = this.groupedPhotos
             .map(group => group.bib_number)
             .filter(bib => bib !== 'unknown')
             .filter(bib => this.searchTerm === '' || bib.toLowerCase().includes(this.searchTerm))
             .slice(0, 8);
-        
+
         if (bibNumbers.length === 0 && this.searchTerm === '') {
             searchSuggestions.classList.remove('show');
             return;
         }
-        
+
         searchSuggestions.innerHTML = bibNumbers.map(bib => `
             <div class="suggestion-item" onclick="photoProcessor.selectSuggestion('${bib}')">
                 Bib #${bib}
             </div>
         `).join('');
-        
+
         if (bibNumbers.length > 0) {
             searchSuggestions.classList.add('show');
         } else {
             searchSuggestions.classList.remove('show');
         }
     }
-    
+
     selectSuggestion(bibNumber) {
         const searchInput = document.getElementById('searchBib');
         const searchSuggestions = document.getElementById('searchSuggestions');
-        
+
         if (searchInput) {
             searchInput.value = bibNumber;
             this.searchTerm = bibNumber.toLowerCase();
             this.applyFilters();
         }
-        
+
         if (searchSuggestions) {
             searchSuggestions.classList.remove('show');
         }
     }
-    
+
     setFilter(filter) {
         // Update button states
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -691,15 +685,15 @@ class PhotoProcessor {
                 else if (btn.id === 'filterUnknown') btn.classList.add('btn-outline-warning');
             }
         });
-        
+
         this.currentFilter = filter;
         this.applyFilters();
     }
-    
+
     setSort(sortType) {
         this.currentSort = sortType;
         this.applyFilters();
-        
+
         // Update dropdown button text
         const sortLabels = {
             'bib-asc': 'Bib A-Z',
@@ -709,28 +703,28 @@ class PhotoProcessor {
             'confidence-desc': 'High Confidence',
             'confidence-asc': 'Low Confidence'
         };
-        
+
         document.getElementById('sortDropdown').innerHTML = `
             <i class="fas fa-sort me-1"></i>${sortLabels[sortType]}
         `;
     }
-    
+
     applyFilters() {
         if (!this.groupedPhotos || this.groupedPhotos.length === 0) {
             this.filteredGroups = [];
             this.updateResultsCount(0);
             return;
         }
-        
+
         let filtered = [...this.groupedPhotos];
-        
+
         // Apply search filter
         if (this.searchTerm) {
             filtered = filtered.filter(group => 
                 group.bib_number.toLowerCase().includes(this.searchTerm)
             );
         }
-        
+
         // Apply category filter
         if (this.currentFilter !== 'all') {
             if (this.currentFilter === 'detected') {
@@ -739,7 +733,7 @@ class PhotoProcessor {
                 filtered = filtered.filter(group => group.bib_number === 'unknown');
             }
         }
-        
+
         // Apply confidence filter
         if (this.confidenceFilter > 0) {
             filtered = filtered.filter(group => {
@@ -748,12 +742,12 @@ class PhotoProcessor {
                 return avgConfidence >= (this.confidenceFilter / 100);
             });
         }
-        
+
         // Apply photo count filter
         if (this.photoCountFilter > 1) {
             filtered = filtered.filter(group => group.count >= this.photoCountFilter);
         }
-        
+
         // Apply sorting
         filtered.sort((a, b) => {
             switch (this.currentSort) {
@@ -781,38 +775,38 @@ class PhotoProcessor {
                     return 0;
             }
         });
-        
+
         this.filteredGroups = filtered;
         this.updateResultsCount(filtered.length);
         this.displayFilteredPhotoGroups();
     }
-    
+
     getGroupAverageConfidence(group) {
         const photosWithConfidence = group.photos.filter(photo => photo.detection_result);
         if (photosWithConfidence.length === 0) return 0;
-        
+
         const totalConfidence = photosWithConfidence.reduce((sum, photo) => 
             sum + photo.detection_result.confidence, 0);
         return totalConfidence / photosWithConfidence.length;
     }
-    
+
     updateResultsCount(count) {
         const total = this.groupedPhotos.length;
         const resultsCount = document.getElementById('resultsCount');
-        
+
         if (count === total) {
             resultsCount.textContent = `Showing all ${total} groups`;
         } else {
             resultsCount.textContent = `Showing ${count} of ${total} groups`;
         }
     }
-    
+
     displayFilteredPhotoGroups() {
         const photoGroupsDiv = document.getElementById('photo-groups');
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-        
+
         console.log('Displaying groups:', groupsToShow);
-        
+
         if (groupsToShow.length === 0) {
             photoGroupsDiv.innerHTML = `
                 <div class="col-12 text-center py-5">
@@ -823,7 +817,7 @@ class PhotoProcessor {
             `;
             return;
         }
-        
+
         photoGroupsDiv.innerHTML = groupsToShow.map(group => `
             <div class="col-lg-4 col-md-6 mb-4 fade-in-up">
                 <div class="card photo-group-card">
@@ -839,7 +833,7 @@ class PhotoProcessor {
                             <i class="fas fa-mouse-pointer me-1"></i>
                             Click photos to view full size
                         </p>
-                        
+
                         <div class="photo-grid">
                             ${group.photos.slice(0, 4).map((photo, index) => `
                                 <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', '${group.bib_number}')">
@@ -870,7 +864,7 @@ class PhotoProcessor {
                                 </div>
                             `).join('')}
                         </div>
-                        
+
                         <div class="text-center mt-3">
                             ${group.count > 4 ? `
                                 <button class="btn btn-primary btn-sm me-2" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
@@ -918,11 +912,11 @@ class PhotoProcessor {
         e.preventDefault();
         e.stopPropagation();
         document.getElementById('upload-area').classList.remove('dragover');
-        
+
         const files = Array.from(e.dataTransfer.files).filter(file => 
             file.type.startsWith('image/')
         );
-        
+
         this.handleFileSelect(files);
     }
 
@@ -930,11 +924,11 @@ class PhotoProcessor {
     handleFileSelect(files, isFolder = false) {
         const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
         const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        
+
         const validFiles = [];
         const invalidFiles = [];
         const oversizedFiles = [];
-        
+
         Array.from(files).forEach(file => {
             if (!SUPPORTED_FORMATS.includes(file.type)) {
                 invalidFiles.push(file.name);
@@ -944,26 +938,26 @@ class PhotoProcessor {
                 validFiles.push(file);
             }
         });
-        
+
         // Add to existing files instead of replacing
         this.selectedFiles = [...this.selectedFiles, ...validFiles];
-        
+
         // Remove duplicates based on file name and size
         this.selectedFiles = this.selectedFiles.filter((file, index, self) =>
             index === self.findIndex(f => f.name === file.name && f.size === file.size)
         );
-        
+
         this.displaySelectedFiles();
-        
+
         // Show feedback messages
         if (validFiles.length > 0) {
             this.showSuccess(`Added ${validFiles.length} photos${isFolder ? ' from folder' : ''}`);
         }
-        
+
         if (invalidFiles.length > 0) {
             this.showError(`${invalidFiles.length} files skipped (unsupported format)`);
         }
-        
+
         if (oversizedFiles.length > 0) {
             this.showError(`${oversizedFiles.length} files skipped (too large)`);
         }
@@ -1113,7 +1107,7 @@ class PhotoProcessor {
         // Smooth progress bar transitions
         progressBar.style.transition = 'width 0.3s ease-in-out';
         progressBar.style.width = `${job.progress}%`;
-        
+
         // Enhanced progress text with phases
         let statusText = '';
         if (job.progress === 0 || job.completed_photos === 0) {
@@ -1126,7 +1120,7 @@ class PhotoProcessor {
         } else {
             statusText = `Processing... ${job.completed_photos}/${job.total_photos} photos (${job.progress}%)`;
         }
-        
+
         progressText.textContent = statusText;
     }
 
@@ -1154,7 +1148,7 @@ class PhotoProcessor {
 
         } catch (error) {
             console.error('Results fetch error:', error);
-            
+
             // If this is the first attempt, try once more after a delay
             if (retryCount === 0) {
                 console.log('Retrying results fetch after 2 seconds...');
@@ -1218,7 +1212,7 @@ class PhotoProcessor {
     displayExportControls() {
         const exportGroupsDiv = document.getElementById('export-groups');
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-        
+
         exportGroupsDiv.innerHTML = groupsToShow.map(group => `
             <div class="col-md-6 mb-2">
                 <label class="export-checkbox ${this.selectedGroups.includes(group.bib_number) ? 'selected' : ''}">
@@ -1230,7 +1224,7 @@ class PhotoProcessor {
                 </label>
             </div>
         `).join('');
-        
+
         // Update selection UI after rendering
         this.updateSelectionUI();
         this.updateExportPreview();
@@ -1250,7 +1244,7 @@ class PhotoProcessor {
         } else {
             this.selectedGroups.push(bibNumber);
         }
-        
+
         this.updateSelectionUI();
         this.updateExportPreview();
     }
@@ -1261,9 +1255,9 @@ class PhotoProcessor {
         const selectedPhotos = this.groupedPhotos
             .filter(group => this.selectedGroups.includes(group.bib_number))
             .flatMap(group => group.photos);
-        
+
         const photoIds = selectedPhotos.map(photo => photo.id);
-        
+
         // Get export options
         const exportFormat = document.getElementById('exportFormat').value;
         const filenamePattern = document.getElementById('filenamePattern').value;
@@ -1271,7 +1265,7 @@ class PhotoProcessor {
         try {
             // Show progress
             this.showExportProgress('Preparing export...');
-            
+
             document.getElementById('export-btn').disabled = true;
             document.getElementById('export-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Export...';
 
@@ -1297,20 +1291,20 @@ class PhotoProcessor {
             if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
 
             const result = await response.json();
-            
+
             // Update progress
             this.updateExportProgress(75, 'Generating ZIP file...');
-            
+
             // Simulate additional progress steps
             setTimeout(() => {
                 this.updateExportProgress(100, 'Download ready!');
-                
+
                 // Download the file
                 const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
                 window.open(downloadUrl, '_blank');
-                
+
                 this.showSuccess(`Successfully exported ${photoIds.length} photos from ${this.selectedGroups.length} groups!`);
-                
+
                 // Hide progress after a delay
                 setTimeout(() => {
                     this.hideExportProgress();
@@ -1326,30 +1320,30 @@ class PhotoProcessor {
             document.getElementById('export-btn').innerHTML = `<i class="fas fa-file-archive me-2"></i>Export Selected (<span id="exportBtnCount">${this.selectedGroups.length}</span>)`;
         }
     }
-    
+
     async downloadAllPhotos() {
         // Get all photos from all groups
         const allPhotos = this.groupedPhotos.flatMap(group => group.photos);
         const photoIds = allPhotos.map(photo => photo.id);
-        
+
         if (photoIds.length === 0) {
             this.showError('No photos to download.');
             return;
         }
-        
+
         try {
             // Show progress
             this.showExportProgress('Preparing download...');
-            
+
             const downloadBtn = document.getElementById('download-all-btn');
             downloadBtn.disabled = true;
             downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating ZIP...';
-            
+
             const exportData = {
                 photo_ids: photoIds,
                 format: 'zip'
             };
-            
+
             const response = await fetch(`${this.apiBase}/download/export`, {
                 method: 'POST',
                 headers: {
@@ -1357,25 +1351,25 @@ class PhotoProcessor {
                 },
                 body: JSON.stringify(exportData)
             });
-            
+
             if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
             const result = await response.json();
-            
+
             // Show completion and download
             setTimeout(() => {
                 this.updateExportProgress(100, 'Download ready!');
-                
+
                 // Download the file
                 const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
                 window.open(downloadUrl, '_blank');
-                
+
                 this.showSuccess(`Successfully downloaded ${photoIds.length} photos organized by bib number!`);
-                
+
                 // Hide progress after a delay
                 setTimeout(() => {
                     this.hideExportProgress();
                 }, 2000);
-                
+
             }, 1000);
         } catch (error) {
             console.error('Download error:', error);
@@ -1395,13 +1389,13 @@ class PhotoProcessor {
         progressBar.style.width = '25%';
         progressBar.innerHTML = `<small>${message}</small>`;
     }
-    
+
     updateExportProgress(percent, message) {
         const progressBar = document.querySelector('#exportProgress .progress-bar');
         progressBar.style.width = `${percent}%`;
         progressBar.innerHTML = `<small>${message}</small>`;
     }
-    
+
     hideExportProgress() {
         document.getElementById('exportProgress').style.display = 'none';
     }
@@ -1412,11 +1406,11 @@ class PhotoProcessor {
         this.currentJobId = null;
         this.groupedPhotos = [];
         this.selectedGroups = [];
-        
+
         document.getElementById('file-input').value = '';
         document.getElementById('upload-btn').disabled = false;
         document.getElementById('upload-btn').innerHTML = '<i class="fas fa-upload me-2"></i>Upload Photos';
-        
+
         this.showUploadSection();
     }
 
@@ -1435,9 +1429,9 @@ class PhotoProcessor {
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         document.body.appendChild(successDiv);
-        
+
         // Auto-remove after 3 seconds
         setTimeout(() => {
             if (successDiv.parentNode) {
@@ -1501,11 +1495,11 @@ class PhotoProcessor {
         e.preventDefault();
         e.stopPropagation();
         document.getElementById('modal-upload-area').classList.remove('dragover');
-        
+
         const files = Array.from(e.dataTransfer.files).filter(file => 
             file.type.startsWith('image/')
         );
-        
+
         this.handleModalFileSelect(files);
     }
 
@@ -1513,16 +1507,16 @@ class PhotoProcessor {
         const imageFiles = Array.from(files).filter(file => 
             file.type.startsWith('image/')
         );
-        
+
         this.modalSelectedFiles = [...this.modalSelectedFiles, ...imageFiles];
-        
+
         // Remove duplicates
         this.modalSelectedFiles = this.modalSelectedFiles.filter((file, index, self) =>
             index === self.findIndex(f => f.name === file.name && f.size === file.size)
         );
-        
+
         this.displayModalSelectedFiles();
-        
+
         if (imageFiles.length > 0) {
             this.showSuccess(`Added ${imageFiles.length} additional photos`);
         }
@@ -1598,7 +1592,7 @@ class PhotoProcessor {
             }
 
             const result = await response.json();
-            
+
             // Process new photos
             const processResponse = await fetch(`${this.apiBase}/process/start`, {
                 method: 'POST',
@@ -1613,10 +1607,10 @@ class PhotoProcessor {
             }
 
             const job = await processResponse.json();
-            
+
             // Show processing notification
             this.showSuccess(`Processing ${this.modalSelectedFiles.length} additional photos...`);
-            
+
             // Poll for completion and merge results
             this.pollAdditionalProcessing(job.job_id);
 
@@ -1639,7 +1633,7 @@ class PhotoProcessor {
                 if (!resultsResponse.ok) throw new Error(`Results fetch failed: ${resultsResponse.statusText}`);
 
                 const newGroupedPhotos = await resultsResponse.json();
-                
+
                 // Merge with existing results
                 this.mergeGroupedPhotos(newGroupedPhotos);
                 this.displayResults();
@@ -1680,7 +1674,7 @@ class PhotoProcessor {
         // Find the group and photo
         let currentGroup = null;
         let currentPhotoIndex = 0;
-        
+
         if (groupBibNumber) {
             currentGroup = this.groupedPhotos.find(group => group.bib_number === groupBibNumber);
         } else {
@@ -1694,69 +1688,69 @@ class PhotoProcessor {
                 }
             }
         }
-        
+
         if (!currentGroup) return;
-        
+
         this.currentLightboxGroup = currentGroup;
         this.currentPhotoIndex = currentPhotoIndex;
-        
+
         this.initializeLightbox();
         this.showPhotoInLightbox(this.currentPhotoIndex);
-        
+
         const modal = new bootstrap.Modal(document.getElementById('photoModal'));
         modal.show();
-        
+
         // Initialize keyboard navigation
         this.initializeLightboxKeyboard();
     }
-    
+
     initializeLightbox() {
         const modal = document.getElementById('photoModal');
-        
+
         // Navigation buttons
         document.getElementById('prevPhotoBtn').onclick = () => this.previousPhoto();
         document.getElementById('nextPhotoBtn').onclick = () => this.nextPhoto();
-        
+
         // Zoom controls
         document.getElementById('zoomInBtn').onclick = () => this.zoomIn();
         document.getElementById('zoomOutBtn').onclick = () => this.zoomOut();
         document.getElementById('zoomResetBtn').onclick = () => this.resetZoom();
-        
+
         // Fullscreen toggle
         document.getElementById('fullscreenBtn').onclick = () => this.toggleFullscreen();
-        
+
         // Download button
         document.getElementById('downloadPhotoBtn').onclick = () => this.downloadCurrentPhoto();
-        
+
         // Initialize inline labeling
         this.initializeInlineLabeling();
-        
+
         // Initialize edit button
         document.getElementById('editBibBtn').onclick = () => this.enableEditMode();
-        
+
         // Initialize thumbnails
         this.createThumbnailStrip();
-        
+
         // Initialize zoom functionality
         this.initializeZoom();
-        
+
         // Reset zoom level
         this.zoomLevel = 1;
         this.panX = 0;
         this.panY = 0;
     }
-    
+
     showPhotoInLightbox(index) {
         if (!this.currentLightboxGroup || index < 0 || index >= this.currentLightboxGroup.photos.length) {
             return;
         }
-        
+
         this.currentPhotoIndex = index;
         const photo = this.currentLightboxGroup.photos[index];
-        
+
         // Show loading spinner
         document.getElementById('photoLoader').style.display = 'block';
-        
+
         // Update image
         const modalImage = document.getElementById('modalPhotoImage');
         modalImage.onload = () => {
@@ -1764,19 +1758,19 @@ class PhotoProcessor {
         };
         modalImage.src = `${this.apiBase}/upload/serve/${photo.id}`;
         modalImage.alt = photo.filename;
-        
+
         // Update metadata
         document.getElementById('photoModalLabel').textContent = `${this.currentLightboxGroup.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${this.currentLightboxGroup.bib_number}`}`;
         document.getElementById('photoPosition').textContent = `${index + 1} of ${this.currentLightboxGroup.photos.length}`;
         document.getElementById('photoFilename').textContent = photo.filename;
         document.getElementById('photoBibNumber').textContent = this.currentLightboxGroup.bib_number === 'unknown' ? 'Unknown' : this.currentLightboxGroup.bib_number;
-        
+
         // Update confidence
         if (photo.detection_result) {
             const confidence = Math.round(photo.detection_result.confidence * 100);
             document.getElementById('photoConfidence').textContent = `${confidence}%`;
             document.getElementById('photoConfidenceDetail').textContent = `${confidence}%`;
-            
+
             // Update confidence badge color
             const badge = document.getElementById('photoConfidence');
             badge.className = 'badge ' + this.getConfidenceBadgeClass(photo.detection_result.confidence);
@@ -1785,45 +1779,45 @@ class PhotoProcessor {
             document.getElementById('photoConfidenceDetail').textContent = 'Not detected';
             document.getElementById('photoConfidence').className = 'badge bg-secondary';
         }
-        
+
         // Update navigation buttons
         document.getElementById('prevPhotoBtn').disabled = index === 0;
         document.getElementById('nextPhotoBtn').disabled = index === this.currentLightboxGroup.photos.length - 1;
-        
+
         // Show/hide inline labeling for unknown photos
         this.updateInlineLabeling(photo);
-        
+
         // Update thumbnail selection
         this.updateThumbnailSelection();
-        
+
         // Reset zoom
         this.resetZoom();
     }
-    
+
     initializeInlineLabeling() {
         console.log('initializeInlineLabeling called');
-        
+
         const saveBtn = document.getElementById('inlineSaveBtn');
         const cancelBtn = document.getElementById('inlineCancelBtn');
         const input = document.getElementById('inlineBibInput');
-        
+
         console.log('Inline labeling elements:', {
             saveBtn: !!saveBtn,
             cancelBtn: !!cancelBtn,
             input: !!input
         });
-        
+
         if (!saveBtn || !cancelBtn || !input) {
             console.error('Could not find inline labeling elements');
             return;
         }
-        
+
         // Save button click
         saveBtn.onclick = () => this.saveInlineLabel();
-        
+
         // Cancel button click
         cancelBtn.onclick = () => this.cancelInlineLabel();
-        
+
         // Input keyboard events
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -1834,29 +1828,29 @@ class PhotoProcessor {
                 this.cancelInlineLabel();
             }
         });
-        
+
         // Only allow numbers - use keypress for better control
         input.addEventListener('keypress', (e) => {
             // Allow numbers (0-9) and control keys
             const char = String.fromCharCode(e.which);
             console.log('Keypress event:', { key: e.key, char: char, which: e.which });
-            
+
             if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.which != 8 && e.which != 0) {
                 console.log('Blocking non-numeric character:', char);
                 e.preventDefault();
             }
         });
-        
+
         console.log('Inline labeling initialized successfully');
     }
-    
+
     updateInlineLabeling(photo) {
         const staticContainer = document.getElementById('photoBibNumberContainer');
         const staticDisplay = document.getElementById('photoBibNumber');
         const editBtn = document.getElementById('editBibBtn'); 
         const inlineContainer = document.getElementById('inlineLabelContainer');
         const input = document.getElementById('inlineBibInput');
-        
+
         console.log('updateInlineLabeling called', {
             photo: photo,
             groupBib: this.currentLightboxGroup?.bib_number,
@@ -1867,32 +1861,32 @@ class PhotoProcessor {
             inlineContainer: !!inlineContainer,
             input: !!input
         });
-        
+
         if (!staticContainer || !staticDisplay || !editBtn || !inlineContainer || !input) {
             console.error('Missing DOM elements for inline labeling');
             return;
         }
-        
+
         const isUnknown = this.currentLightboxGroup.bib_number === 'unknown' || 
                          (photo.detection_result && photo.detection_result.bib_number === 'unknown');
-        
+
         console.log('isUnknown:', isUnknown);
-        
+
         // Reset edit mode state
         this.isEditMode = false;
-        
+
         if (isUnknown) {
             // Show inline labeling immediately for unknown photos
             console.log('Showing inline labeling for unknown photo');
             staticContainer.classList.add('d-none');
             inlineContainer.classList.remove('d-none');
-            
+
             // Auto-focus the input after a brief delay
             setTimeout(() => {
                 input.focus();
                 input.select();
             }, 100);
-            
+
             // Clear any previous value
             input.value = '';
         } else {
@@ -1903,66 +1897,66 @@ class PhotoProcessor {
             inlineContainer.classList.add('d-none');
         }
     }
-    
+
     enableEditMode() {
         console.log('enableEditMode called');
         const staticContainer = document.getElementById('photoBibNumberContainer');
         const inlineContainer = document.getElementById('inlineLabelContainer');
         const input = document.getElementById('inlineBibInput');
-        
+
         if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
-        
+
         const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
-        
+
         // Switch to edit mode
         this.isEditMode = true;
         staticContainer.classList.add('d-none');
         inlineContainer.classList.remove('d-none');
-        
+
         // Pre-fill with current bib number
         if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
             input.value = photo.detection_result.bib_number;
         } else {
             input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
         }
-        
+
         // Focus and select the input
         setTimeout(() => {
             input.focus();
             input.select();
         }, 100);
     }
-    
+
     async saveInlineLabel() {
         const input = document.getElementById('inlineBibInput');
         const bibNumber = input.value.trim();
-        
+
         if (!bibNumber || !this.validateBibNumber(bibNumber)) {
             this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
             input.focus();
             return;
         }
-        
+
         if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
-        
+
         const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
         const saveBtn = document.getElementById('inlineSaveBtn');
         const originalContent = saveBtn.innerHTML;
-        
+
         try {
             // Show loading state
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            
+
             // Save the label
             await this.labelPhoto(photo.id, bibNumber);
-            
+
             // Show success
             this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
-            
+
             // Refresh data
             await this.refreshAfterLabeling();
-            
+
             // Smart navigation based on mode
             if (this.isEditMode) {
                 // For editing detected photos: stay in current group, just refresh
@@ -1975,7 +1969,7 @@ class PhotoProcessor {
                 // For unknown photos: advance to next unknown for rapid labeling
                 this.advanceToNextUnknownPhoto();
             }
-            
+
         } catch (error) {
             this.showError(`Failed to label photo: ${error.message}`);
             input.focus();
@@ -1984,15 +1978,15 @@ class PhotoProcessor {
             saveBtn.innerHTML = originalContent;
         }
     }
-    
+
     cancelInlineLabel() {
         const input = document.getElementById('inlineBibInput');
         const staticContainer = document.getElementById('photoBibNumberContainer');
         const inlineContainer = document.getElementById('inlineLabelContainer');
-        
+
         input.value = '';
         input.blur();
-        
+
         // If we were in edit mode, go back to static display
         if (this.isEditMode) {
             this.isEditMode = false;
@@ -2001,10 +1995,10 @@ class PhotoProcessor {
         }
         // For unknown photos, keep the inline input visible
     }
-    
+
     advanceToNextUnknownPhoto() {
         if (!this.currentLightboxGroup) return;
-        
+
         // Find next unknown photo in current group
         for (let i = this.currentPhotoIndex + 1; i < this.currentLightboxGroup.photos.length; i++) {
             const photo = this.currentLightboxGroup.photos[i];
@@ -2013,7 +2007,7 @@ class PhotoProcessor {
                 return;
             }
         }
-        
+
         // If no more unknown in current group, look for next unknown in all groups
         const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
         if (unknownGroup && unknownGroup.photos.length > 0) {
@@ -2025,7 +2019,7 @@ class PhotoProcessor {
         } else {
             // No more unknown photos - show success message
             this.showSuccess('All photos have been labeled! 🎉');
-            
+
             // Close modal after a brief delay
             setTimeout(() => {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('photoModal'));
@@ -2033,25 +2027,25 @@ class PhotoProcessor {
             }, 1500);
         }
     }
-    
+
     createThumbnailStrip() {
         const container = document.getElementById('thumbnailContainer');
         container.innerHTML = '';
-        
+
         this.currentLightboxGroup.photos.forEach((photo, index) => {
             const thumbnailDiv = document.createElement('div');
             thumbnailDiv.className = 'thumbnail-item';
             thumbnailDiv.onclick = () => this.showPhotoInLightbox(index);
-            
+
             const img = document.createElement('img');
             img.src = `${this.apiBase}/upload/serve/${photo.id}`;
             img.alt = photo.filename;
-            
+
             thumbnailDiv.appendChild(img);
             container.appendChild(thumbnailDiv);
         });
     }
-    
+
     updateThumbnailSelection() {
         const thumbnails = document.querySelectorAll('.thumbnail-item');
         thumbnails.forEach((thumb, index) => {
@@ -2062,34 +2056,34 @@ class PhotoProcessor {
             }
         });
     }
-    
+
     previousPhoto() {
         if (this.currentPhotoIndex > 0) {
             this.showPhotoInLightbox(this.currentPhotoIndex - 1);
         }
     }
-    
+
     nextPhoto() {
         if (this.currentPhotoIndex < this.currentLightboxGroup.photos.length - 1) {
             this.showPhotoInLightbox(this.currentPhotoIndex + 1);
         }
     }
-    
+
     initializeZoom() {
         const modalImage = document.getElementById('modalPhotoImage');
         const photoContainer = document.getElementById('photoContainer');
-        
+
         // Mouse wheel zoom
         photoContainer.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             this.adjustZoom(delta);
         });
-        
+
         // Touch zoom (pinch)
         let initialDistance = 0;
         let initialZoom = 1;
-        
+
         photoContainer.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2) {
                 e.preventDefault();
@@ -2097,7 +2091,7 @@ class PhotoProcessor {
                 initialZoom = this.zoomLevel;
             }
         });
-        
+
         photoContainer.addEventListener('touchmove', (e) => {
             if (e.touches.length === 2) {
                 e.preventDefault();
@@ -2107,12 +2101,12 @@ class PhotoProcessor {
                 this.applyZoom();
             }
         });
-        
+
         // Drag to pan when zoomed
         let isDragging = false;
         let lastX = 0;
         let lastY = 0;
-        
+
         modalImage.addEventListener('mousedown', (e) => {
             if (this.zoomLevel > 1) {
                 e.preventDefault();
@@ -2122,7 +2116,7 @@ class PhotoProcessor {
                 modalImage.classList.add('dragging');
             }
         });
-        
+
         document.addEventListener('mousemove', (e) => {
             if (isDragging) {
                 e.preventDefault();
@@ -2135,7 +2129,7 @@ class PhotoProcessor {
                 lastY = e.clientY;
             }
         });
-        
+
         document.addEventListener('mouseup', () => {
             if (isDragging) {
                 isDragging = false;
@@ -2143,44 +2137,44 @@ class PhotoProcessor {
             }
         });
     }
-    
+
     getTouchDistance(touches) {
         const dx = touches[0].clientX - touches[1].clientX;
         const dy = touches[0].clientY - touches[1].clientY;
         return Math.sqrt(dx * dx + dy * dy);
     }
-    
+
     adjustZoom(delta) {
         this.zoomLevel = Math.max(0.5, Math.min(5, this.zoomLevel + delta));
         this.applyZoom();
     }
-    
+
     zoomIn() {
         this.adjustZoom(0.2);
     }
-    
+
     zoomOut() {
         this.adjustZoom(-0.2);
     }
-    
+
     resetZoom() {
         this.zoomLevel = 1;
         this.panX = 0;
         this.panY = 0;
         this.applyZoom();
     }
-    
+
     applyZoom() {
         const modalImage = document.getElementById('modalPhotoImage');
         modalImage.style.transform = `scale(${this.zoomLevel}) translate(${this.panX / this.zoomLevel}px, ${this.panY / this.zoomLevel}px)`;
-        
+
         if (this.zoomLevel > 1) {
             modalImage.classList.add('zoomed');
         } else {
             modalImage.classList.remove('zoomed');
         }
     }
-    
+
     toggleFullscreen() {
         if (!document.fullscreenElement) {
             document.getElementById('photoModal').requestFullscreen();
@@ -2188,22 +2182,22 @@ class PhotoProcessor {
             document.exitFullscreen();
         }
     }
-    
+
     downloadCurrentPhoto() {
         if (this.currentLightboxGroup && this.currentPhotoIndex >= 0) {
             const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
             window.open(`${this.apiBase}/upload/serve/${photo.id}`, '_blank');
         }
     }
-    
+
     initializeLightboxKeyboard() {
         document.addEventListener('keydown', this.handleLightboxKeyboard.bind(this));
     }
-    
+
     handleLightboxKeyboard(e) {
         const modal = document.getElementById('photoModal');
         if (!modal.classList.contains('show')) return;
-        
+
         switch(e.key) {
             case 'ArrowLeft':
                 e.preventDefault();
@@ -2236,7 +2230,7 @@ class PhotoProcessor {
                 break;
         }
     }
-    
+
     getConfidenceBadgeClass(confidence) {
         if (confidence >= 0.8) return 'bg-success';
         if (confidence >= 0.6) return 'bg-warning';
@@ -2250,7 +2244,7 @@ class PhotoProcessor {
         const galleryGrid = document.getElementById('galleryGrid');
         const modalLabel = document.getElementById('galleryModalLabel');
         const downloadBtn = document.getElementById('downloadGroupBtn');
-        
+
         if (editMode) {
             modalLabel.textContent = `Edit Labels - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
             downloadBtn.style.display = 'none';
@@ -2258,7 +2252,7 @@ class PhotoProcessor {
             modalLabel.textContent = `All Photos - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
             downloadBtn.style.display = 'block';
         }
-        
+
         galleryGrid.innerHTML = group.photos.map(photo => `
             <div class="photo-item position-relative" ${editMode ? '' : `onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')"`}>
                 <img src="${this.apiBase}/upload/serve/${photo.id}" 
@@ -2287,7 +2281,7 @@ class PhotoProcessor {
                 ` : ''}
             </div>
         `).join('');
-        
+
         if (!editMode) {
             downloadBtn.onclick = () => {
                 // Export this specific group
@@ -2295,7 +2289,7 @@ class PhotoProcessor {
                 this.exportPhotos();
             };
         }
-        
+
         const modal = new bootstrap.Modal(document.getElementById('galleryModal'));
         modal.show();
     }
@@ -2396,10 +2390,10 @@ class PhotoProcessor {
 
             // Success - remove the photo from the unknown group and refresh display
             input.parentElement.parentElement.parentElement.remove();
-            
+
             // Refresh the grouped photos from backend
             await this.refreshGroupedPhotos();
-            
+
             this.showSuccess(`Photo labeled as bib #${bibNumber}!`);
 
         } catch (error) {
@@ -2429,22 +2423,22 @@ class PhotoProcessor {
         // Reset form
         document.getElementById('feedbackForm').reset();
         document.getElementById('charCount').textContent = '0';
-        
+
         // Auto-fill system information
         const systemInfo = this.getSystemInfo();
         document.getElementById('systemInfo').textContent = systemInfo;
-        
+
         // Set up character counter
         const description = document.getElementById('feedbackDescription');
         const charCount = document.getElementById('charCount');
-        
+
         description.addEventListener('input', function() {
             charCount.textContent = this.value.length;
         });
-        
+
         // Set up form submission
         document.getElementById('submitFeedbackBtn').onclick = this.submitFeedback.bind(this);
-        
+
         const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
         modal.show();
     }
@@ -2452,20 +2446,20 @@ class PhotoProcessor {
     getSystemInfo() {
         const nav = navigator;
         const screen = window.screen;
-        
+
         return `Browser: ${nav.userAgent} | Screen: ${screen.width}x${screen.height} | Language: ${nav.language} | Platform: ${nav.platform}`;
     }
 
     async submitFeedback() {
         const form = document.getElementById('feedbackForm');
         const submitBtn = document.getElementById('submitFeedbackBtn');
-        
+
         // Validate form
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
         }
-        
+
         const feedbackData = {
             type: document.getElementById('feedbackType').value,
             title: document.getElementById('feedbackTitle').value.trim(),
@@ -2473,11 +2467,11 @@ class PhotoProcessor {
             email: document.getElementById('feedbackEmail').value.trim() || null,
             system_info: this.getSystemInfo()
         };
-        
+
         try {
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
-            
+
             const response = await fetch(`${this.apiBase}/feedback/submit`, {
                 method: 'POST',
                 headers: {
@@ -2485,20 +2479,20 @@ class PhotoProcessor {
                 },
                 body: JSON.stringify(feedbackData)
             });
-            
+
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.detail || 'Failed to submit feedback');
             }
-            
+
             const result = await response.json();
-            
+
             // Close modal and show success
             const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
             modal.hide();
-            
+
             this.showSuccess('Thank you for your feedback! We appreciate your input and will review it soon.');
-            
+
         } catch (error) {
             console.error('Feedback submission error:', error);
             this.showError(`Failed to submit feedback: ${error.message}`);
@@ -2524,9 +2518,9 @@ class PhotoProcessor {
     displayUnknownPhotos() {
         const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
         const unknownPhotos = unknownGroup ? unknownGroup.photos : [];
-        
+
         document.getElementById('unknown-count-display').textContent = unknownPhotos.length;
-        
+
         if (unknownPhotos.length === 0) {
             document.getElementById('unknown-photos-grid').classList.add('d-none');
             document.getElementById('no-unknown-message').classList.remove('d-none');
@@ -2545,7 +2539,7 @@ class PhotoProcessor {
                              style="height: 200px; object-fit: cover; cursor: pointer;"
                              onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', 'unknown')"
                              loading="lazy">
-                        
+
                         <!-- Selection checkbox -->
                         <div class="position-absolute top-0 start-0 p-2">
                             <input class="form-check-input unknown-photo-checkbox" 
@@ -2553,7 +2547,7 @@ class PhotoProcessor {
                                    data-photo-id="${photo.id}"
                                    onchange="photoProcessor.toggleUnknownPhotoSelection('${photo.id}')">
                         </div>
-                        
+
                         <!-- Edit button -->
                         <div class="position-absolute top-0 end-0 p-2">
                             <button class="btn btn-primary btn-sm" 
@@ -2563,7 +2557,7 @@ class PhotoProcessor {
                             </button>
                         </div>
                     </div>
-                    
+
                     <div class="card-body p-2">
                         <p class="card-text small text-muted mb-1" title="${photo.filename}">
                             ${photo.filename.length > 20 ? photo.filename.substring(0, 20) + '...' : photo.filename}
@@ -2578,7 +2572,7 @@ class PhotoProcessor {
         `).join('');
 
         document.getElementById('unknown-photos-grid').innerHTML = gridHtml;
-        
+
         // Initialize selection state
         this.selectedUnknownPhotos = [];
         this.updateBatchLabelButton();
@@ -2600,9 +2594,9 @@ class PhotoProcessor {
     selectAllUnknown() {
         const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
         const unknownPhotos = unknownGroup ? unknownGroup.photos : [];
-        
+
         const allSelected = this.selectedUnknownPhotos.length === unknownPhotos.length;
-        
+
         if (allSelected) {
             // Deselect all
             this.selectedUnknownPhotos = [];
@@ -2614,14 +2608,14 @@ class PhotoProcessor {
             document.querySelectorAll('.unknown-photo-checkbox').forEach(cb => cb.checked = true);
             document.getElementById('select-all-unknown-btn').innerHTML = '<i class="fas fa-minus-square me-2"></i>Deselect All';
         }
-        
+
         this.updateBatchLabelButton();
     }
 
     updateBatchLabelButton() {
         const batchBtn = document.getElementById('batch-label-btn');
         const selectAllBtn = document.getElementById('select-all-unknown-btn');
-        
+
         if (this.selectedUnknownPhotos.length > 0) {
             batchBtn.disabled = false;
             batchBtn.innerHTML = `<i class="fas fa-tags me-2"></i>Batch Label Selected (${this.selectedUnknownPhotos.length})`;
@@ -2632,7 +2626,7 @@ class PhotoProcessor {
 
         const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
         const totalUnknown = unknownGroup ? unknownGroup.photos.length : 0;
-        
+
         if (this.selectedUnknownPhotos.length === totalUnknown && totalUnknown > 0) {
             selectAllBtn.innerHTML = '<i class="fas fa-minus-square me-2"></i>Deselect All';
         } else {
@@ -2646,14 +2640,14 @@ class PhotoProcessor {
     showSinglePhotoLabelModal(photoId) {
         this.currentPhotoToLabel = photoId;
         const photo = this.findPhotoById(photoId);
-        
+
         if (!photo) return;
 
         // Set up modal content
         document.getElementById('labelPhotoPreview').src = `${this.apiBase}/upload/serve/${photoId}`;
         document.getElementById('labelPhotoFilename').textContent = photo.filename;
         document.getElementById('manualBibNumber').value = '';
-        
+
         // Set current status
         const statusEl = document.getElementById('currentPhotoStatus');
         if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
@@ -2675,13 +2669,13 @@ class PhotoProcessor {
     setupSingleLabelEventListener() {
         const btn = document.getElementById('apply-single-label-btn');
         const input = document.getElementById('manualBibNumber');
-        
+
         // Remove existing listeners
         btn.replaceWith(btn.cloneNode(true));
         const newBtn = document.getElementById('apply-single-label-btn');
-        
+
         newBtn.addEventListener('click', () => this.applySingleLabel());
-        
+
         // Allow Enter key to submit
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -2692,7 +2686,7 @@ class PhotoProcessor {
 
     async applySingleLabel() {
         const bibNumber = document.getElementById('manualBibNumber').value.trim();
-        
+
         if (!bibNumber || !this.validateBibNumber(bibNumber)) {
             this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
             return;
@@ -2700,16 +2694,16 @@ class PhotoProcessor {
 
         try {
             await this.labelPhoto(this.currentPhotoToLabel, bibNumber);
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('manualLabelModal'));
             modal.hide();
-            
+
             this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
-            
+
             // Refresh displays
             await this.refreshAfterLabeling();
-            
+
         } catch (error) {
             this.showError(`Failed to label photo: ${error.message}`);
         }
@@ -2724,7 +2718,7 @@ class PhotoProcessor {
         // Update count
         document.getElementById('selectedPhotoCount').textContent = this.selectedUnknownPhotos.length;
         document.getElementById('batchBibNumber').value = '';
-        
+
         // Show preview thumbnails
         this.displayBatchPhotoPreviews();
 
@@ -2753,7 +2747,7 @@ class PhotoProcessor {
                 </div>
             `;
         }).join('');
-        
+
         document.getElementById('batchPhotosPreviews').innerHTML = previewsHtml;
     }
 
@@ -2761,16 +2755,16 @@ class PhotoProcessor {
         const index = this.selectedUnknownPhotos.indexOf(photoId);
         if (index > -1) {
             this.selectedUnknownPhotos.splice(index, 1);
-            
+
             // Update checkbox
             const checkbox = document.querySelector(`input[data-photo-id="${photoId}"]`);
             if (checkbox) checkbox.checked = false;
-            
+
             // Update count and previews
             document.getElementById('selectedPhotoCount').textContent = this.selectedUnknownPhotos.length;
             this.displayBatchPhotoPreviews();
             this.updateBatchLabelButton();
-            
+
             // Close modal if no photos left
             if (this.selectedUnknownPhotos.length === 0) {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('batchLabelModal'));
@@ -2782,13 +2776,13 @@ class PhotoProcessor {
     setupBatchLabelEventListener() {
         const btn = document.getElementById('apply-batch-labels-btn');
         const input = document.getElementById('batchBibNumber');
-        
+
         // Remove existing listeners
         btn.replaceWith(btn.cloneNode(true));
         const newBtn = document.getElementById('apply-batch-labels-btn');
-        
+
         newBtn.addEventListener('click', () => this.applyBatchLabels());
-        
+
         // Allow Enter key to submit
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -2799,7 +2793,7 @@ class PhotoProcessor {
 
     async applyBatchLabels() {
         const bibNumber = document.getElementById('batchBibNumber').value.trim();
-        
+
         if (!bibNumber || !this.validateBibNumber(bibNumber)) {
             this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
             return;
@@ -2807,30 +2801,30 @@ class PhotoProcessor {
 
         const btn = document.getElementById('apply-batch-labels-btn');
         const originalText = btn.innerHTML;
-        
+
         try {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Labeling...';
-            
+
             // Label all selected photos
             const promises = this.selectedUnknownPhotos.map(photoId => 
                 this.labelPhoto(photoId, bibNumber)
             );
-            
+
             await Promise.all(promises);
-            
+
             // Close modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('batchLabelModal'));
             modal.hide();
-            
+
             this.showSuccess(`${this.selectedUnknownPhotos.length} photos labeled as Bib #${bibNumber}`);
-            
+
             // Clear selection
             this.selectedUnknownPhotos = [];
-            
+
             // Refresh displays
             await this.refreshAfterLabeling();
-            
+
         } catch (error) {
             this.showError(`Failed to label photos: ${error.message}`);
         } finally {
@@ -2882,7 +2876,7 @@ class PhotoProcessor {
                     this.groupedPhotos = await response.json();
                     this.updateStatsCards();
                     this.displayResults();
-                    
+
                     // If we're on unknown photos page, refresh it
                     if (!document.getElementById('unknown-photos-section').classList.contains('d-none')) {
                         this.displayUnknownPhotos();
@@ -2924,19 +2918,19 @@ window.logout = logout;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded'); // Debug log
     checkAuthOnLoad();
-    
+
     // Set up authentication form handlers
     const signInForm = document.getElementById('signInForm');
     const createAccountForm = document.getElementById('createAccountForm');
-    
+
     console.log('Sign In Form found:', !!signInForm); // Debug log
     console.log('Create Account Form found:', !!createAccountForm); // Debug log
-    
+
     if (signInForm) {
         signInForm.addEventListener('submit', handleSignIn);
         console.log('Sign In event listener attached'); // Debug log
     }
-    
+
     if (createAccountForm) {
         createAccountForm.addEventListener('submit', handleCreateAccount);
         console.log('Create Account event listener attached'); // Debug log

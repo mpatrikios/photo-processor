@@ -25,7 +25,7 @@ app = FastAPI(title="Photo Processor API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],  # Allow all origins for Replit environment
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
