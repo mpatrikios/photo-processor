@@ -1822,26 +1822,14 @@ class PhotoProcessor {
     initializeInlineLabeling() {
         console.log('initializeInlineLabeling called');
 
-        const saveBtn = document.getElementById('inlineSaveBtn');
-        const cancelBtn = document.getElementById('inlineCancelBtn');
         const input = document.getElementById('inlineBibInput');
 
-        console.log('Inline labeling elements:', {
-            saveBtn: !!saveBtn,
-            cancelBtn: !!cancelBtn,
-            input: !!input
-        });
+        console.log('Inline labeling input found:', !!input);
 
-        if (!saveBtn || !cancelBtn || !input) {
-            console.error('Could not find inline labeling elements');
+        if (!input) {
+            console.error('Could not find inline labeling input');
             return;
         }
-
-        // Save button click
-        saveBtn.onclick = () => this.saveInlineLabel();
-
-        // Cancel button click
-        cancelBtn.onclick = () => this.cancelInlineLabel();
 
         // Input keyboard events
         input.addEventListener('keydown', (e) => {
@@ -1915,23 +1903,6 @@ class PhotoProcessor {
                            spellcheck="false">
                 </div>
                 
-                <div class="labeling-actions">
-                    <button class="btn" 
-                            id="inlineSaveBtn" 
-                            type="button" 
-                            title="Save label (Enter)">
-                        <i class="fas fa-check"></i>
-                        Save
-                    </button>
-                    <button class="btn" 
-                            id="inlineCancelBtn" 
-                            type="button" 
-                            title="Cancel (Esc)">
-                        <i class="fas fa-times"></i>
-                        Cancel
-                    </button>
-                </div>
-                
                 <div class="labeling-hints">
                     <div class="hint-item">
                         <i class="fas fa-keyboard"></i>
@@ -1996,13 +1967,12 @@ class PhotoProcessor {
         if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
 
         const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
-        const saveBtn = document.getElementById('inlineSaveBtn');
-        const originalContent = saveBtn.innerHTML;
 
         try {
-            // Show loading state
-            saveBtn.disabled = true;
-            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            // Show loading state in input
+            input.disabled = true;
+            input.style.opacity = '0.6';
+            input.value = 'Saving...';
 
             // Save the label
             await this.labelPhoto(photo.id, bibNumber);
@@ -2028,10 +1998,11 @@ class PhotoProcessor {
 
         } catch (error) {
             this.showError(`Failed to label photo: ${error.message}`);
+            // Restore input state
+            input.disabled = false;
+            input.style.opacity = '1';
+            input.value = bibNumber;
             input.focus();
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = originalContent;
         }
     }
 
