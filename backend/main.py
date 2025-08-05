@@ -38,6 +38,12 @@ os.makedirs("exports", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/processed", StaticFiles(directory="processed"), name="processed")
 
+# Serve frontend static files
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "static")), name="static")
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(process.router, prefix="/api/process", tags=["process"])
