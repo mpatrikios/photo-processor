@@ -7,6 +7,7 @@ packages = ["freetype", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", 
 
 [deployment]
 run = ["sh", "-c", "npm run dev"]
+deploymentTarget = "cloudrun"
 
 [[ports]]
 localPort = 5173
