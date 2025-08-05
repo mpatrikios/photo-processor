@@ -6,4 +6,14 @@ requires-python = ">=3.12"
 dependencies = [
     "python-dotenv>=1.1.1",
     "sift-stack-py>=0.7.0",
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "python-multipart>=0.0.6",
+    "pillow>=10.2.0",
+    "opencv-python>=4.8.0",
+    "pytesseract>=0.3.10",
+    "pydantic>=2.5.0",
+    "aiofiles>=23.2.1",
+    "google-cloud-vision>=3.4.0",
+    "fastapi-mail>=1.4.1",
 ]
