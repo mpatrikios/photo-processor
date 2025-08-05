@@ -231,12 +231,8 @@ class PhotoProcessor {
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
         
-        // Check authentication status on initialization
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-            this.isAuthenticated = true;
-            this.authToken = token;
-        }
+        // Initialize authentication and UI
+        this.initializeApp();
     }
 
     // Authentication Methods
@@ -331,6 +327,17 @@ class PhotoProcessor {
             // Restore button state
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
+        }
+    }
+
+    async initializeApp() {
+        // Check if we have a stored token
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            this.authToken = token;
+            await this.checkAuthStatus();
+        } else {
+            this.showLoginScreen();
         }
     }
 
