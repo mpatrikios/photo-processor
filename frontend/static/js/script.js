@@ -1894,10 +1894,13 @@ class PhotoProcessor {
         this.isEditMode = false;
 
         if (isUnknown) {
-            // Show inline labeling immediately for unknown photos
+            // Show enhanced inline labeling for unknown photos
             console.log('Showing inline labeling for unknown photo');
             staticContainer.classList.add('d-none');
             inlineContainer.classList.remove('d-none');
+            
+            // Update the inline container with enhanced content
+            this.setupEnhancedInlineLabeling(photo);
 
             // Auto-focus the input after a brief delay
             setTimeout(() => {
@@ -1908,12 +1911,81 @@ class PhotoProcessor {
             // Clear any previous value
             input.value = '';
         } else {
-            // Show static display with edit button for detected photos
+            // Show enhanced static display with edit button for detected photos
             console.log('Showing static display with edit button');
             staticContainer.classList.remove('d-none');
             editBtn.classList.remove('d-none');
             inlineContainer.classList.add('d-none');
+            
+            // Update static display with current bib number
+            const currentBib = photo.detection_result?.bib_number || this.currentLightboxGroup.bib_number;
+            if (currentBib && currentBib !== 'unknown') {
+                staticDisplay.textContent = currentBib;
+            }
         }
+    }
+
+    setupEnhancedInlineLabeling(photo) {
+        const inlineContainer = document.getElementById('inlineLabelContainer');
+        
+        // Create enhanced labeling interface
+        inlineContainer.innerHTML = `
+            <div class="inline-labeling-form">
+                <div class="labeling-header">
+                    <h6>
+                        <i class="fas fa-tag"></i>
+                        Label this photo
+                    </h6>
+                    <p>Enter the bib number you can see in this image</p>
+                </div>
+                
+                <div class="bib-input-group">
+                    <input type="text" 
+                           class="form-control" 
+                           id="inlineBibInput" 
+                           placeholder="Bib #" 
+                           maxlength="6" 
+                           pattern="[0-9]{1,6}"
+                           autocomplete="off"
+                           spellcheck="false">
+                </div>
+                
+                <div class="labeling-actions">
+                    <button class="btn" 
+                            id="inlineSaveBtn" 
+                            type="button" 
+                            title="Save label (Enter)">
+                        <i class="fas fa-check"></i>
+                        Save
+                    </button>
+                    <button class="btn" 
+                            id="inlineCancelBtn" 
+                            type="button" 
+                            title="Cancel (Esc)">
+                        <i class="fas fa-times"></i>
+                        Cancel
+                    </button>
+                </div>
+                
+                <div class="labeling-hints">
+                    <div class="hint-item">
+                        <i class="fas fa-keyboard"></i>
+                        <span>Press Enter to save</span>
+                    </div>
+                    <div class="hint-item">
+                        <i class="fas fa-arrow-right"></i>
+                        <span>Auto-advance to next</span>
+                    </div>
+                    <div class="hint-item">
+                        <i class="fas fa-undo"></i>
+                        <span>Esc to cancel</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Re-initialize event listeners for the new elements
+        this.initializeInlineLabeling();
     }
 
     enableEditMode() {

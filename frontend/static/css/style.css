@@ -1492,128 +1492,378 @@ html {
     100% { left: 100%; }
 }
 
-/* Inline Photo Labeling Styles */
+/* Enhanced Inline Photo Labeling Styles */
 #photoMetadata {
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(15px);
     transition: all 0.3s ease;
     z-index: 1050 !important;
     position: relative;
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%);
+    border-radius: 12px 12px 0 0;
+    border-top: 3px solid var(--primary-color);
 }
 
+/* Enhanced metadata layout */
+.photo-metadata-enhanced {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.5rem;
+}
+
+.photo-info-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    color: white;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.info-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.info-value {
+    font-size: 1rem;
+    color: white;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Enhanced inline labeling container */
 #inlineLabelContainer {
-    animation: fadeInUp 0.3s ease;
+    animation: slideInFromBottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: block !important;
-    padding: 12px;
-    background: rgba(255, 193, 7, 0.9) !important;
-    border-radius: 8px;
-    border: 3px solid var(--warning-color);
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    border-radius: 12px;
+    border: 2px solid #f39c12;
     position: relative;
     z-index: 1060;
-    margin-top: 8px;
+    margin-top: 1rem;
+    box-shadow: 0 8px 25px rgba(243, 156, 18, 0.3);
+    overflow: hidden;
+}
+
+#inlineLabelContainer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #f39c12, #e67e22, #d35400);
+    animation: labelingPulse 2s ease-in-out infinite;
 }
 
 #inlineLabelContainer.d-none {
     display: none !important;
 }
 
-/* Temporary debug styling */
+/* Enhanced labeling form */
+.inline-labeling-form {
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.labeling-header {
+    margin-bottom: 1rem;
+    color: #d35400;
+}
+
+.labeling-header h6 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.labeling-header p {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.85rem;
+    color: #8e5100;
+    font-weight: 500;
+}
+
+/* Enhanced input styling */
+.bib-input-group {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+#inlineBibInput {
+    background: white !important;
+    border: 3px solid #f39c12 !important;
+    color: #2c3e50 !important;
+    font-weight: 700 !important;
+    text-align: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 1.25rem !important;
+    height: 50px !important;
+    width: 120px;
+    border-radius: 25px;
+    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.2);
+}
+
+#inlineBibInput:focus {
+    background: white;
+    border-color: #e67e22;
+    box-shadow: 0 0 0 4px rgba(243, 156, 18, 0.25), 0 8px 25px rgba(243, 156, 18, 0.3);
+    transform: scale(1.05);
+    outline: none;
+}
+
+#inlineBibInput::placeholder {
+    color: #95a5a6;
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+/* Enhanced action buttons */
+.labeling-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+#inlineSaveBtn {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 100px;
+    justify-content: center;
+}
+
+#inlineSaveBtn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #229954, #27ae60);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+}
+
+#inlineSaveBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#inlineCancelBtn {
+    background: linear-gradient(135deg, #95a5a6, #bdc3c7);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: 25px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(149, 165, 166, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 100px;
+    justify-content: center;
+}
+
+#inlineCancelBtn:hover {
+    background: linear-gradient(135deg, #7f8c8d, #95a5a6);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(149, 165, 166, 0.4);
+}
+
+/* Static display styling */
+#photoBibNumberContainer {
+    align-items: center;
+    gap: 0.75rem;
+    display: flex;
+}
+
 #photoBibNumber {
-    background: rgba(0, 255, 0, 0.2);
-    padding: 4px;
-    border-radius: 4px;
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(39, 174, 96, 0.3));
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #27ae60;
+    border: 2px solid rgba(46, 204, 113, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 #photoBibNumber.d-none {
     display: none !important;
 }
 
-/* Edit button styling */
+#photoBibNumber::before {
+    content: '🏃';
+    font-size: 1rem;
+}
+
+/* Enhanced edit button */
 #editBibBtn {
-    transition: all 0.2s ease;
-    background: rgba(255, 193, 7, 0.8);
-    border-color: var(--warning-color);
-    color: var(--dark-color);
+    background: linear-gradient(135deg, #f39c12, #e67e22);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
 }
 
 #editBibBtn:hover {
-    background: var(--warning-color);
-    transform: scale(1.1);
+    background: linear-gradient(135deg, #e67e22, #d35400);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(243, 156, 18, 0.4);
 }
 
-#photoBibNumberContainer {
+#editBibBtn.d-none {
+    display: none !important;
+}
+
+/* Quick action hints */
+.labeling-hints {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(243, 156, 18, 0.3);
+    font-size: 0.8rem;
+    color: #8e5100;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.hint-item {
+    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.25rem;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
 }
 
-/* Ensure thumbnail strip stays below metadata */
-#thumbnailStrip {
-    z-index: 1040 !important;
-}
-
-/* Make sure photo metadata overlay is always on top */
-.modal-fullscreen #photoMetadata {
-    z-index: 1055 !important;
-}
-
-@keyframes fadeInUp {
+/* Animations */
+@keyframes slideInFromBottom {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(20px) scale(0.95);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
-#inlineBibInput {
-    background: rgba(255, 255, 255, 1) !important;
-    border: 3px solid var(--primary-color) !important;
-    color: var(--dark-color) !important;
-    font-weight: 700 !important;
-    text-align: center;
-    transition: all 0.2s ease;
-    font-size: 1.1rem !important;
-    height: 40px !important;
+@keyframes labelingPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
-#inlineBibInput:focus {
-    background: rgba(255, 255, 255, 1);
-    border-color: var(--warning-color);
-    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25);
-    transform: scale(1.05);
+/* Success animation */
+.labeling-success {
+    animation: successBounce 0.8s ease;
 }
 
-#inlineBibInput::placeholder {
-    color: var(--gray-600);
-    font-weight: normal;
+@keyframes successBounce {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.05); background-color: rgba(46, 204, 113, 0.2); }
+    50% { transform: scale(1.02); }
+    75% { transform: scale(1.01); }
+    100% { transform: scale(1); }
 }
 
-#inlineSaveBtn {
-    background: var(--success-color);
-    border-color: var(--success-color);
-    transition: all 0.2s ease;
+/* Confidence badge improvements */
+.confidence-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-#inlineSaveBtn:hover:not(:disabled) {
-    background: #157347;
-    transform: scale(1.1);
-}
-
-#inlineSaveBtn:disabled {
-    opacity: 0.7;
-}
-
-#inlineCancelBtn {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.3);
+.confidence-badge-enhanced {
+    background: linear-gradient(135deg, #3498db, #2980b9);
     color: white;
-    transition: all 0.2s ease;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
 }
 
-#inlineCancelBtn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
+.confidence-badge-enhanced::before {
+    content: '🎯';
+    font-size: 0.8rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .photo-metadata-enhanced {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding: 1rem;
+    }
+    
+    .photo-info-section {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+    
+    .inline-labeling-form {
+        padding: 1rem;
+    }
+    
+    .bib-input-group {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    #inlineBibInput {
+        width: 150px;
+        font-size: 1.1rem !important;
+    }
+    
+    .labeling-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .labeling-hints {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
 }
 
 /* Quick labeling success animation */
