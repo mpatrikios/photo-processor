@@ -1585,13 +1585,13 @@ html {
 #inlineLabelContainer {
     animation: slideInFromBottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: block !important;
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     border-radius: 12px;
-    border: 2px solid #f39c12;
+    border: 2px solid var(--primary-color);
     position: relative;
     z-index: 1060;
     margin-top: 1rem;
-    box-shadow: 0 8px 25px rgba(243, 156, 18, 0.3);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
     overflow: hidden;
 }
 
@@ -1602,7 +1602,7 @@ html {
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, #f39c12, #e67e22, #d35400);
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
     animation: labelingPulse 2s ease-in-out infinite;
 }
 
@@ -1618,7 +1618,7 @@ html {
 
 .labeling-header {
     margin-bottom: 1rem;
-    color: #d35400;
+    color: var(--primary-color);
 }
 
 .labeling-header h6 {
@@ -1634,7 +1634,7 @@ html {
 .labeling-header p {
     margin: 0.25rem 0 0 0;
     font-size: 0.85rem;
-    color: #8e5100;
+    color: var(--gray-600);
     font-weight: 500;
 }
 
@@ -1649,7 +1649,7 @@ html {
 
 #inlineBibInput {
     background: white !important;
-    border: 3px solid #f39c12 !important;
+    border: 3px solid var(--primary-color) !important;
     color: #2c3e50 !important;
     font-weight: 700 !important;
     text-align: center;
@@ -1658,13 +1658,13 @@ html {
     height: 50px !important;
     width: 120px;
     border-radius: 25px;
-    box-shadow: 0 4px 15px rgba(243, 156, 18, 0.2);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
 }
 
 #inlineBibInput:focus {
     background: white;
-    border-color: #e67e22;
-    box-shadow: 0 0 0 4px rgba(243, 156, 18, 0.25), 0 8px 25px rgba(243, 156, 18, 0.3);
+    border-color: var(--primary-dark);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25), 0 8px 25px rgba(59, 130, 246, 0.3);
     transform: scale(1.05);
     outline: none;
 }
@@ -1792,9 +1792,9 @@ html {
 .labeling-hints {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid rgba(243, 156, 18, 0.3);
+    border-top: 1px solid rgba(59, 130, 246, 0.3);
     font-size: 0.8rem;
-    color: #8e5100;
+    color: var(--gray-600);
     display: flex;
     justify-content: center;
     gap: 1rem;
@@ -1805,7 +1805,7 @@ html {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(59, 130, 246, 0.1);
     padding: 0.25rem 0.5rem;
     border-radius: 12px;
     font-weight: 500;
