@@ -213,7 +213,7 @@ function checkAuthOnLoad() {
 
 class PhotoProcessor {
     constructor() {
-        this.apiBase = 'http://localhost:8000/api';
+        this.apiBase = window.location.protocol + '//' + window.location.hostname + ':8000/api';
         this.selectedFiles = [];
         this.currentJobId = null;
         this.groupedPhotos = [];
