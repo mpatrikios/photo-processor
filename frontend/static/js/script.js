@@ -1883,16 +1883,14 @@ class PhotoProcessor {
         const isUnknown = this.currentLightboxGroup.bib_number === 'unknown' || 
                          (photo.detection_result && photo.detection_result.bib_number === 'unknown');
 
-        // Reset edit mode state
-        this.isEditMode = false;
-
-        if (isUnknown) {
-            // For unknown photos, show the inline labeling interface immediately
+        // If we're in edit mode OR the photo is unknown, show inline labeling
+        if (this.isEditMode || isUnknown) {
+            // Show the inline labeling interface
             staticContainer.classList.add('d-none');
             inlineContainer.classList.remove('d-none');
             this.setupEnhancedInlineLabeling(photo);
         } else {
-            // For detected photos, show static display with edit button
+            // For detected photos not in edit mode, show static display with edit button
             staticContainer.classList.remove('d-none');
             editBtn.classList.remove('d-none');
             inlineContainer.classList.add('d-none');
@@ -1970,36 +1968,32 @@ class PhotoProcessor {
 
     enableEditMode() {
         console.log('enableEditMode called');
-        const staticContainer = document.getElementById('photoBibNumberContainer');
-        const inlineContainer = document.getElementById('inlineLabelContainer');
-
+        
         if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
 
         const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
 
         // Switch to edit mode
         this.isEditMode = true;
-        staticContainer.classList.add('d-none');
-        inlineContainer.classList.remove('d-none');
+        
+        // Trigger the UI update using the existing updateInlineLabeling function
+        this.updateInlineLabeling(photo);
 
-        // Use the same enhanced labeling interface
-        this.setupEnhancedInlineLabeling(photo);
+        // Pre-fill with current bib number after a brief delay to ensure elements are created
+        setTimeout(() => {
+            const input = document.getElementById('inlineBibInput');
+            if (input) {
+                if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
+                    input.value = photo.detection_result.bib_number;
+                } else {
+                    input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
+                }
 
-        // Pre-fill with current bib number
-        const input = document.getElementById('inlineBibInput');
-        if (input) {
-            if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
-                input.value = photo.detection_result.bib_number;
-            } else {
-                input.value = this.currentLightboxGroup.bib_number === 'unknown' ? '' : this.currentLightboxGroup.bib_number;
-            }
-
-            // Focus and select the input
-            setTimeout(() => {
+                // Focus and select the input
                 input.focus();
                 input.select();
-            }, 100);
-        }
+            }
+        }, 100);
     }
 
     async saveInlineLabel() {
