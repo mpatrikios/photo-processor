@@ -1883,24 +1883,11 @@ class PhotoProcessor {
         const isUnknown = this.currentLightboxGroup.bib_number === 'unknown' || 
                          (photo.detection_result && photo.detection_result.bib_number === 'unknown');
 
-        // If we're in edit mode OR the photo is unknown, show inline labeling
-        if (this.isEditMode || isUnknown) {
-            // Show the inline labeling interface
-            staticContainer.classList.add('d-none');
-            inlineContainer.classList.remove('d-none');
-            this.setupEnhancedInlineLabeling(photo);
-        } else {
-            // For detected photos not in edit mode, show static display with edit button
-            staticContainer.classList.remove('d-none');
-            editBtn.classList.remove('d-none');
-            inlineContainer.classList.add('d-none');
-            
-            // Update static display with current bib number
-            const currentBib = photo.detection_result?.bib_number || this.currentLightboxGroup.bib_number;
-            if (currentBib && currentBib !== 'unknown') {
-                staticDisplay.textContent = currentBib;
-            }
-        }
+        // Always show the enhanced inline labeling interface for ALL photos
+        // This ensures consistent UI between unknown and labeled photos
+        staticContainer.classList.add('d-none');
+        inlineContainer.classList.remove('d-none');
+        this.setupEnhancedInlineLabeling(photo);
     }
 
     setupEnhancedInlineLabeling(photo) {
