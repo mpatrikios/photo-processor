@@ -60,11 +60,21 @@ class NumberDetector:
         
         bib_number, confidence, bbox = self._detect_with_tesseract(image)
         
-        result = DetectionResult(
-            bib_number=bib_number,
-            confidence=confidence,
-            bbox=bbox
-        )
+        # If no reliable detection from either method, mark as unknown
+        if not bib_number or confidence < 0.5:
+            print(f"❌ No reliable bib number detected for {photo_id}, marking as unknown")
+            result = DetectionResult(
+                bib_number="unknown",
+                confidence=0.0,
+                bbox=None
+            )
+        else:
+            print(f"🎯 Tesseract detected bib #{bib_number} (confidence: {confidence:.2f}) for {photo_id}")
+            result = DetectionResult(
+                bib_number=bib_number,
+                confidence=confidence,
+                bbox=bbox
+            )
         
         self.results[photo_id] = result
         return result
@@ -399,12 +409,21 @@ class NumberDetector:
     def update_manual_label(self, photo_id: str, bib_number: str) -> bool:
         """Update a photo's detection result with a manual label"""
         try:
-            # Create a manual detection result with high confidence
-            manual_result = DetectionResult(
-                bib_number=bib_number,
-                confidence=1.0,  # Manual labels get 100% confidence
-                bbox=None  # No bounding box for manual labels
-            )
+            # Handle "unknown" labels specially
+            if bib_number.lower() == "unknown":
+                # For unknown labels, keep them as unknown
+                manual_result = DetectionResult(
+                    bib_number="unknown",
+                    confidence=0.0,  # Unknown labels get 0% confidence
+                    bbox=None
+                )
+            else:
+                # Create a manual detection result with high confidence for valid bib numbers
+                manual_result = DetectionResult(
+                    bib_number=bib_number,
+                    confidence=1.0,  # Manual labels get 100% confidence
+                    bbox=None  # No bounding box for manual labels
+                )
             
             # Store the manual result
             self.results[photo_id] = manual_result

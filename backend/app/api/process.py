@@ -88,8 +88,8 @@ async def manual_label_photo(request: ManualLabelRequest):
     if not request.photo_id or not request.bib_number:
         raise HTTPException(status_code=400, detail="Photo ID and bib number are required")
     
-    # Validate bib number format
-    if not detector._is_valid_bib_number(request.bib_number):
+    # Validate bib number format (allow "unknown" as a special case)
+    if request.bib_number.lower() != "unknown" and not detector._is_valid_bib_number(request.bib_number):
         raise HTTPException(status_code=400, detail="Invalid bib number format")
     
     # Check if photo exists
