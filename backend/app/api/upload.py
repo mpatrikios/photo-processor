@@ -11,6 +11,9 @@ router = APIRouter()
 UPLOAD_DIR = "uploads"
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp"}
 
+# Ensure upload directory exists
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 @router.get("/test")
 async def test_upload_route():
     """Test endpoint to verify upload routing is working"""
@@ -24,12 +27,16 @@ def is_allowed_file(filename: str) -> bool:
 
 @router.post("/photos", response_model=UploadResponse)
 async def upload_photos(files: List[UploadFile] = File(...)):
+    print(f"🔄 Upload endpoint called with {len(files) if files else 0} files")
+    
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
     
     photo_ids = []
     
     for file in files:
+        print(f"📁 Processing file: {file.filename}")
+        
         if not is_allowed_file(file.filename):
             raise HTTPException(
                 status_code=400, 
@@ -41,15 +48,20 @@ async def upload_photos(files: List[UploadFile] = File(...)):
         new_filename = f"{photo_id}{file_extension}"
         file_path = os.path.join(UPLOAD_DIR, new_filename)
         
+        print(f"💾 Saving to: {file_path}")
+        
         try:
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
             photo_ids.append(photo_id)
+            print(f"✅ Saved file with ID: {photo_id}")
             
         except Exception as e:
+            print(f"❌ Failed to save {file.filename}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to save file {file.filename}: {str(e)}")
     
+    print(f"🎉 Successfully uploaded {len(photo_ids)} photos")
     return UploadResponse(
         photo_ids=photo_ids,
         message=f"Successfully uploaded {len(photo_ids)} photos"

@@ -31,9 +31,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("processed", exist_ok=True)
-os.makedirs("exports", exist_ok=True)
+# Create required directories
+upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
+processed_dir = os.path.join(os.path.dirname(__file__), "processed") 
+exports_dir = os.path.join(os.path.dirname(__file__), "exports")
+
+os.makedirs(upload_dir, exist_ok=True)
+os.makedirs(processed_dir, exist_ok=True)
+os.makedirs(exports_dir, exist_ok=True)
+
+print(f"Created directories: {upload_dir}, {processed_dir}, {exports_dir}")
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.mount("/processed", StaticFiles(directory="processed"), name="processed")
@@ -49,6 +56,13 @@ app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(process.router, prefix="/api/process", tags=["process"])
 app.include_router(download.router, prefix="/api/download", tags=["download"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
+
+print("✅ API routers registered:")
+print("  - /api/auth")
+print("  - /api/upload") 
+print("  - /api/process")
+print("  - /api/download")
+print("  - /api/feedback")
 
 @app.get("/")
 async def root():
