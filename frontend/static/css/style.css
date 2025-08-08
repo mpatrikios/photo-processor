@@ -1,4 +1,3 @@
-
 /* Enhanced Styling for Race Photo Processor */
 
 :root {
@@ -8,7 +7,7 @@
     --racesort-red-hover: #bb2d3b;
     --racesort-light-gray: #f8f9fa;
     --racesort-dark-gray: #6c757d;
-    
+
     /* Updated color variables to match brand */
     --primary-color: var(--racesort-red);
     --primary-dark: var(--racesort-red-hover);
@@ -624,58 +623,58 @@ header .lead {
         min-height: 180px;
         padding: 2rem 1rem !important;
     }
-    
+
     .photo-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 0.75rem;
     }
-    
+
     .photo-item:hover {
         transform: scale(1.02);
     }
-    
+
     .photo-item .hover-overlay {
         font-size: 0.8rem;
         padding: 0.5rem 1rem;
     }
-    
+
     .display-4 {
         font-size: 2.5rem !important;
     }
-    
+
     .card-body {
         padding: 2rem !important;
     }
-    
+
     .file-item {
         padding: 0.75rem;
         flex-direction: column;
         text-align: center;
     }
-    
+
     .file-item .file-info {
         margin-bottom: 0.5rem;
     }
-    
+
     .stats-card {
         margin-bottom: 1rem;
     }
-    
+
     .btn-group {
         flex-direction: column;
         width: 100%;
     }
-    
+
     .btn-group .btn {
         margin-bottom: 0.5rem;
         border-radius: var(--border-radius-sm) !important;
     }
-    
+
     /* Stack buttons vertically on mobile */
     .d-flex.gap-2 {
         flex-direction: column;
     }
-    
+
     .d-flex.gap-2 .btn {
         margin-bottom: 0.5rem;
     }
@@ -686,11 +685,11 @@ header .lead {
         padding-left: 1rem;
         padding-right: 1rem;
     }
-    
+
     .display-4 {
         font-size: 2rem !important;
     }
-    
+
     .card-body {
         padding: 1.5rem !important;
     }
@@ -770,7 +769,7 @@ input[type="checkbox"]:focus {
     .card {
         border: 2px solid var(--dark-color);
     }
-    
+
     .upload-dropzone {
         border-width: 3px !important;
     }
@@ -1334,24 +1333,31 @@ html {
     .photo-group-card .card-body {
         padding: 1rem;
     }
-    
+
     .photo-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.5rem;
         margin-top: 1rem;
     }
-    
+
     .photo-item {
         aspect-ratio: 1;
         min-height: 120px;
     }
-    
+
     /* Make modal navigation larger on mobile */
-    #photoModal .btn-dark {
-        padding: 1rem;
-        font-size: 1.2rem;
+    .photo-modal-labeling-mode #photoMetadata .row,
+    .photo-modal-labeling-mode #photoMetadata .col-md-4 {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: center;
     }
-    
+
+    .photo-modal-labeling-mode #photoMetadata .col-md-4 {
+        flex: none;
+        width: 100%;
+    }
+
     /* Better touch targets */
     .photo-item .hover-overlay {
         opacity: 0.9;
@@ -1359,7 +1365,7 @@ html {
         font-size: 0.7rem;
         padding: 0.4rem 0.8rem;
     }
-    
+
     /* Always show hint text on mobile */
     .card-body p.text-muted {
         opacity: 1;
@@ -1509,46 +1515,9 @@ html {
     grid-template-columns: 1fr auto;
     gap: 1rem;
     align-items: center;
-    padding: 1.5rem;
-}
-
-.photo-info-section {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
-    color: white;
-}
-
-.info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.info-label {
-    font-size: 0.75rem;
-    color: rgba(255, 255, 255, 0.7);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 600;
-}
-
-.info-value {
-    font-size: 1rem;
-    color: white;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-/* Enhanced metadata layout */
-.photo-metadata-enhanced {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1rem;
-    align-items: center;
-    padding: 1.5rem;
+    padding: 0.75rem 1.5rem;
+    max-height: 120px;
+    overflow: hidden;
 }
 
 .photo-info-section {
@@ -1777,7 +1746,7 @@ html {
 }
 
 @keyframes labelingPulse {
-    0%, 100% { opacity: 1; }
+    0% { opacity: 1; }
     50% { opacity: 0.7; }
 }
 
@@ -1826,31 +1795,31 @@ html {
         gap: 1rem;
         padding: 1rem;
     }
-    
+
     .photo-info-section {
         grid-template-columns: 1fr;
         gap: 0.75rem;
     }
-    
+
     .inline-labeling-form {
         padding: 1rem;
     }
-    
+
     .bib-input-group {
         flex-direction: column;
         align-items: center;
     }
-    
+
     #inlineBibInput {
         width: 150px;
         font-size: 1.1rem !important;
     }
-    
+
     .labeling-actions {
         flex-direction: column;
         align-items: center;
     }
-    
+
     .labeling-hints {
         flex-direction: column;
         gap: 0.5rem;
@@ -1894,16 +1863,16 @@ html {
         flex-direction: column;
         gap: 0.5rem;
     }
-    
+
     #photoMetadata .col-md-4 {
         flex: none;
         width: 100%;
     }
-    
+
     #inlineLabelContainer .input-group {
         justify-content: center;
     }
-    
+
     #inlineBibInput {
         max-width: 120px;
         font-size: 1.1rem;
