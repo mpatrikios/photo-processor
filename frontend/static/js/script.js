@@ -1760,6 +1760,9 @@ class PhotoProcessor {
     setupModalEventListeners() {
         const modalElement = document.getElementById('photoModal');
         
+        // Remove any stray photoMetadata elements inside the modal
+        this.cleanupModalPhotoMetadata();
+        
         // Remove existing listeners to prevent duplicates
         modalElement.removeEventListener('shown.bs.modal', this.handleModalShown);
         modalElement.removeEventListener('hidden.bs.modal', this.handleModalHidden);
@@ -1771,6 +1774,18 @@ class PhotoProcessor {
         // Add event listeners
         modalElement.addEventListener('shown.bs.modal', this.handleModalShown);
         modalElement.addEventListener('hidden.bs.modal', this.handleModalHidden);
+    }
+
+    cleanupModalPhotoMetadata() {
+        // Remove any photoMetadata elements that might exist inside the modal
+        const modalElement = document.getElementById('photoModal');
+        if (modalElement) {
+            const strayElements = modalElement.querySelectorAll('[id*="photoMetadata"], .photoMetadata');
+            strayElements.forEach(element => {
+                console.log('Removing stray photoMetadata element from modal:', element);
+                element.remove();
+            });
+        }
     }
 
     handleModalShown() {

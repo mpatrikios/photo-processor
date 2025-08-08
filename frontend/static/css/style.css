@@ -1870,6 +1870,14 @@ body.metadata-panel-visible .photo-viewing-area {
     display: none;
 }
 
+/* Ensure no photoMetadata elements appear inside the modal */
+#photoModal #photoMetadata,
+#photoModal .photoMetadata,
+.modal-body #photoMetadata,
+.modal-content #photoMetadata {
+    display: none !important;
+}
+
 /* Removed unused .photo-modal-labeling-mode enhancement styles */
 
 /* Detection note styling */
