@@ -1737,6 +1737,10 @@ class PhotoProcessor {
         if (metadataPanel) {
             // Remove any hiding classes and show the panel
             metadataPanel.classList.remove('d-none', 'photo-metadata-hidden');
+            
+            // Add body class for CSS targeting (replaces :has() selector)
+            document.body.classList.add('metadata-panel-visible');
+            document.body.classList.remove('metadata-panel-hidden');
         }
     }
 
@@ -1746,6 +1750,10 @@ class PhotoProcessor {
         if (metadataPanel) {
             // Add the hiding class for smooth animation
             metadataPanel.classList.add('photo-metadata-hidden');
+            
+            // Add body class for CSS targeting (replaces :has() selector)
+            document.body.classList.add('metadata-panel-hidden');
+            document.body.classList.remove('metadata-panel-visible');
         }
     }
 
