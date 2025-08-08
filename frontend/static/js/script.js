@@ -1724,12 +1724,62 @@ class PhotoProcessor {
         const modal = new bootstrap.Modal(document.getElementById('photoModal'));
         modal.show();
 
+        // Show the fixed metadata panel
+        this.showFixedMetadataPanel();
+
         // Initialize keyboard navigation
         this.initializeLightboxKeyboard();
     }
 
+    showFixedMetadataPanel() {
+        console.log('Showing fixed metadata panel');
+        const metadataPanel = document.getElementById('photoMetadata');
+        if (metadataPanel) {
+            // Remove any hiding classes and show the panel
+            metadataPanel.classList.remove('d-none', 'photo-metadata-hidden');
+        }
+    }
+
+    hideFixedMetadataPanel() {
+        console.log('Hiding fixed metadata panel');
+        const metadataPanel = document.getElementById('photoMetadata');
+        if (metadataPanel) {
+            // Add the hiding class for smooth animation
+            metadataPanel.classList.add('photo-metadata-hidden');
+        }
+    }
+
+    setupModalEventListeners() {
+        const modalElement = document.getElementById('photoModal');
+        
+        // Remove existing listeners to prevent duplicates
+        modalElement.removeEventListener('shown.bs.modal', this.handleModalShown);
+        modalElement.removeEventListener('hidden.bs.modal', this.handleModalHidden);
+        
+        // Bind the context for the event handlers
+        this.handleModalShown = this.handleModalShown.bind(this);
+        this.handleModalHidden = this.handleModalHidden.bind(this);
+        
+        // Add event listeners
+        modalElement.addEventListener('shown.bs.modal', this.handleModalShown);
+        modalElement.addEventListener('hidden.bs.modal', this.handleModalHidden);
+    }
+
+    handleModalShown() {
+        console.log('Photo modal shown, ensuring metadata panel is visible');
+        this.showFixedMetadataPanel();
+    }
+
+    handleModalHidden() {
+        console.log('Photo modal hidden, hiding metadata panel');
+        this.hideFixedMetadataPanel();
+    }
+
     initializeLightbox() {
         const modal = document.getElementById('photoModal');
+
+        // Add Bootstrap modal event listeners for fixed metadata panel
+        this.setupModalEventListeners();
 
         // Navigation buttons
         document.getElementById('prevPhotoBtn').onclick = () => this.previousPhoto();

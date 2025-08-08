@@ -1102,9 +1102,7 @@ body:has(#photoMetadata.d-none) #thumbnailStrip {
     padding: 1rem 1.5rem;
 }
 
-.modal-fullscreen #photoMetadata {
-    padding: 1.5rem;
-}
+/* Removed conflicting modal-fullscreen #photoMetadata rule - metadata is now fixed */
 
 .modal-fullscreen .modal-body {
     display: flex;
@@ -1874,23 +1872,30 @@ body:has(#photoMetadata:not(.d-none)) .photo-viewing-area {
 
 /* Fixed Photo Metadata Panel (Outside Modal) */
 #photoMetadata {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 1065; /* Higher than modal backdrop (1050) and modal (1055) */
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%);
-    border-top: 3px solid var(--primary-color);
-    padding: 1rem;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1060 !important; /* Between modal (1055) and modal backdrop (1050), but below tooltips (1070) */
+    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%) !important;
+    border-top: 3px solid var(--primary-color) !important;
+    padding: 1rem !important;
     backdrop-filter: blur(10px);
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    display: block !important; /* Override Bootstrap d-none when we want it visible */
 }
 
+/* Hidden state for the fixed panel */
+#photoMetadata.photo-metadata-hidden {
+    transform: translateY(100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+/* Default hidden state */
 #photoMetadata.d-none {
-    transform: translateY(100%);
-    opacity: 0;
-    pointer-events: none;
+    display: none !important;
 }
 
 /* Photo modal enhancements for labeling */
