@@ -993,6 +993,8 @@ html {
 
 #photoContainer {
     background: #000;
+    position: relative;
+    z-index: 1;
 }
 
 #photoLoader {
@@ -1096,6 +1098,18 @@ html {
 
 .modal-fullscreen #photoMetadata {
     padding: 1.5rem;
+}
+
+.modal-fullscreen .modal-body {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    height: calc(100vh - 120px);
+}
+
+.modal-fullscreen .modal-body > div:first-child {
+    flex: 1;
+    min-height: 0;
 }
 
 /* Keyboard navigation feedback */
@@ -1503,10 +1517,11 @@ html {
     backdrop-filter: blur(15px);
     transition: all 0.3s ease;
     z-index: 1050 !important;
-    position: static;
+    position: relative;
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%);
     border-radius: 0 0 12px 12px;
     border-bottom: 3px solid var(--primary-color);
+    margin-top: 0;
 }
 
 /* Enhanced metadata layout */
