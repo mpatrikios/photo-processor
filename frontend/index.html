@@ -569,29 +569,45 @@
                     </div>
                 </div>
                 
-                <div class="modal-body p-0 position-relative d-flex align-items-center justify-content-center">
-                    <!-- Navigation Arrows -->
-                    <button type="button" class="btn btn-dark btn-lg position-absolute start-0 ms-3 z-3" id="prevPhotoBtn" title="Previous (Left Arrow)">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <button type="button" class="btn btn-dark btn-lg position-absolute end-0 me-3 z-3" id="nextPhotoBtn" title="Next (Right Arrow)">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                    
-                    <!-- Photo Container with Zoom -->
-                    <div class="photo-container w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
-                        <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
+                <div class="modal-body p-0 d-flex flex-column">
+                    <!-- Photo Container with Navigation -->
+                    <div class="position-relative d-flex align-items-center justify-content-center" style="flex: 1; min-height: 60vh;">
+                        <!-- Navigation Arrows -->
+                        <button type="button" class="btn btn-dark btn-lg position-absolute start-0 ms-3 z-3" id="prevPhotoBtn" title="Previous (Left Arrow)">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button type="button" class="btn btn-dark btn-lg position-absolute end-0 me-3 z-3" id="nextPhotoBtn" title="Next (Right Arrow)">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
                         
-                        <!-- Loading Spinner -->
-                        <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                        <!-- Photo Container with Zoom -->
+                        <div class="photo-container w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
+                            <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
+                            
+                            <!-- Loading Spinner -->
+                            <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
                             </div>
+                        </div>
+                        
+                        <!-- Zoom Controls -->
+                        <div class="position-absolute top-50 end-0 me-3 d-flex flex-column gap-2" id="zoomControls">
+                            <button type="button" class="btn btn-dark btn-sm" id="zoomInBtn" title="Zoom In (+)">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button type="button" class="btn btn-dark btn-sm" id="zoomOutBtn" title="Zoom Out (-)">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <button type="button" class="btn btn-dark btn-sm" id="zoomResetBtn" title="Reset Zoom (0)">
+                                <i class="fas fa-search"></i>
+                            </button>
                         </div>
                     </div>
                     
-                    <!-- Enhanced Photo Metadata Overlay -->
-                    <div class="position-absolute bottom-0 start-0 end-0 text-white" id="photoMetadata">
+                    <!-- Enhanced Photo Metadata Below Image -->
+                    <div class="text-white" id="photoMetadata">
                         <div class="photo-metadata-enhanced">
                             <div class="photo-info-section">
                                 <div class="info-item">
@@ -638,19 +654,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Zoom Controls -->
-                    <div class="position-absolute top-50 end-0 me-3 d-flex flex-column gap-2" id="zoomControls">
-                        <button type="button" class="btn btn-dark btn-sm" id="zoomInBtn" title="Zoom In (+)">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                        <button type="button" class="btn btn-dark btn-sm" id="zoomOutBtn" title="Zoom Out (-)">
-                            <i class="fas fa-minus"></i>
-                        </button>
-                        <button type="button" class="btn btn-dark btn-sm" id="zoomResetBtn" title="Reset Zoom (0)">
-                            <i class="fas fa-search"></i>
-                        </button>
                     </div>
                 </div>
                 
