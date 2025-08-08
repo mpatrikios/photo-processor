@@ -1721,7 +1721,9 @@ class PhotoProcessor {
         this.initializeLightbox();
         this.showPhotoInLightbox(this.currentPhotoIndex);
 
-        const modal = new bootstrap.Modal(document.getElementById('photoModal'));
+        const modal = new bootstrap.Modal(document.getElementById('photoModal'), {
+            focus: false  // Disable Bootstrap focus management
+        });
         modal.show();
 
         // Show the fixed metadata panel
@@ -1735,12 +1737,22 @@ class PhotoProcessor {
         console.log('Showing fixed metadata panel');
         const metadataPanel = document.getElementById('photoMetadata');
         if (metadataPanel) {
+            console.log('Panel element found, current classes:', metadataPanel.className);
+            
             // Remove any hiding classes and show the panel
             metadataPanel.classList.remove('d-none', 'photo-metadata-hidden');
+            
+            // Explicitly ensure pointer events are enabled
+            metadataPanel.style.pointerEvents = 'auto';
             
             // Add body class for CSS targeting (replaces :has() selector)
             document.body.classList.add('metadata-panel-visible');
             document.body.classList.remove('metadata-panel-hidden');
+            
+            console.log('Panel shown, final classes:', metadataPanel.className);
+            console.log('Panel pointer events:', metadataPanel.style.pointerEvents);
+        } else {
+            console.error('photoMetadata panel not found!');
         }
     }
 
@@ -1896,28 +1908,36 @@ class PhotoProcessor {
 
         const input = document.getElementById('inlineBibInput');
 
-        console.log('Inline labeling input found:', !!input);
+        console.log('Inline labeling input found:', !!input, 'disabled:', input?.disabled);
 
         if (!input) {
             console.error('Could not find inline labeling input');
             return;
         }
 
+        // Ensure input is always enabled and clickable before setting up events
+        input.disabled = false;
+        input.style.pointerEvents = 'auto';
+        input.style.cursor = 'text';
+
         // Remove any existing event listeners to prevent duplicates
         const newInput = input.cloneNode(true);
         input.parentNode.replaceChild(newInput, input);
         const freshInput = document.getElementById('inlineBibInput');
+        
+        // Ensure cloned input maintains clickable state and priority focus
+        freshInput.disabled = false;
+        freshInput.style.pointerEvents = 'auto';
+        freshInput.style.cursor = 'text';
+        freshInput.tabIndex = 1; // Higher priority than modal elements
 
         // Input keyboard events
         freshInput.addEventListener('keydown', (e) => {
-            console.log('Keydown event:', e.key);
             if (e.key === 'Enter') {
                 e.preventDefault();
-                console.log('Enter pressed, calling saveInlineLabel');
                 this.saveInlineLabel();
             } else if (e.key === 'Escape') {
                 e.preventDefault();
-                console.log('Escape pressed, calling cancelInlineLabel');
                 this.cancelInlineLabel();
             }
         });
@@ -1937,12 +1957,25 @@ class PhotoProcessor {
             // Allow numbers (0-9) and control keys
             const char = String.fromCharCode(e.which);
             if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.which != 8 && e.which != 0) {
-                console.log('Blocking non-numeric character:', char);
                 e.preventDefault();
             }
         });
 
-        console.log('Inline labeling initialized successfully');
+        // Simple click handler - focus management no longer needed
+        freshInput.addEventListener('click', (e) => {
+            freshInput.focus();
+        });
+
+        // Input event handlers
+        freshInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeLightbox();
+            }
+        });
+        
+        // Removed infinite loop focus fix that was causing console spam
+
+        // Inline labeling initialized
     }
 
     updateInlineLabeling(photo) {
@@ -1986,45 +2019,24 @@ class PhotoProcessor {
             currentBibNumber = this.currentLightboxGroup.bib_number;
         }
         
-        // Create enhanced labeling interface
+        // Create compact horizontal labeling interface
+        const compactDetectionNote = detectionNote ? 
+            detectionNote.replace('<div class="detection-note mb-2">', '<span class="detection-inline">').replace('</div>', '</span>') : '';
+        
         inlineContainer.innerHTML = `
             <div class="inline-labeling-form">
-                <div class="labeling-header">
-                    <h6>
-                        <i class="fas fa-tag"></i>
-                        Label this photo
-                    </h6>
-                    <p>Enter the bib number you can see in this image</p>
-                </div>
-                
-                ${detectionNote}
-                
-                <div class="bib-input-group">
-                    <input type="text" 
-                           class="form-control" 
-                           id="inlineBibInput" 
-                           placeholder="Bib #" 
-                           maxlength="6" 
-                           pattern="[0-9]{1,6}"
-                           autocomplete="off"
-                           spellcheck="false"
-                           value="${currentBibNumber}">
-                </div>
-                
-                <div class="labeling-hints">
-                    <div class="hint-item">
-                        <i class="fas fa-keyboard"></i>
-                        <span>Press Enter to save</span>
-                    </div>
-                    <div class="hint-item">
-                        <i class="fas fa-arrow-right"></i>
-                        <span>Auto-advance to next</span>
-                    </div>
-                    <div class="hint-item">
-                        <i class="fas fa-undo"></i>
-                        <span>Esc to cancel</span>
-                    </div>
-                </div>
+                <span class="labeling-icon"><i class="fas fa-tag"></i></span>
+                <span class="labeling-text">Label:</span>
+                <input type="text" 
+                       class="form-control" 
+                       id="inlineBibInput" 
+                       placeholder="Bib #" 
+                       maxlength="6" 
+                       pattern="[0-9]{1,6}"
+                       autocomplete="off"
+                       spellcheck="false"
+                       value="${currentBibNumber}">
+                ${compactDetectionNote}
             </div>
         `;
         
@@ -2032,19 +2044,28 @@ class PhotoProcessor {
         setTimeout(() => {
             this.initializeInlineLabeling();
             
-            // Focus and select the input
+            // Focus and select the input, ensuring it's enabled and clickable
             const input = document.getElementById('inlineBibInput');
             if (input) {
+                input.disabled = false;
+                input.style.pointerEvents = 'auto';
+                input.style.cursor = 'text';
+                
+                // Input is ready for user interaction
+                
+                // Force focus and select
                 input.focus();
                 if (currentBibNumber) {
                     input.select();
                 }
+                // Input setup complete
+                
+                // Input is ready for interaction
             }
         }, 50);
     }
 
     enableEditMode() {
-        console.log('enableEditMode called');
         
         if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
 
@@ -2081,8 +2102,7 @@ class PhotoProcessor {
         const photo = this.allPhotosFlat[this.currentPhotoIndex];
 
         try {
-            // Show loading state in input
-            input.disabled = true;
+            // Show loading state in input but keep it enabled to maintain clickability
             input.style.opacity = '0.6';
             input.value = 'Saving...';
 
@@ -2115,11 +2135,13 @@ class PhotoProcessor {
         } catch (error) {
             console.error('Failed to label photo:', error);
             this.showError(`Failed to label photo: ${error.message}`);
-            // Restore input state
+            // Restore input state and ensure it's enabled and clickable
             input.disabled = false;
             input.style.opacity = '1';
             input.value = bibNumber;
+            input.style.pointerEvents = 'auto';
             input.focus();
+            console.log('Input restored after error, disabled:', input.disabled);
         }
     }
 
@@ -2344,6 +2366,14 @@ class PhotoProcessor {
     handleLightboxKeyboard(e) {
         const modal = document.getElementById('photoModal');
         if (!modal.classList.contains('show')) return;
+
+        // Don't interfere with input field typing
+        if (document.activeElement && 
+            (document.activeElement.tagName === 'INPUT' || 
+             document.activeElement.tagName === 'TEXTAREA' ||
+             document.activeElement.id === 'inlineBibInput')) {
+            return; // Allow normal typing in input fields
+        }
 
         switch(e.key) {
             case 'ArrowLeft':
