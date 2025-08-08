@@ -2015,7 +2015,7 @@ class PhotoProcessor {
                     AI detected: Bib #${currentBibNumber} (${confidence}% confidence)
                 </small>
             </div>`;
-        } else if (this.currentLightboxGroup.bib_number !== 'unknown') {
+        } else if (this.currentLightboxGroup && this.currentLightboxGroup.bib_number !== 'unknown') {
             currentBibNumber = this.currentLightboxGroup.bib_number;
         }
         
