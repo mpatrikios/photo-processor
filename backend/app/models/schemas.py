@@ -32,6 +32,7 @@ class ProcessingJob(BaseModel):
     progress: int = 0
     completed_photos: int = 0
     total_photos: int
+    debug_mode: bool = False
 
 class GroupedPhotos(BaseModel):
     bib_number: str

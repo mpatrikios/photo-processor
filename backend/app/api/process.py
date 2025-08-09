@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException
-from typing import List
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Optional
 import uuid
 from app.models.schemas import ProcessingJob, ProcessingStatus, GroupedPhotos, ManualLabelRequest
 from app.services.detector import NumberDetector
@@ -11,7 +11,7 @@ jobs = {}
 detector = NumberDetector()
 
 @router.post("/start", response_model=ProcessingJob)
-async def start_processing(photo_ids: List[str]):
+async def start_processing(photo_ids: List[str], debug: Optional[bool] = Query(True, description="Enable debug mode for detailed logging")):
     if not photo_ids:
         raise HTTPException(status_code=400, detail="No photo IDs provided")
     
@@ -20,7 +20,8 @@ async def start_processing(photo_ids: List[str]):
         job_id=job_id,
         photo_ids=photo_ids,
         status=ProcessingStatus.PENDING,
-        total_photos=len(photo_ids)
+        total_photos=len(photo_ids),
+        debug_mode=debug
     )
     
     jobs[job_id] = job
@@ -43,7 +44,7 @@ async def process_photos_async(job_id: str):
             job.completed_photos = i
             job.progress = max(1, int(((i + 0.5) / job.total_photos) * 95))  # 1-95% range
             
-            await detector.process_photo(photo_id)
+            await detector.process_photo(photo_id, debug_mode=job.debug_mode)
             
             # Add small delay to make progress visible and prevent overwhelming the system
             await asyncio.sleep(0.1)  # 100ms delay per photo for smoother UX

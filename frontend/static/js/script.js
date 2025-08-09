@@ -875,7 +875,7 @@ class PhotoProcessor {
                                     </div>
                                     ${photo.detection_result && photo.detection_result.confidence > 0 ? `
                                         <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
-                                            ${Math.round(photo.detection_result.confidence * 100)}%
+                                            ${Math.round((photo.detection_result.confidence / 1.5) * 100)}%
                                         </div>
                                     ` : ''}
                                     ${group.count > 4 && index === 3 ? `
@@ -890,30 +890,6 @@ class PhotoProcessor {
                             `).join('')}
                         </div>
 
-                        <div class="text-center mt-3">
-                            ${group.count > 4 ? `
-                                <button class="btn btn-primary btn-sm me-2" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
-                                    <i class="fas fa-expand-alt me-1"></i>
-                                    View All ${group.count} Photos
-                                </button>
-                            ` : group.count > 0 ? `
-                                <button class="btn btn-outline-primary btn-sm me-2" onclick="photoProcessor.showAllPhotos('${group.bib_number}')">
-                                    <i class="fas fa-eye me-1"></i>
-                                    ${group.bib_number === 'unknown' ? 'View & Label Photos' : 'View Photos'}
-                                </button>
-                            ` : ''}
-                            ${group.bib_number === 'unknown' ? `
-                                <button class="btn btn-warning btn-sm" onclick="photoProcessor.showUnknownPhotosPage()">
-                                    <i class="fas fa-tag me-1"></i>
-                                    Label Photos
-                                </button>
-                            ` : `
-                                <button class="btn btn-outline-secondary btn-sm" onclick="photoProcessor.showEditGroupModal('${group.bib_number}')">
-                                    <i class="fas fa-edit me-1"></i>
-                                    Edit Labels
-                                </button>
-                            `}
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1876,7 +1852,7 @@ class PhotoProcessor {
 
         // Update confidence
         if (photo.detection_result) {
-            const confidence = Math.round(photo.detection_result.confidence * 100);
+            const confidence = Math.round((photo.detection_result.confidence / 1.5) * 100);
             document.getElementById('photoConfidence').textContent = `${confidence}%`;
             document.getElementById('photoConfidenceDetail').textContent = `${confidence}%`;
 
@@ -2008,7 +1984,7 @@ class PhotoProcessor {
         
         if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
             currentBibNumber = photo.detection_result.bib_number;
-            const confidence = Math.round(photo.detection_result.confidence * 100);
+            const confidence = Math.round((photo.detection_result.confidence / 1.5) * 100);
             detectionNote = `<div class="detection-note mb-2">
                 <small class="text-info">
                     <i class="fas fa-robot me-1"></i>
@@ -2414,62 +2390,6 @@ class PhotoProcessor {
         return 'bg-danger';
     }
 
-    showAllPhotos(bibNumber, editMode = false) {
-        const group = this.groupedPhotos.find(g => g.bib_number === bibNumber);
-        if (!group) return;
-
-        const galleryGrid = document.getElementById('galleryGrid');
-        const modalLabel = document.getElementById('galleryModalLabel');
-        const downloadBtn = document.getElementById('downloadGroupBtn');
-
-        if (editMode) {
-            modalLabel.textContent = `Edit Labels - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
-            downloadBtn.style.display = 'none';
-        } else {
-            modalLabel.textContent = `All Photos - ${bibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${bibNumber}`}`;
-            downloadBtn.style.display = 'block';
-        }
-
-        galleryGrid.innerHTML = group.photos.map(photo => `
-            <div class="photo-item position-relative" ${editMode ? '' : `onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}')"`}>
-                <img src="${this.apiBase}/upload/serve/${photo.id}" 
-                     alt="${photo.filename}" 
-                     style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
-                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="photo-placeholder" style="display: none;">
-                    <i class="fas fa-image fa-2x"></i>
-                </div>
-                ${photo.detection_result ? `
-                    <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
-                        ${Math.round(photo.detection_result.confidence * 100)}%
-                    </div>
-                ` : ''}
-                ${editMode ? `
-                    <div class="position-absolute top-0 end-0 p-1">
-                        <button class="btn btn-primary btn-sm" 
-                                onclick="photoProcessor.showSinglePhotoLabelModal('${photo.id}')"
-                                title="Edit label">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                    </div>
-                    <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white text-center py-1">
-                        <small>${photo.filename}</small>
-                    </div>
-                ` : ''}
-            </div>
-        `).join('');
-
-        if (!editMode) {
-            downloadBtn.onclick = () => {
-                // Export this specific group
-                this.selectedGroups = [bibNumber];
-                this.exportPhotos();
-            };
-        }
-
-        const modal = new bootstrap.Modal(document.getElementById('galleryModal'));
-        modal.show();
-    }
 
     showManualLabelModal() {
         const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
@@ -3063,15 +2983,6 @@ class PhotoProcessor {
         }
     }
 
-    // Group Editing Methods
-    showEditGroupModal(bibNumber) {
-        const group = this.groupedPhotos.find(g => g.bib_number === bibNumber);
-        if (!group) return;
-
-        // For now, let's show the individual photos in the group for editing
-        // We'll use the gallery modal but with edit functionality
-        this.showAllPhotos(bibNumber, true); // true for edit mode
-    }
 }
 
 // Initialize the application
