@@ -19,6 +19,8 @@ The Race Photo Processor is a web application that automatically detects and sor
 - Bootstrap 5.3.2 + FontAwesome 6.4.0 (CDN)
 - Custom CSS with CSS variables and modern styling
 
+**Note**: The README.md incorrectly mentions React/TypeScript/Tailwind - the actual frontend uses vanilla JavaScript and Bootstrap 5.
+
 ## Development Commands
 
 ### Setup and Installation
@@ -26,8 +28,11 @@ The Race Photo Processor is a web application that automatically detects and sor
 # Install all dependencies (both npm and python)
 npm run install:all
 
-# Install only backend dependencies
+# Install only backend dependencies (creates venv and installs requirements.txt)
 npm run install:backend
+
+# Alternative: Manual setup
+cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 
 # Alternative: Using UV package manager
 uv sync  # if using uv.lock
@@ -35,6 +40,9 @@ uv sync  # if using uv.lock
 
 ### Development Server
 ```bash
+# IMPORTANT: Activate venv first if installing manually
+cd backend && source venv/bin/activate && cd ..
+
 # Start both frontend and backend in development mode
 npm run dev
 
@@ -95,6 +103,10 @@ python test_vision.py
 - Handles file selection, upload, processing workflow
 - Real-time status polling and UI updates
 - Photo filtering, sorting, and export management
+- **Critical Navigation Logic**: Separate workflows for detected vs unknown photos
+  - `saveInlineLabel()`: Smart navigation with timeout protection (10s save, 8s refresh)
+  - `advanceToNextUnknownPhoto()`: Auto-advances for rapid labeling workflow
+  - State-based decision making: `wasEditingDetectedPhoto` vs `wasUnknownPhoto`
 
 ### Processing Pipeline
 1. **Upload**: Files stored with UUID names in `uploads/` directory
@@ -171,10 +183,15 @@ backend/service-account-key.json  # Google Cloud credentials (not in git)
 - Job status tracked in memory (`jobs` dictionary in process.py)
 - Frontend polls job status every 2 seconds during processing
 
-### Error Handling
+### Error Handling and Timeout Protection
 - Google Vision API errors fall back to Tesseract automatically
 - File upload validates extensions and handles save errors
 - Frontend shows user-friendly error messages for API failures
+- **Critical**: Timeout protection in `saveInlineLabel()` using `Promise.race()`
+  - Save operations: 10-second timeout with 'Save timeout' error
+  - Refresh operations: 8-second timeout with 'Refresh timeout' error
+  - Input field state always restored on success/error to prevent "Saving..." stuck state
+- **Keyboard Navigation**: `handleLightboxKeyboard()` allows arrow keys even when input focused, blocks other interfering keys
 
 ### Performance Considerations
 - No database - all state in memory (jobs, results)
@@ -186,3 +203,41 @@ backend/service-account-key.json  # Google Cloud credentials (not in git)
 - File extension validation on upload
 - CORS restricted to localhost origins
 - No authentication system currently implemented
+
+## Common Troubleshooting
+
+### "ERR_CONNECTION_REFUSED" on Photo Upload
+**Symptom**: Frontend loads but photo uploads fail with connection refused errors
+
+**Root Cause**: Backend dependencies not installed (missing `uvicorn`, `fastapi`, etc.)
+
+**Solution**:
+```bash
+# Option 1: Use npm script
+npm run install:backend
+
+# Option 2: Manual venv setup
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cd ..
+npm run dev
+```
+
+### Port 5173 Already in Use
+**Symptom**: Frontend fails to start with "Address already in use"
+
+**Solution**:
+```bash
+# Kill existing process
+lsof -ti:5173 | xargs kill -9
+# Then restart
+npm run dev
+```
+
+### Photo Navigation Issues
+**Key Pattern**: The application separates detected photos (edit-in-place) from unknown photos (rapid labeling workflow). When modifying navigation logic:
+- Always store original photo state before `isEditMode` is modified
+- Use `wasEditingDetectedPhoto` and `wasUnknownPhoto` for navigation decisions
+- Ensure input field state restoration in both success and error paths
