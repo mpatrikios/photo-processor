@@ -6,7 +6,7 @@ channel = "stable-25_05"
 packages = ["freetype", "lcms2", "libGL", "libGLU", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tesseract", "tk", "zlib"]
 
 [deployment]
-run = ["sh", "-c", "npm start"]
+run = ["sh", "-c", "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
