@@ -4,7 +4,11 @@ from fastapi.staticfiles import StaticFiles
 import os
 from dotenv import load_dotenv
 
-from app.api import upload, process, download, feedback, auth
+# Import database setup and models
+from database import create_tables, get_db_info
+from app.models import user, usage  # Import models to register them with SQLAlchemy
+
+from app.api import upload, process, download, feedback, auth, users
 
 # Load environment variables from .env file
 env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -22,6 +26,28 @@ else:
     print("❌ GOOGLE_APPLICATION_CREDENTIALS not set")
 
 app = FastAPI(title="Photo Processor API", version="1.0.0")
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database tables on startup."""
+    print("🔄 Initializing database...")
+    create_tables()
+    
+    db_info = get_db_info()
+    print(f"✅ Database initialized: {db_info['database_path']}")
+    print(f"📊 Database size: {db_info['database_size_mb']} MB")
+    
+    # Clean up expired sessions on startup
+    from app.services.auth_service import auth_service
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        cleaned = auth_service.cleanup_expired_sessions(db)
+        if cleaned > 0:
+            print(f"🧹 Cleaned up {cleaned} expired sessions")
+    finally:
+        db.close()
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +70,7 @@ print(f"Created directories: {upload_dir}, {processed_dir}, {exports_dir}")
 
 # Include API routers FIRST - before static file mounts
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(process.router, prefix="/api/process", tags=["process"])
 app.include_router(download.router, prefix="/api/download", tags=["download"])
@@ -61,6 +88,7 @@ if os.path.exists(frontend_path):
 
 print("✅ API routers registered:")
 print("  - /api/auth")
+print("  - /api/users")
 print("  - /api/upload") 
 print("  - /api/process")
 print("  - /api/download")
@@ -76,9 +104,30 @@ async def health():
 
 @app.get("/auth-status")
 async def auth_status():
-    from app.api.auth import active_sessions
+    """Get authentication system status."""
+    from database import SessionLocal
+    from app.models.user import User, UserSession
+    
+    db = SessionLocal()
+    try:
+        total_users = db.query(User).count()
+        active_users = db.query(User).filter(User.is_active == True).count()
+        active_sessions = db.query(UserSession).filter(UserSession.is_active == True).count()
+        
+        return {
+            "auth_system": "database",
+            "total_users": total_users,
+            "active_users": active_users,
+            "active_sessions": active_sessions,
+            "database_info": get_db_info()
+        }
+    finally:
+        db.close()
+
+@app.get("/db-status")
+async def database_status():
+    """Get database status and information."""
     return {
-        "auth_system": "active",
-        "active_sessions": len(active_sessions),
-        "demo_users": ["admin", "user"]
+        "status": "connected",
+        "info": get_db_info()
     }

@@ -78,16 +78,12 @@ function logout() {
 }
 
 // Handle authentication form submissions
-function handleSignIn(event) {
-    console.log('Sign In form submitted'); // Debug log
+async function handleSignIn(event) {
     event.preventDefault();
     const form = event.target;
 
     const emailElement = document.getElementById('signInEmail');
     const passwordElement = document.getElementById('signInPassword');
-
-    console.log('Email element:', emailElement); // Debug log
-    console.log('Password element:', passwordElement); // Debug log
 
     if (!emailElement || !passwordElement) {
         console.error('Form elements not found!');
@@ -95,10 +91,8 @@ function handleSignIn(event) {
         return;
     }
 
-    const email = emailElement.value;
+    const email = emailElement.value.trim();
     const password = passwordElement.value;
-
-    console.log('Email:', email, 'Password:', password); // Debug log
 
     // Basic validation
     if (!email || !password) {
@@ -112,31 +106,57 @@ function handleSignIn(event) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
 
-    // Simulate authentication (replace with actual API call)
-    setTimeout(() => {
-        // Store auth token
-        localStorage.setItem('auth_token', 'demo-token-' + Date.now());
+    try {
+        // Call real authentication API
+        const response = await fetch('http://localhost:8000/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email,
+                password: password
+            })
+        });
 
-        // Hide modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
-        modal.hide();
+        const result = await response.json();
 
-        // Show app section
-        showAppSection();
+        if (response.ok) {
+            // Store auth token
+            localStorage.setItem('auth_token', result.token);
+            
+            // Store user info
+            localStorage.setItem('user_info', JSON.stringify(result.user));
 
-        showNotification('Welcome to RaceSort!', 'success');
+            // Hide modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
+            modal.hide();
 
+            // Clear form
+            form.reset();
+
+            // Show app section
+            showAppSection();
+
+            showNotification(result.message || 'Welcome back!', 'success');
+        } else {
+            showNotification(result.detail || 'Login failed. Please check your credentials.', 'error');
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        showNotification('Network error. Please check your connection and try again.', 'error');
+    } finally {
         // Restore button
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
-    }, 1500);
+    }
 }
 
-function handleCreateAccount(event) {
+async function handleCreateAccount(event) {
     event.preventDefault();
     const form = event.target;
-    const name = document.getElementById('createName').value;
-    const email = document.getElementById('createEmail').value;
+    const name = document.getElementById('createName').value.trim();
+    const email = document.getElementById('createEmail').value.trim();
     const password = document.getElementById('createPassword').value;
 
     // Validation
@@ -145,8 +165,13 @@ function handleCreateAccount(event) {
         return;
     }
 
-    if (password.length < 6) {
-        showNotification('Password must be at least 6 characters', 'error');
+    if (name.length < 2) {
+        showNotification('Full name must be at least 2 characters', 'error');
+        return;
+    }
+
+    if (password.length < 8) {
+        showNotification('Password must be at least 8 characters', 'error');
         return;
     }
 
@@ -156,24 +181,52 @@ function handleCreateAccount(event) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Account...';
 
-    // Simulate account creation (replace with actual API call)
-    setTimeout(() => {
-        // Store auth token
-        localStorage.setItem('auth_token', 'demo-token-' + Date.now());
+    try {
+        // Call real registration API
+        const response = await fetch('http://localhost:8000/api/auth/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email: email,
+                password: password,
+                full_name: name,
+                confirm_password: password
+            })
+        });
 
-        // Hide modal
-        const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
-        modal.hide();
+        const result = await response.json();
 
-        // Show app section
-        showAppSection();
+        if (response.ok) {
+            // Store auth token
+            localStorage.setItem('auth_token', result.token);
+            
+            // Store user info
+            localStorage.setItem('user_info', JSON.stringify(result.user));
 
-        showNotification('Account created successfully! Welcome to RaceSort!', 'success');
+            // Hide modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
+            modal.hide();
 
+            // Clear form
+            form.reset();
+
+            // Show app section
+            showAppSection();
+
+            showNotification(result.message || 'Account created successfully!', 'success');
+        } else {
+            showNotification(result.detail || 'Failed to create account. Please try again.', 'error');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        showNotification('Network error. Please check your connection and try again.', 'error');
+    } finally {
         // Restore button
         submitBtn.disabled = false;
         submitBtn.innerHTML = originalText;
-    }, 1500);
+    }
 }
 
 function showNotification(message, type = 'info') {
@@ -263,8 +316,8 @@ class PhotoProcessor {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ token: token })
+                    'Authorization': `Bearer ${token}`
+                }
             });
 
             if (response.ok) {
@@ -272,6 +325,12 @@ class PhotoProcessor {
                 if (data.valid) {
                     this.isAuthenticated = true;
                     this.authToken = token;
+                    
+                    // Store user info if available
+                    if (data.user) {
+                        localStorage.setItem('user_info', JSON.stringify(data.user));
+                    }
+                    
                     showAppSection();
                     return true;
                 }
@@ -282,6 +341,7 @@ class PhotoProcessor {
         
         // If we get here, auth failed - clear token and show login
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_info');
         this.showLoginScreen();
         return false;
     }
@@ -368,8 +428,8 @@ class PhotoProcessor {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ token: this.authToken })
+                        'Authorization': `Bearer ${this.authToken}`
+                    }
                 });
             }
         } catch (error) {
@@ -377,6 +437,7 @@ class PhotoProcessor {
         } finally {
             // Always clear local session regardless of backend response
             localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_info');
             this.authToken = null;
             this.isAuthenticated = false;
             this.resetApp();
