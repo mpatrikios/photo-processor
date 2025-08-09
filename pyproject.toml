@@ -16,4 +16,6 @@ dependencies = [
     "aiofiles>=23.2.1",
     "google-cloud-vision>=3.4.0",
     "fastapi-mail>=1.4.1",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.8.0",
 ]
