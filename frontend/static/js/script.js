@@ -1847,6 +1847,20 @@ class PhotoProcessor {
         // Update metadata
         document.getElementById('photoModalLabel').textContent = `${photo.groupBibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${photo.groupBibNumber}`}`;
         document.getElementById('photoPosition').textContent = `${index + 1} of ${this.allPhotosFlat.length}`;
+        
+        // Update category badge
+        const categoryBadge = document.getElementById('photoCategory');
+        const isUnknown = photo.groupBibNumber === 'unknown' || 
+                         !photo.detection_result || 
+                         photo.detection_result.bib_number === 'unknown';
+        if (isUnknown) {
+            categoryBadge.textContent = 'Unknown';
+            categoryBadge.className = 'badge bg-warning text-dark';
+        } else {
+            categoryBadge.textContent = 'Detected';
+            categoryBadge.className = 'badge bg-info';
+        }
+        
         document.getElementById('photoFilename').textContent = photo.filename;
         document.getElementById('photoBibNumber').textContent = photo.groupBibNumber === 'unknown' ? 'Unknown' : photo.groupBibNumber;
 
@@ -2077,6 +2091,12 @@ class PhotoProcessor {
 
         const photo = this.allPhotosFlat[this.currentPhotoIndex];
 
+        // Store the original photo state before making changes
+        const wasEditingDetectedPhoto = this.isEditMode;
+        const wasUnknownPhoto = photo.groupBibNumber === 'unknown' || 
+                               !photo.detection_result || 
+                               photo.detection_result.bib_number === 'unknown';
+
         try {
             // Show loading state in input but keep it enabled to maintain clickability
             input.style.opacity = '0.6';
@@ -2084,18 +2104,24 @@ class PhotoProcessor {
 
             console.log(`Attempting to label photo ${photo.id} as bib #${bibNumber}`);
 
-            // Save the label
-            await this.labelPhoto(photo.id, bibNumber);
+            // Save the label with timeout protection
+            await Promise.race([
+                this.labelPhoto(photo.id, bibNumber),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 10000))
+            ]);
 
             // Show success
             this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
 
-            // Refresh data
-            await this.refreshAfterLabeling();
+            // Refresh data with timeout protection
+            await Promise.race([
+                this.refreshAfterLabeling(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 8000))
+            ]);
 
-            // Smart navigation based on mode
-            if (this.isEditMode) {
-                // For editing detected photos: stay in current group, just refresh
+            // Smart navigation based on original photo state, not current isEditMode
+            if (wasEditingDetectedPhoto) {
+                // For editing detected photos: stay in current photo, just refresh display
                 this.isEditMode = false;
                 const staticContainer = document.getElementById('photoBibNumberContainer');
                 const inlineContainer = document.getElementById('inlineLabelContainer');
@@ -2103,21 +2129,57 @@ class PhotoProcessor {
                     staticContainer.classList.remove('d-none');
                     inlineContainer.classList.add('d-none');
                 }
-            } else {
+                console.log('Staying on current photo after editing detected photo');
+            } else if (wasUnknownPhoto) {
                 // For unknown photos: advance to next unknown for rapid labeling
+                console.log('Advancing to next unknown photo after labeling');
                 this.advanceToNextUnknownPhoto();
+            } else {
+                // Fallback: stay on current photo
+                console.log('Staying on current photo (fallback case)');
             }
+            
+            // CRITICAL: Restore input field state after successful completion
+            // This was missing, causing the "Saving..." text to remain stuck
+            input.disabled = false;
+            input.style.opacity = '1';
+            input.style.pointerEvents = 'auto';
+            
+            // Clear the input for unknown photos (ready for next), or restore for detected photos
+            if (wasUnknownPhoto && !wasEditingDetectedPhoto) {
+                input.value = ''; // Clear for next unknown photo
+                input.focus(); // Keep focus for rapid labeling
+            } else {
+                input.value = bibNumber; // Show the saved value for detected photos
+                input.blur(); // Remove focus since we're done editing
+            }
+            
+            console.log('Input field restored after successful save');
 
         } catch (error) {
             console.error('Failed to label photo:', error);
-            this.showError(`Failed to label photo: ${error.message}`);
-            // Restore input state and ensure it's enabled and clickable
+            
+            // Handle timeout vs other errors differently
+            let errorMessage;
+            if (error.message === 'Save timeout') {
+                errorMessage = 'Save operation timed out. Please try again.';
+            } else if (error.message === 'Refresh timeout') {
+                errorMessage = 'Save completed but refresh timed out. Photo may still be labeled correctly.';
+            } else {
+                errorMessage = `Failed to label photo: ${error.message}`;
+            }
+            
+            this.showError(errorMessage);
+            
+            // CRITICAL: Always restore input field state on any error
+            // This ensures the input never remains stuck in "Saving..." state
             input.disabled = false;
             input.style.opacity = '1';
-            input.value = bibNumber;
+            input.value = bibNumber; // Restore the user's input
             input.style.pointerEvents = 'auto';
             input.focus();
-            console.log('Input restored after error, disabled:', input.disabled);
+            
+            console.log('Input field fully restored after error:', error.message);
         }
     }
 
@@ -2336,19 +2398,38 @@ class PhotoProcessor {
     }
 
     initializeLightboxKeyboard() {
-        document.addEventListener('keydown', this.handleLightboxKeyboard.bind(this));
+        // Remove any existing listener to prevent duplicates
+        if (this.lightboxKeyboardHandler) {
+            document.removeEventListener('keydown', this.lightboxKeyboardHandler);
+        }
+        
+        // Bind and store the handler for future removal
+        this.lightboxKeyboardHandler = this.handleLightboxKeyboard.bind(this);
+        document.addEventListener('keydown', this.lightboxKeyboardHandler);
     }
 
     handleLightboxKeyboard(e) {
         const modal = document.getElementById('photoModal');
         if (!modal.classList.contains('show')) return;
 
-        // Don't interfere with input field typing
-        if (document.activeElement && 
+        // Check if we're in an input field
+        const isInputFocused = document.activeElement && 
             (document.activeElement.tagName === 'INPUT' || 
              document.activeElement.tagName === 'TEXTAREA' ||
-             document.activeElement.id === 'inlineBibInput')) {
-            return; // Allow normal typing in input fields
+             document.activeElement.id === 'inlineBibInput');
+
+        // For input fields: allow arrow keys for navigation, but block other keys that interfere with typing
+        if (isInputFocused) {
+            // Allow arrow keys for photo navigation even in input fields
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                // Continue to handle arrow keys below
+            } else if (e.key === 'Enter' || e.key === 'Escape') {
+                // Allow Enter and Escape to be handled by input event listeners
+                return;
+            } else {
+                // Block all other keys to prevent interference with typing
+                return;
+            }
         }
 
         switch(e.key) {
