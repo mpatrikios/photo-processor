@@ -45,6 +45,11 @@ backend/uploads/
 backend/processed/
 backend/exports/
 
+# Database files
+backend/race_photos.db
+backend/*.db
+backend/*.sqlite
+
 # Logs
 *.log
 logs/

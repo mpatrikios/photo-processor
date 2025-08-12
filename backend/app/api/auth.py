@@ -317,16 +317,3 @@ async def get_auth_stats(
         "database_status": "connected"
     }
 
-@router.get("/test")
-async def test_auth_route():
-    """Test endpoint to verify auth routing is working."""
-    return {
-        "message": "Real authentication system is active",
-        "endpoints": [
-            "POST /register - Create new account",
-            "POST /login - Login with email/password", 
-            "POST /logout - Logout current session",
-            "GET /me - Get current user info",
-            "POST /change-password - Change password"
-        ]
-    }

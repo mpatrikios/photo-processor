@@ -508,20 +508,10 @@
                         <div class="card mb-4">
                             <div class="card-body">
                                 <div class="row align-items-center">
-                                    <div class="col-md-6">
+                                    <div class="col-12">
                                         <p class="mb-0">
                                             <strong id="unknown-count-display">0</strong> photos need manual labeling
                                         </p>
-                                    </div>
-                                    <div class="col-md-6 text-end">
-                                        <button class="btn btn-success me-2" id="batch-label-btn" onclick="photoProcessor?.showBatchLabelModal()">
-                                            <i class="fas fa-tags me-2"></i>
-                                            Batch Label Selected
-                                        </button>
-                                        <button class="btn btn-outline-primary" id="select-all-unknown-btn" onclick="photoProcessor?.selectAllUnknown()">
-                                            <i class="fas fa-check-square me-2"></i>
-                                            Select All
-                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -789,57 +779,6 @@
         </div>
     </div>
 
-    <!-- Batch Labeling Modal -->
-    <div class="modal fade" id="batchLabelModal" tabindex="-1" aria-labelledby="batchLabelModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="batchLabelModalLabel">
-                        <i class="fas fa-tags me-2"></i>
-                        Batch Label Photos
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <p class="text-muted">
-                            Label <strong id="selectedPhotoCount">0</strong> selected photos with the same bib number:
-                        </p>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="batchBibNumber" class="form-label">Bib Number</label>
-                            <input type="text" class="form-control form-control-lg" id="batchBibNumber" 
-                                   placeholder="Enter bib number" maxlength="6" pattern="[0-9]{1,6}">
-                            <div class="form-text">Enter 1-6 digits (1-99999)</div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                All selected photos will be labeled with this bib number
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Selected Photos Preview -->
-                    <div class="mb-3">
-                        <label class="form-label">Selected Photos</label>
-                        <div id="batchPhotosPreviews" class="d-flex flex-wrap gap-2" style="max-height: 200px; overflow-y: auto;">
-                            <!-- Selected photo thumbnails will be shown here -->
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" id="apply-batch-labels-btn" class="btn btn-primary">
-                        <i class="fas fa-check me-2"></i>
-                        Apply to All Selected
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Feedback Modal -->
     <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">

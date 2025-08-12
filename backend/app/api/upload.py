@@ -14,11 +14,6 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp"}
 # Ensure upload directory exists
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.get("/test")
-async def test_upload_route():
-    """Test endpoint to verify upload routing is working"""
-    return {"message": "Upload routes are working", "upload_dir": UPLOAD_DIR}
-
 def get_file_extension(filename: str) -> str:
     return os.path.splitext(filename.lower())[1]
 

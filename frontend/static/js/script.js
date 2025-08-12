@@ -294,7 +294,6 @@ class PhotoProcessor {
         this.panY = 0;
         this.currentLightboxGroup = null;
         this.currentPhotoIndex = 0;
-        this.selectedUnknownPhotos = []; // For unknown photos selection
 
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
@@ -2751,7 +2750,6 @@ class PhotoProcessor {
     showMainResults() {
         document.getElementById('unknown-photos-section').classList.add('d-none');
         document.getElementById('results-section').classList.remove('d-none');
-        this.selectedUnknownPhotos = []; // Clear selection
     }
 
     displayUnknownPhotos() {
@@ -2779,14 +2777,6 @@ class PhotoProcessor {
                              onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', 'unknown')"
                              loading="lazy">
 
-                        <!-- Selection checkbox -->
-                        <div class="position-absolute top-0 start-0 p-2">
-                            <input class="form-check-input unknown-photo-checkbox" 
-                                   type="checkbox" 
-                                   data-photo-id="${photo.id}"
-                                   onchange="photoProcessor.toggleUnknownPhotoSelection('${photo.id}')">
-                        </div>
-
                         <!-- Edit button -->
                         <div class="position-absolute top-0 end-0 p-2">
                             <button class="btn btn-primary btn-sm" 
@@ -2812,64 +2802,9 @@ class PhotoProcessor {
 
         document.getElementById('unknown-photos-grid').innerHTML = gridHtml;
 
-        // Initialize selection state
-        this.selectedUnknownPhotos = [];
-        this.updateBatchLabelButton();
     }
 
     // Selection Management
-    toggleUnknownPhotoSelection(photoId) {
-        const index = this.selectedUnknownPhotos.indexOf(photoId);
-        if (index > -1) {
-            this.selectedUnknownPhotos.splice(index, 1);
-        } else {
-            this.selectedUnknownPhotos.push(photoId);
-        }
-        this.updateBatchLabelButton();
-    }
-
-    selectAllUnknown() {
-        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
-        const unknownPhotos = unknownGroup ? unknownGroup.photos : [];
-
-        const allSelected = this.selectedUnknownPhotos.length === unknownPhotos.length;
-
-        if (allSelected) {
-            // Deselect all
-            this.selectedUnknownPhotos = [];
-            document.querySelectorAll('.unknown-photo-checkbox').forEach(cb => cb.checked = false);
-            document.getElementById('select-all-unknown-btn').innerHTML = '<i class="fas fa-check-square me-2"></i>Select All';
-        } else {
-            // Select all
-            this.selectedUnknownPhotos = unknownPhotos.map(photo => photo.id);
-            document.querySelectorAll('.unknown-photo-checkbox').forEach(cb => cb.checked = true);
-            document.getElementById('select-all-unknown-btn').innerHTML = '<i class="fas fa-minus-square me-2"></i>Deselect All';
-        }
-
-        this.updateBatchLabelButton();
-    }
-
-    updateBatchLabelButton() {
-        const batchBtn = document.getElementById('batch-label-btn');
-        const selectAllBtn = document.getElementById('select-all-unknown-btn');
-
-        if (this.selectedUnknownPhotos.length > 0) {
-            batchBtn.disabled = false;
-            batchBtn.innerHTML = `<i class="fas fa-tags me-2"></i>Batch Label Selected (${this.selectedUnknownPhotos.length})`;
-        } else {
-            batchBtn.disabled = true;
-            batchBtn.innerHTML = '<i class="fas fa-tags me-2"></i>Batch Label Selected';
-        }
-
-        const unknownGroup = this.groupedPhotos.find(group => group.bib_number === 'unknown');
-        const totalUnknown = unknownGroup ? unknownGroup.photos.length : 0;
-
-        if (this.selectedUnknownPhotos.length === totalUnknown && totalUnknown > 0) {
-            selectAllBtn.innerHTML = '<i class="fas fa-minus-square me-2"></i>Deselect All';
-        } else {
-            selectAllBtn.innerHTML = '<i class="fas fa-check-square me-2"></i>Select All';
-        }
-    }
 
     // Manual Labeling Methods
     currentPhotoToLabel = null;
@@ -2946,129 +2881,6 @@ class PhotoProcessor {
         }
     }
 
-    showBatchLabelModal() {
-        if (this.selectedUnknownPhotos.length === 0) {
-            this.showError('Please select photos to label first');
-            return;
-        }
-
-        // Update count
-        document.getElementById('selectedPhotoCount').textContent = this.selectedUnknownPhotos.length;
-        document.getElementById('batchBibNumber').value = '';
-
-        // Show preview thumbnails
-        this.displayBatchPhotoPreviews();
-
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('batchLabelModal'));
-        modal.show();
-
-        // Set up event listener
-        this.setupBatchLabelEventListener();
-    }
-
-    displayBatchPhotoPreviews() {
-        const previewsHtml = this.selectedUnknownPhotos.map(photoId => {
-            const photo = this.findPhotoById(photoId);
-            return `
-                <div class="position-relative">
-                    <img src="${this.apiBase}/upload/serve/${photoId}" 
-                         class="rounded" 
-                         style="width: 60px; height: 60px; object-fit: cover;">
-                    <button class="btn btn-danger btn-sm position-absolute top-0 end-0" 
-                            style="transform: translate(50%, -50%); width: 20px; height: 20px; border-radius: 50%; padding: 0; font-size: 10px;"
-                            onclick="photoProcessor.removeFromBatchSelection('${photoId}')"
-                            title="Remove from selection">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-            `;
-        }).join('');
-
-        document.getElementById('batchPhotosPreviews').innerHTML = previewsHtml;
-    }
-
-    removeFromBatchSelection(photoId) {
-        const index = this.selectedUnknownPhotos.indexOf(photoId);
-        if (index > -1) {
-            this.selectedUnknownPhotos.splice(index, 1);
-
-            // Update checkbox
-            const checkbox = document.querySelector(`input[data-photo-id="${photoId}"]`);
-            if (checkbox) checkbox.checked = false;
-
-            // Update count and previews
-            document.getElementById('selectedPhotoCount').textContent = this.selectedUnknownPhotos.length;
-            this.displayBatchPhotoPreviews();
-            this.updateBatchLabelButton();
-
-            // Close modal if no photos left
-            if (this.selectedUnknownPhotos.length === 0) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('batchLabelModal'));
-                modal.hide();
-            }
-        }
-    }
-
-    setupBatchLabelEventListener() {
-        const btn = document.getElementById('apply-batch-labels-btn');
-        const input = document.getElementById('batchBibNumber');
-
-        // Remove existing listeners
-        btn.replaceWith(btn.cloneNode(true));
-        const newBtn = document.getElementById('apply-batch-labels-btn');
-
-        newBtn.addEventListener('click', () => this.applyBatchLabels());
-
-        // Allow Enter key to submit
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.applyBatchLabels();
-            }
-        });
-    }
-
-    async applyBatchLabels() {
-        const bibNumber = document.getElementById('batchBibNumber').value.trim();
-
-        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
-            this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
-            return;
-        }
-
-        const btn = document.getElementById('apply-batch-labels-btn');
-        const originalText = btn.innerHTML;
-
-        try {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Labeling...';
-
-            // Label all selected photos
-            const promises = this.selectedUnknownPhotos.map(photoId => 
-                this.labelPhoto(photoId, bibNumber)
-            );
-
-            await Promise.all(promises);
-
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('batchLabelModal'));
-            modal.hide();
-
-            this.showSuccess(`${this.selectedUnknownPhotos.length} photos labeled as Bib #${bibNumber}`);
-
-            // Clear selection
-            this.selectedUnknownPhotos = [];
-
-            // Refresh displays
-            await this.refreshAfterLabeling();
-
-        } catch (error) {
-            this.showError(`Failed to label photos: ${error.message}`);
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
-    }
 
     // Helper Methods
     validateBibNumber(bibNumber) {

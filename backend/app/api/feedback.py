@@ -132,39 +132,3 @@ async def feedback_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get feedback stats: {str(e)}")
 
-@router.get("/email-config")
-async def check_email_config():
-    """Check if email is properly configured"""
-    return {
-        "email_configured": email_service.is_configured(),
-        "admin_email": email_service.admin_email if email_service.admin_email else "Not configured",
-        "smtp_host": email_service.smtp_host,
-        "smtp_port": email_service.smtp_port,
-        "smtp_use_tls": email_service.smtp_use_tls
-    }
-
-@router.post("/test-email")
-async def test_email():
-    """Send a test email to verify configuration"""
-    if not email_service.is_configured():
-        raise HTTPException(status_code=400, detail="Email not configured")
-    
-    test_feedback = {
-        "id": f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        "timestamp": datetime.now().isoformat(),
-        "type": "general",
-        "title": "Email Configuration Test",
-        "description": "This is a test email to verify that feedback notifications are working correctly.",
-        "email": "test@example.com",
-        "system_info": "Test system information",
-        "status": "test"
-    }
-    
-    try:
-        success = await email_service.send_feedback_notification(test_feedback)
-        if success:
-            return {"message": "Test email sent successfully!", "admin_email": email_service.admin_email}
-        else:
-            raise HTTPException(status_code=500, detail="Failed to send test email")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Email test failed: {str(e)}")
