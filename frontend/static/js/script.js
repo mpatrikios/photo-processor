@@ -108,7 +108,12 @@ async function handleSignIn(event) {
 
     try {
         // Call real authentication API
-        const response = await fetch('http://localhost:8000/api/auth/login', {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            `${window.location.protocol}//${window.location.host}/api`;
+        
+        const response = await fetch(`${apiBase}/auth/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -183,7 +188,12 @@ async function handleCreateAccount(event) {
 
     try {
         // Call real registration API
-        const response = await fetch('http://localhost:8000/api/auth/register', {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            `${window.location.protocol}//${window.location.host}/api`;
+            
+        const response = await fetch(`${apiBase}/auth/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -268,7 +278,7 @@ class PhotoProcessor {
     constructor() {
         // In development, frontend runs on 5173 and backend on 8000
         // In production, both will be served from the same domain
-        const isDevelopment = window.location.port === '5173';
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         if (isDevelopment) {
             this.apiBase = window.location.protocol + '//' + window.location.hostname + ':8000/api';
         } else {
@@ -3268,14 +3278,19 @@ async function showProfileModal() {
 async function loadCustomProfileData() {
     try {
         // Load all data in parallel
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            `${window.location.protocol}//${window.location.host}/api`;
+            
         const [quotaResponse, statsResponse, timelineResponse] = await Promise.all([
-            fetch('http://localhost:8000/api/users/me/quota', {
+            fetch(`${apiBase}/users/me/quota`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
             }),
-            fetch('http://localhost:8000/api/users/me/stats', {
+            fetch(`${apiBase}/users/me/stats`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
             }),
-            fetch('http://localhost:8000/api/users/me/timeline?days=7', {
+            fetch(`${apiBase}/users/me/timeline?days=7`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
             })
         ]);
@@ -3423,7 +3438,12 @@ async function updateCustomProfile() {
     if (!fullNameInput) return;
     
     try {
-        const response = await fetch('http://localhost:8000/api/users/me/profile', {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            `${window.location.protocol}//${window.location.host}/api`;
+            
+        const response = await fetch(`${apiBase}/users/me/profile`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,

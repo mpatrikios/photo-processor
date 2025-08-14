@@ -88,6 +88,13 @@ if os.getenv('ENVIRONMENT') in ['production', 'staging']:
         # "https://yourdomain.com"
     ])
 
+# Add Replit deployment URLs
+allowed_origins.extend([
+    "https://photo-processor-2-mpatrikios1.replit.app",
+    "https://*.replit.app",  # Allow all replit.app subdomains
+    "https://*.replit.dev",  # Allow all replit.dev subdomains
+])
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
