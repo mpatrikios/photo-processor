@@ -2116,3 +2116,128 @@ body.metadata-panel-visible .photo-viewing-area {
 .progress-bar {
     transition: width 0.3s ease;
 }
+
+/* About Page Styling */
+/* Team headshots - circular with border and shadow */
+.team-headshot {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: center;
+    border: 4px solid #fff;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.team-headshot:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+
+/* Team member list items */
+.team-member-item {
+    transition: transform 0.2s ease;
+}
+
+.team-member-item:hover {
+    transform: translateX(10px);
+}
+
+/* Badge styling for skills */
+#about .badge {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.8rem;
+    font-weight: 500;
+}
+
+/* Quote styling */
+#about blockquote {
+    font-style: italic;
+    color: #6c757d;
+    border-left: 3px solid #dee2e6;
+    padding-left: 1rem;
+    margin-top: 0.5rem;
+}
+
+/* Mission section icons */
+#about .fas.fa-3x {
+    opacity: 0.8;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#about .fas.fa-3x:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+/* Smooth scrolling for anchor links */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Team member content styling */
+#about .team-member-item h4 {
+    color: #212529;
+    margin-bottom: 0.5rem;
+}
+
+#about .team-member-item .text-primary,
+#about .team-member-item .text-success,
+#about .team-member-item .text-warning,
+#about .team-member-item .text-info {
+    font-size: 1rem;
+}
+
+/* Divider styling */
+#about hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #dee2e6, transparent);
+    margin: 3rem 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .team-headshot {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 1rem;
+    }
+    
+    .team-member-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .team-member-item .flex-shrink-0 {
+        margin-right: 0 !important;
+        margin-bottom: 1rem;
+    }
+    
+    .team-member-item:hover {
+        transform: none;
+    }
+    
+    #about .fas.fa-3x {
+        font-size: 2rem !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .team-headshot {
+        width: 70px;
+        height: 70px;
+    }
+    
+    #about .team-member-item h4 {
+        font-size: 1.3rem;
+    }
+    
+    #about .badge {
+        font-size: 0.65rem;
+        padding: 0.3rem 0.6rem;
+        margin-bottom: 0.25rem;
+        display: inline-block;
+    }
+}
