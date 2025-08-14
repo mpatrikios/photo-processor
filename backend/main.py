@@ -1,8 +1,13 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables FIRST - before any other imports
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path=env_path)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
-from dotenv import load_dotenv
 
 # Import database setup and models
 from database import create_tables, get_db_info
@@ -10,11 +15,7 @@ from app.models import user, usage  # Import models to register them with SQLAlc
 
 from app.api import upload, process, download, feedback, auth, users
 
-# Load environment variables from .env file
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-load_dotenv(dotenv_path=env_path)
-
-# Debug: Print Google Cloud credentials path
+# Debug: Print environment variables
 google_creds = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 if google_creds:
     print(f"✅ Google Cloud credentials loaded: {google_creds}")
@@ -24,6 +25,13 @@ if google_creds:
         print("❌ Credentials file not found")
 else:
     print("❌ GOOGLE_APPLICATION_CREDENTIALS not set")
+
+# Debug: Check JWT secret key
+jwt_secret = os.getenv('JWT_SECRET_KEY')
+if jwt_secret:
+    print(f"✅ JWT_SECRET_KEY loaded: {jwt_secret[:10]}...")
+else:
+    print("❌ JWT_SECRET_KEY not set")
 
 app = FastAPI(title="Photo Processor API", version="1.0.0")
 
@@ -38,8 +46,21 @@ async def startup_event():
     print(f"✅ Database initialized: {db_info['database_path']}")
     print(f"📊 Database size: {db_info['database_size_mb']} MB")
     
-    # Clean up expired sessions on startup
+    # Test AuthService singleton and JWT functionality
     from app.services.auth_service import auth_service
+    print(f"🧪 Testing AuthService functionality...")
+    
+    # Test token creation and verification
+    test_token = auth_service.create_access_token(999)  # Test user ID
+    print(f"🧪 Test token created: {test_token[:50]}...")
+    
+    test_result = auth_service.verify_token(test_token)
+    if test_result:
+        print(f"✅ AuthService test PASSED - tokens work correctly")
+    else:
+        print(f"❌ AuthService test FAILED - JWT not working properly")
+    
+    # Clean up expired sessions on startup
     from database import SessionLocal
     db = SessionLocal()
     try:
@@ -51,8 +72,8 @@ async def startup_event():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # Set to False when using allow_origins=["*"]
+    allow_origins=["http://localhost:5173", "http://localhost:8000", "http://127.0.0.1:5173", "http://127.0.0.1:8000"],
+    allow_credentials=True,  # Enable credentials for authentication
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )

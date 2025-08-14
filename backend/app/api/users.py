@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -27,10 +27,17 @@ async def get_my_usage_stats(
 
 @router.get("/me/quota")
 async def get_my_quota(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get current user's quota information."""
+    
+    # Debug request headers
+    print(f"🔍 Quota endpoint - Request headers:")
+    for name, value in request.headers.items():
+        if name.lower() in ['authorization', 'content-type', 'origin']:
+            print(f"🔍   {name}: {value}")
     
     quota = usage_tracker.get_or_create_user_quota(db, current_user.id)
     

@@ -12,9 +12,22 @@ import hashlib
 class AuthService:
     """
     Service for handling authentication, JWT tokens, and user management.
+    Singleton pattern to ensure consistent secret keys.
     """
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(AuthService, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self):
+        # Only initialize once
+        if self._initialized:
+            return
+            
         # JWT Configuration
         self.SECRET_KEY = os.getenv("JWT_SECRET_KEY", self._generate_secret_key())
         self.ALGORITHM = "HS256"
@@ -22,7 +35,13 @@ class AuthService:
         
         # Ensure we have a secret key
         if not os.getenv("JWT_SECRET_KEY"):
-            print(f"⚠️  Warning: Using generated JWT secret key. Set JWT_SECRET_KEY environment variable for production.")
+            print(f"⚠️  Warning: Using generated JWT secret key: {self.SECRET_KEY[:10]}... Set JWT_SECRET_KEY environment variable for production.")
+        else:
+            print(f"✅ Using JWT_SECRET_KEY from environment: {self.SECRET_KEY[:10]}...")
+        print(f"🔐 AuthService singleton initialized with secret key length: {len(self.SECRET_KEY)}")
+        
+        # Mark as initialized
+        AuthService._initialized = True
     
     def _generate_secret_key(self) -> str:
         """
@@ -42,11 +61,14 @@ class AuthService:
         to_encode = {
             "sub": str(user_id),  # Subject (user ID)
             "exp": expire,        # Expiration time
-            "iat": datetime.utcnow(),  # Issued at time
+            "iat": int(datetime.utcnow().timestamp()),  # Issued at time
             "type": "access"      # Token type
         }
         
         encoded_jwt = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
+        print(f"🔑 Token created for user {user_id}")
+        print(f"🔑 Secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
+        print(f"🔑 Token payload: {to_encode}")
         return encoded_jwt
 
     def verify_token(self, token: str) -> Optional[dict]:
@@ -55,12 +77,21 @@ class AuthService:
         Returns the payload if valid, None if invalid.
         """
         try:
+            print(f"🔍 Verifying token")
+            print(f"🔍 Secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
+            print(f"🔍 Token: {token[:50]}...")
+            
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
+            print(f"✅ Token decoded successfully. Payload: {payload}")
             user_id: str = payload.get("sub")
             if user_id is None:
+                print("❌ No 'sub' field in token payload")
                 return None
+            print(f"✅ Token verification successful for user_id: {user_id}")
             return {"user_id": int(user_id), "payload": payload}
-        except JWTError:
+        except JWTError as e:
+            print(f"❌ JWT verification failed: {str(e)}")
+            print(f"❌ Failed secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
             return None
 
     def hash_token(self, token: str) -> str:
@@ -170,11 +201,14 @@ class AuthService:
         """
         Get user from a valid JWT token.
         """
+        print(f"🔍 Verifying token: {token[:20]}..." if token else "🔍 No token to verify")
         token_data = self.verify_token(token)
         if not token_data:
+            print("❌ Token verification failed")
             return None
         
         user_id = token_data["user_id"]
+        print(f"🔍 Token verified for user ID: {user_id}")
         user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
         
         if not user:

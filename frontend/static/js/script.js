@@ -316,7 +316,8 @@ class PhotoProcessor {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
-                }
+                },
+                credentials: 'include'
             });
 
             if (response.ok) {
@@ -353,6 +354,9 @@ class PhotoProcessor {
     showMainContent() {
         document.getElementById('login-section').classList.add('d-none');
         document.getElementById('main-content').classList.remove('d-none');
+        
+        // Load user quota when showing main content
+        this.loadUserQuota();
     }
 
     initializeLoginForm() {
@@ -428,7 +432,8 @@ class PhotoProcessor {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${this.authToken}`
-                    }
+                    },
+                    credentials: 'include'
                 });
             }
         } catch (error) {
@@ -1024,7 +1029,7 @@ class PhotoProcessor {
         }
     }
 
-    displaySelectedFiles() {
+    async displaySelectedFiles() {
         const selectedFilesDiv = document.getElementById('selected-files');
         const fileListDiv = document.getElementById('file-list');
         const fileCountSpan = document.getElementById('file-count');
@@ -1037,7 +1042,35 @@ class PhotoProcessor {
         selectedFilesDiv.classList.remove('d-none');
         fileCountSpan.textContent = this.selectedFiles.length;
 
-        fileListDiv.innerHTML = this.selectedFiles.map((file, index) => `
+        // Check quota and add warning if needed
+        const quotaCheck = await this.checkUploadQuota(this.selectedFiles.length);
+        let warningHtml = '';
+        
+        if (!quotaCheck.canUpload) {
+            warningHtml = `
+                <div class="alert alert-danger mt-3 mb-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${quotaCheck.message}
+                </div>
+            `;
+            // Disable upload button
+            document.getElementById('upload-btn').disabled = true;
+        } else {
+            // Check if approaching limit (within 10 photos)
+            const quota = await this.loadUserQuota();
+            if (quota && quota.photos_remaining <= 10 && quota.photos_remaining > 0) {
+                warningHtml = `
+                    <div class="alert alert-warning mt-3 mb-3">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        Warning: Only ${quota.photos_remaining} photos remaining this month.
+                    </div>
+                `;
+            }
+            // Enable upload button
+            document.getElementById('upload-btn').disabled = false;
+        }
+
+        fileListDiv.innerHTML = warningHtml + this.selectedFiles.map((file, index) => `
             <div class="file-item">
                 <div class="file-info">
                     <i class="fas fa-image file-icon"></i>
@@ -1072,9 +1105,114 @@ class PhotoProcessor {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
+    // Helper method for authenticated API calls
+    getAuthHeaders(includeContentType = true) {
+        const headers = {};
+        if (includeContentType) {
+            headers['Content-Type'] = 'application/json';
+        }
+        // Get token from localStorage if this.authToken is not set
+        const token = this.authToken || localStorage.getItem('auth_token');
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    }
+
+    // Get current user quota
+    async loadUserQuota() {
+        try {
+            console.log('🔄 Loading user quota...');
+            console.log('🔐 Current authToken:', this.authToken ? `${this.authToken.substring(0, 20)}...` : 'NULL');
+            
+            // Check localStorage token as well
+            const storedToken = localStorage.getItem('auth_token');
+            console.log('🔐 Stored token:', storedToken ? `${storedToken.substring(0, 20)}...` : 'NULL');
+            
+            const headers = this.getAuthHeaders();
+            console.log('🔐 Request headers:', headers);
+            
+            const response = await fetch(`${this.apiBase}/users/me/quota`, {
+                headers: headers,
+                credentials: 'include'
+            });
+
+            console.log('📊 Quota response status:', response.status);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('✅ Quota data received:', data);
+                this.updateQuotaDisplay(data.quota);
+                return data.quota;
+            } else {
+                console.error('❌ Quota request failed:', response.status, response.statusText);
+            }
+        } catch (error) {
+            console.error('Failed to load quota:', error);
+        }
+        return null;
+    }
+
+    // Update quota display in UI
+    updateQuotaDisplay(quota) {
+        const quotaStatus = document.getElementById('quota-status');
+        const quotaText = document.getElementById('quota-text');
+        const quotaProgress = document.getElementById('quota-progress');
+
+        if (!quota) {
+            quotaStatus.classList.add('d-none');
+            return;
+        }
+
+        const remaining = quota.photos_remaining;
+        const used = quota.photos_used_this_month;
+        const total = quota.monthly_photo_limit;
+        const percentage = (used / total) * 100;
+
+        quotaText.textContent = `${remaining.toLocaleString()} photos remaining this month (${used.toLocaleString()}/${total.toLocaleString()})`;
+        quotaProgress.style.width = `${percentage}%`;
+
+        // Update progress bar color based on usage
+        quotaProgress.className = 'progress-bar';
+        if (percentage >= 90) {
+            quotaProgress.classList.add('bg-danger');
+            quotaStatus.className = 'alert alert-danger mb-4';
+        } else if (percentage >= 75) {
+            quotaProgress.classList.add('bg-warning');
+            quotaStatus.className = 'alert alert-warning mb-4';
+        } else {
+            quotaProgress.classList.add('bg-success');
+            quotaStatus.className = 'alert alert-info mb-4';
+        }
+
+        quotaStatus.classList.remove('d-none');
+    }
+
+    // Check if user can upload the specified number of photos
+    async checkUploadQuota(photoCount) {
+        const quota = await this.loadUserQuota();
+        if (!quota) return { canUpload: true, message: '' };
+
+        const remaining = quota.photos_remaining;
+        if (photoCount > remaining) {
+            return {
+                canUpload: false,
+                message: `Cannot upload ${photoCount} photos. Only ${remaining} photos remaining this month.`
+            };
+        }
+
+        return { canUpload: true, message: '' };
+    }
+
     // File Upload
     async uploadFiles() {
         if (this.selectedFiles.length === 0) return;
+
+        // Check quota before upload
+        const quotaCheck = await this.checkUploadQuota(this.selectedFiles.length);
+        if (!quotaCheck.canUpload) {
+            this.showError(quotaCheck.message);
+            return;
+        }
 
         const formData = new FormData();
         this.selectedFiles.forEach(file => {
@@ -1087,20 +1225,38 @@ class PhotoProcessor {
 
             const response = await fetch(`${this.apiBase}/upload/photos`, {
                 method: 'POST',
+                headers: this.getAuthHeaders(false), // Don't include Content-Type for FormData
+                credentials: 'include',
                 body: formData
             });
+
+            if (response.status === 402) {
+                // Payment Required - quota exceeded
+                const error = await response.json();
+                throw new Error(error.detail || 'Monthly photo limit exceeded');
+            }
 
             if (!response.ok) {
                 throw new Error(`Upload failed: ${response.statusText}`);
             }
 
             const result = await response.json();
+            
+            // Update quota display with new information
+            if (result.quota_info) {
+                this.updateQuotaDisplay(result.quota_info);
+            }
+            
             this.showProcessingSection();
             this.startProcessing(result.photo_ids);
 
         } catch (error) {
             console.error('Upload error:', error);
-            this.showError('Upload failed. Please try again.');
+            if (error.message.includes('quota') || error.message.includes('limit')) {
+                this.showError(`Quota exceeded: ${error.message}`);
+            } else {
+                this.showError('Upload failed. Please try again.');
+            }
             document.getElementById('upload-btn').disabled = false;
             document.getElementById('upload-btn').innerHTML = '<i class="fas fa-upload me-2"></i>Upload Photos';
         }
@@ -1583,7 +1739,7 @@ class PhotoProcessor {
         }
     }
 
-    displayModalSelectedFiles() {
+    async displayModalSelectedFiles() {
         const selectedFilesDiv = document.getElementById('modal-selected-files');
         const fileListDiv = document.getElementById('modal-file-list');
         const fileCountSpan = document.getElementById('modal-file-count');
@@ -1596,10 +1752,35 @@ class PhotoProcessor {
         }
 
         selectedFilesDiv.classList.remove('d-none');
-        uploadBtn.disabled = false;
         fileCountSpan.textContent = this.modalSelectedFiles.length;
 
-        fileListDiv.innerHTML = this.modalSelectedFiles.map((file, index) => `
+        // Check quota for modal files
+        const quotaCheck = await this.checkUploadQuota(this.modalSelectedFiles.length);
+        let warningHtml = '';
+        
+        if (!quotaCheck.canUpload) {
+            warningHtml = `
+                <div class="alert alert-danger mt-3 mb-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${quotaCheck.message}
+                </div>
+            `;
+            uploadBtn.disabled = true;
+        } else {
+            // Check if approaching limit
+            const quota = await this.loadUserQuota();
+            if (quota && quota.photos_remaining <= 10 && quota.photos_remaining > 0) {
+                warningHtml = `
+                    <div class="alert alert-warning mt-3 mb-3">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        Warning: Only ${quota.photos_remaining} photos remaining this month.
+                    </div>
+                `;
+            }
+            uploadBtn.disabled = false;
+        }
+
+        fileListDiv.innerHTML = warningHtml + this.modalSelectedFiles.map((file, index) => `
             <div class="file-item">
                 <div class="file-info">
                     <i class="fas fa-image file-icon"></i>
@@ -1628,6 +1809,13 @@ class PhotoProcessor {
     async uploadMoreFiles() {
         if (this.modalSelectedFiles.length === 0) return;
 
+        // Check quota before upload
+        const quotaCheck = await this.checkUploadQuota(this.modalSelectedFiles.length);
+        if (!quotaCheck.canUpload) {
+            this.showError(quotaCheck.message);
+            return;
+        }
+
         const formData = new FormData();
         this.modalSelectedFiles.forEach(file => {
             formData.append('files', file);
@@ -1645,14 +1833,27 @@ class PhotoProcessor {
             // Upload new photos
             const response = await fetch(`${this.apiBase}/upload/photos`, {
                 method: 'POST',
+                headers: this.getAuthHeaders(false), // Don't include Content-Type for FormData
+                credentials: 'include',
                 body: formData
             });
+
+            if (response.status === 402) {
+                // Payment Required - quota exceeded
+                const error = await response.json();
+                throw new Error(error.detail || 'Monthly photo limit exceeded');
+            }
 
             if (!response.ok) {
                 throw new Error(`Upload failed: ${response.statusText}`);
             }
 
             const result = await response.json();
+            
+            // Update quota display with new information
+            if (result.quota_info) {
+                this.updateQuotaDisplay(result.quota_info);
+            }
 
             // Process new photos
             const processResponse = await fetch(`${this.apiBase}/process/start`, {
@@ -1677,7 +1878,11 @@ class PhotoProcessor {
 
         } catch (error) {
             console.error('Upload more error:', error);
-            this.showError('Failed to upload additional photos. Please try again.');
+            if (error.message.includes('quota') || error.message.includes('limit')) {
+                this.showError(`Quota exceeded: ${error.message}`);
+            } else {
+                this.showError('Failed to upload additional photos. Please try again.');
+            }
         }
     }
 
@@ -2945,6 +3150,298 @@ const photoProcessor = new PhotoProcessor();
 // Make it globally accessible for onclick handlers
 window.photoProcessor = photoProcessor;
 
+// Profile functionality - CREATE NEW WORKING MODAL
+async function showProfileModal() {
+    console.log('showProfileModal called - creating new working modal');
+    
+    // Remove any existing custom modals
+    const existingCustomModal = document.getElementById('customProfileModal');
+    if (existingCustomModal) {
+        existingCustomModal.remove();
+    }
+    
+    // Create completely new modal structure
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.id = 'customProfileModal';
+    modalBackdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    // Create modal dialog
+    const modalDialog = document.createElement('div');
+    modalDialog.style.cssText = `
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        width: 600px;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow: auto;
+        position: relative;
+    `;
+    
+    // Create modal content with loading message first
+    modalDialog.innerHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
+                <h4 style="margin: 0; color: #333;">Profile</h4>
+                <button id="customModalClose" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+            <div id="customModalContent">
+                <div style="text-align: center; padding: 40px;">
+                    <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <p style="margin-top: 15px; color: #666;">Loading profile data...</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    modalBackdrop.appendChild(modalDialog);
+    document.body.appendChild(modalBackdrop);
+    
+    // Add close functionality
+    const closeBtn = document.getElementById('customModalClose');
+    const closeModal = () => {
+        modalBackdrop.remove();
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    modalBackdrop.addEventListener('click', (e) => {
+        if (e.target === modalBackdrop) {
+            closeModal();
+        }
+    });
+    
+    // Load profile data
+    try {
+        await loadCustomProfileData();
+    } catch (error) {
+        console.error('Error loading profile data:', error);
+        const contentDiv = document.getElementById('customModalContent');
+        if (contentDiv) {
+            contentDiv.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #dc3545;">
+                    <h5>Error Loading Profile</h5>
+                    <p>Unable to load profile data. Please try again later.</p>
+                    <button onclick="this.closest('#customProfileModal').remove()" style="padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+                </div>
+            `;
+        }
+    }
+}
+
+async function loadCustomProfileData() {
+    try {
+        // Load all data in parallel
+        const [quotaResponse, statsResponse, timelineResponse] = await Promise.all([
+            fetch('http://localhost:8000/api/users/me/quota', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            }),
+            fetch('http://localhost:8000/api/users/me/stats', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            }),
+            fetch('http://localhost:8000/api/users/me/timeline?days=7', {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            })
+        ]);
+
+        if (!quotaResponse.ok || !statsResponse.ok || !timelineResponse.ok) {
+            throw new Error('Failed to load profile data');
+        }
+
+        const quotaData = await quotaResponse.json();
+        const statsData = await statsResponse.json();
+        const timelineData = await timelineResponse.json();
+
+        // Update modal content
+        updateCustomModalContent(quotaData, statsData, timelineData);
+        
+    } catch (error) {
+        console.error('Error loading custom profile data:', error);
+        throw error;
+    }
+}
+
+function updateCustomModalContent(quotaData, statsData, timelineData) {
+    const contentDiv = document.getElementById('customModalContent');
+    if (!contentDiv) return;
+    
+    const user = statsData.user;
+    const quota = quotaData.quota;
+    const stats = statsData.stats;
+    const timeline = timelineData.timeline;
+    
+    contentDiv.innerHTML = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <!-- Tabs -->
+            <div style="display: flex; border-bottom: 1px solid #dee2e6; margin-bottom: 20px;">
+                <button onclick="showCustomTab('quota')" id="quotaTab" style="padding: 10px 20px; border: none; background: none; border-bottom: 2px solid #007bff; color: #007bff; cursor: pointer; font-weight: 500;">Quota</button>
+                <button onclick="showCustomTab('account')" id="accountTab" style="padding: 10px 20px; border: none; background: none; border-bottom: 2px solid transparent; color: #666; cursor: pointer;">Account</button>
+                <button onclick="showCustomTab('activity')" id="activityTab" style="padding: 10px 20px; border: none; background: none; border-bottom: 2px solid transparent; color: #666; cursor: pointer;">Recent Activity</button>
+            </div>
+            
+            <!-- Quota Tab -->
+            <div id="quotaContent">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h5 style="margin: 0 0 10px 0;">Monthly Photo Quota</h5>
+                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 5px;">
+                        ${quota.photos_used_this_month}/${quota.monthly_photo_limit}
+                    </div>
+                    <div style="background: rgba(255,255,255,0.3); border-radius: 10px; height: 8px; margin-bottom: 10px;">
+                        <div style="background: ${quota.photos_used_this_month >= quota.monthly_photo_limit ? '#ff6b6b' : '#4ecdc4'}; height: 8px; border-radius: 10px; width: ${Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%; transition: width 0.3s ease;"></div>
+                    </div>
+                    <p style="margin: 0; opacity: 0.9;">${Math.max(0, quota.monthly_photo_limit - quota.photos_used_this_month)} photos remaining this month</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold; color: #28a745;">${stats.total_photos_uploaded || 0}</div>
+                        <div style="color: #666; font-size: 14px;">Total Photos Uploaded</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold; color: #17a2b8;">${stats.total_processing_jobs || 0}</div>
+                        <div style="color: #666; font-size: 14px;">Processing Jobs</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Account Tab -->
+            <div id="accountContent" style="display: none;">
+                <div style="space-y: 15px;">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: 500; margin-bottom: 5px; color: #333;">Email</label>
+                        <input type="email" value="${user.email}" readonly style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: #f8f9fa;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: 500; margin-bottom: 5px; color: #333;">Full Name</label>
+                        <input type="text" id="customFullName" value="${user.full_name || ''}" style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: 500; margin-bottom: 5px; color: #333;">Member Since</label>
+                        <input type="text" value="${new Date(user.created_at).toLocaleDateString()}" readonly style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: #f8f9fa;">
+                    </div>
+                    <div style="text-align: right;">
+                        <button onclick="updateCustomProfile()" style="padding: 8px 20px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Changes</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Activity Tab -->
+            <div id="activityContent" style="display: none;">
+                ${timeline.length > 0 ? `
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${timeline.map(item => `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee;">
+                                <div>
+                                    <div style="font-weight: 500;">${item.action_display}</div>
+                                    <div style="font-size: 12px; color: #666;">${new Date(item.created_at).toLocaleString()}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 14px; color: ${item.success ? '#28a745' : '#dc3545'};">
+                                        ${item.success ? '✓' : '✗'}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        <p>No recent activity found.</p>
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+}
+
+function showCustomTab(tabName) {
+    // Hide all content
+    const contents = ['quotaContent', 'accountContent', 'activityContent'];
+    contents.forEach(contentId => {
+        const element = document.getElementById(contentId);
+        if (element) element.style.display = 'none';
+    });
+    
+    // Reset all tab styles
+    const tabs = ['quotaTab', 'accountTab', 'activityTab'];
+    tabs.forEach(tabId => {
+        const element = document.getElementById(tabId);
+        if (element) {
+            element.style.borderBottomColor = 'transparent';
+            element.style.color = '#666';
+        }
+    });
+    
+    // Show selected content and style active tab
+    const contentElement = document.getElementById(tabName + 'Content');
+    const tabElement = document.getElementById(tabName + 'Tab');
+    
+    if (contentElement) contentElement.style.display = 'block';
+    if (tabElement) {
+        tabElement.style.borderBottomColor = '#007bff';
+        tabElement.style.color = '#007bff';
+    }
+}
+
+async function updateCustomProfile() {
+    const fullNameInput = document.getElementById('customFullName');
+    if (!fullNameInput) return;
+    
+    try {
+        const response = await fetch('http://localhost:8000/api/users/me/profile', {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                full_name: fullNameInput.value
+            })
+        });
+        
+        if (response.ok) {
+            // Show success message
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = 'Saved!';
+            button.style.backgroundColor = '#28a745';
+            
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.backgroundColor = '#007bff';
+            }, 2000);
+        } else {
+            throw new Error('Failed to update profile');
+        }
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        alert('Error updating profile. Please try again.');
+    }
+}
+
+// Make profile functions globally accessible
+window.showProfileModal = showProfileModal;
+window.showCustomTab = showCustomTab;
+window.updateCustomProfile = updateCustomProfile;
+
+// Placeholder functions for future features
+function showChangePasswordModal() {
+    alert('Change password feature coming soon!');
+}
+
+function editProfile() {
+    alert('Edit profile feature coming soon!');
+}
+
 // Make functions globally accessible for onclick handlers
 window.showSignInModal = showSignInModal;
 window.showCreateAccountModal = showCreateAccountModal;
@@ -2953,6 +3450,9 @@ window.switchToSignIn = switchToSignIn;
 window.showLandingPage = showLandingPage;
 window.showAppSection = showAppSection;
 window.logout = logout;
+window.showProfileModal = showProfileModal;
+window.showChangePasswordModal = showChangePasswordModal;
+window.editProfile = editProfile;
 
 // Check authentication status when page loads
 document.addEventListener('DOMContentLoaded', () => {

@@ -79,15 +79,19 @@ def get_current_user(
     This is a FastAPI dependency that can be used in protected endpoints.
     """
     token = credentials.credentials
+    print(f"🔐 Authentication attempt with token: {token[:20]}..." if token else "🔐 No token provided")
+    
     user = auth_service.get_user_from_token(db, token)
     
     if not user:
+        print(f"❌ Authentication failed for token: {token[:20]}..." if token else "❌ No token provided")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"}
         )
     
+    print(f"✅ Authentication successful for user: {user.id} ({user.email})")
     return user
 
 # Authentication Endpoints

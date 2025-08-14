@@ -2030,3 +2030,89 @@ body.metadata-panel-visible .photo-viewing-area {
         font-size: 1.1rem;
     }
 }
+
+/* Aggressive Profile Modal Fixes */
+#profileModal {
+    z-index: 1055 !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#profileModal.show {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+#profileModal .modal-dialog {
+    z-index: 1056 !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 90% !important;
+    max-width: 600px !important;
+    margin: 0 !important;
+}
+
+#profileModal .modal-content {
+    z-index: 1057 !important;
+    position: relative !important;
+    background-color: white !important;
+    border: 3px solid #ff0000 !important; /* Red debug border */
+    border-radius: 0.375rem !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 400px !important;
+}
+
+/* Debug styles to make modal visible */
+.modal.show {
+    display: block !important;
+}
+
+.modal.show .modal-dialog {
+    transform: none !important;
+    opacity: 1 !important;
+}
+
+/* Ensure modal content appears above everything */
+.modal-content {
+    position: relative !important;
+    z-index: 1060 !important;
+    background: white !important;
+    min-height: 200px !important;
+    border: 2px solid #007bff !important; /* Debug border */
+}
+
+/* Profile modal specific styling */
+.modal-lg {
+    max-width: 900px;
+}
+
+/* Tab content styling */
+.tab-content {
+    min-height: 400px;
+}
+
+/* Progress bar styling for quotas */
+.progress {
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    overflow: hidden;
+}
+
+/* Spinner animation for loading states */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
