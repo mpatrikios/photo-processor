@@ -1,4 +1,4 @@
-// RaceSort - Main JavaScript
+// TagSort - Main JavaScript
 
 // Global functions for modal and authentication handling
 function showSignInModal() {

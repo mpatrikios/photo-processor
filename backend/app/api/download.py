@@ -20,7 +20,7 @@ async def create_export(request: ExportRequest):
         raise HTTPException(status_code=400, detail="No photo IDs provided")
     
     export_id = str(uuid.uuid4())
-    zip_filename = f"race_photos_{export_id}.zip"
+    zip_filename = f"tag_photos_{export_id}.zip"
     zip_path = os.path.join(EXPORT_DIR, zip_filename)
     
     try:
@@ -60,7 +60,7 @@ async def create_export(request: ExportRequest):
 
 @router.get("/file/{export_id}")
 async def download_export(export_id: str):
-    zip_filename = f"race_photos_{export_id}.zip"
+    zip_filename = f"tag_photos_{export_id}.zip"
     zip_path = os.path.join(EXPORT_DIR, zip_filename)
     
     if not os.path.exists(zip_path):

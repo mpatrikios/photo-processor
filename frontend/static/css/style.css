@@ -1,22 +1,22 @@
-/* Enhanced Styling for Race Photo Processor */
+/* Enhanced Styling for TagSort */
 
 :root {
-    /* RaceSort Brand Colors */
-    --racesort-black: #1a1a1a;
-    --racesort-red: #dc3545;
-    --racesort-red-hover: #bb2d3b;
-    --racesort-light-gray: #f8f9fa;
-    --racesort-dark-gray: #6c757d;
+    /* TagSort Brand Colors */
+    --tagsort-black: #1a1a1a;
+    --tagsort-red: #dc3545;
+    --tagsort-red-hover: #bb2d3b;
+    --tagsort-light-gray: #f8f9fa;
+    --tagsort-dark-gray: #6c757d;
 
     /* Updated color variables to match brand */
-    --primary-color: var(--racesort-red);
-    --primary-dark: var(--racesort-red-hover);
-    --secondary-color: var(--racesort-dark-gray);
+    --primary-color: var(--tagsort-red);
+    --primary-dark: var(--tagsort-red-hover);
+    --secondary-color: var(--tagsort-dark-gray);
     --success-color: #198754;
     --warning-color: #ffc107;
-    --danger-color: var(--racesort-red);
+    --danger-color: var(--tagsort-red);
     --light-color: #ffffff;
-    --dark-color: var(--racesort-black);
+    --dark-color: var(--tagsort-black);
     --gray-50: #f8fafc;
     --gray-100: #f1f5f9;
     --gray-200: #e2e8f0;
@@ -775,7 +775,7 @@ input[type="checkbox"]:focus {
     }
 }
 
-/* RaceSort Landing Page Styles */
+/* TagSort Landing Page Styles */
 .navbar-brand {
     font-size: 1.75rem !important;
     font-weight: 800 !important;
@@ -783,7 +783,7 @@ input[type="checkbox"]:focus {
 }
 
 .hero-section {
-    background: linear-gradient(135deg, #ffffff 0%, var(--racesort-light-gray) 100%);
+    background: linear-gradient(135deg, #ffffff 0%, var(--tagsort-light-gray) 100%);
     padding-top: 80px; /* Account for fixed navbar */
     position: relative;
     overflow: hidden;
@@ -837,47 +837,47 @@ input[type="checkbox"]:focus {
     transform: translateY(-5px);
 }
 
-/* RaceSort Brand Text Styling */
-.racesort-brand .text-dark {
-    color: var(--racesort-black) !important;
+/* TagSort Brand Text Styling */
+.tagsort-brand .text-dark {
+    color: var(--tagsort-black) !important;
     font-weight: 800;
 }
 
-.racesort-brand .text-danger {
-    color: var(--racesort-red) !important;
+.tagsort-brand .text-danger {
+    color: var(--tagsort-red) !important;
     font-weight: 800;
 }
 
-/* Button Overrides for RaceSort */
+/* Button Overrides for TagSort */
 .btn-danger {
-    background: linear-gradient(135deg, var(--racesort-red), var(--racesort-red-hover));
+    background: linear-gradient(135deg, var(--tagsort-red), var(--tagsort-red-hover));
     border: none;
     font-weight: 600;
     letter-spacing: 0.025em;
 }
 
 .btn-danger:hover {
-    background: linear-gradient(135deg, var(--racesort-red-hover), #a02622);
+    background: linear-gradient(135deg, var(--tagsort-red-hover), #a02622);
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
 }
 
 .btn-outline-dark {
-    border: 2px solid var(--racesort-black);
-    color: var(--racesort-black);
+    border: 2px solid var(--tagsort-black);
+    color: var(--tagsort-black);
     font-weight: 600;
     letter-spacing: 0.025em;
 }
 
 .btn-outline-dark:hover {
-    background: var(--racesort-black);
-    border-color: var(--racesort-black);
+    background: var(--tagsort-black);
+    border-color: var(--tagsort-black);
     color: white;
 }
 
 /* Navigation Styles */
 .navbar-dark {
-    background: var(--racesort-black) !important;
+    background: var(--tagsort-black) !important;
 }
 
 .navbar-dark .navbar-nav .nav-link {
@@ -887,32 +887,32 @@ input[type="checkbox"]:focus {
 }
 
 .navbar-dark .navbar-nav .nav-link:hover {
-    color: var(--racesort-red) !important;
+    color: var(--tagsort-red) !important;
 }
 
-/* Modal Styling for RaceSort */
+/* Modal Styling for TagSort */
 .modal-header .modal-title {
     font-weight: 700;
     font-size: 1.25rem;
 }
 
 .modal-header .modal-title .text-dark {
-    color: var(--racesort-black) !important;
+    color: var(--tagsort-black) !important;
 }
 
 .modal-header .modal-title .text-danger {
-    color: var(--racesort-red) !important;
+    color: var(--tagsort-red) !important;
 }
 
 /* Form Styling */
 .form-control:focus {
-    border-color: var(--racesort-red);
+    border-color: var(--tagsort-red);
     box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
 }
 
 .form-check-input:checked {
-    background-color: var(--racesort-red);
-    border-color: var(--racesort-red);
+    background-color: var(--tagsort-red);
+    border-color: var(--tagsort-red);
 }
 
 /* Authentication Form Enhancements */
@@ -926,7 +926,7 @@ input[type="checkbox"]:focus {
 #signInModal .modal-header,
 #createAccountModal .modal-header {
     border-bottom: 1px solid var(--gray-200);
-    background: linear-gradient(135deg, var(--racesort-light-gray) 0%, #ffffff 100%);
+    background: linear-gradient(135deg, var(--tagsort-light-gray) 0%, #ffffff 100%);
     border-radius: 1rem 1rem 0 0;
 }
 
@@ -949,12 +949,12 @@ html {
 
 .lead {
     font-weight: 400;
-    color: var(--racesort-dark-gray);
+    color: var(--tagsort-dark-gray);
 }
 
 /* CTA Section Styling */
 .bg-dark {
-    background: linear-gradient(135deg, var(--racesort-black) 0%, #2d3748 100%) !important;
+    background: linear-gradient(135deg, var(--tagsort-black) 0%, #2d3748 100%) !important;
 }
 
 /* Animation for appearing elements */

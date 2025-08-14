@@ -38,7 +38,7 @@ gcloud auth application-default login
 ```
 
 ## 5. Test the Setup
-Start the backend server and upload a photo with visible race numbers. Check the console logs to see if Google Vision API is being used.
+Start the backend server and upload a photo with visible bib numbers. Check the console logs to see if Google Vision API is being used.
 
 ## Pricing
 - First 1,000 text detection requests per month: FREE

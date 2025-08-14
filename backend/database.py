@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Database file path
 DATABASE_DIR = Path(__file__).parent
-DATABASE_URL = f"sqlite:///{DATABASE_DIR}/race_photos.db"
+DATABASE_URL = f"sqlite:///{DATABASE_DIR}/tag_photos.db"
 
 # Create database directory if it doesn't exist
 DATABASE_DIR.mkdir(exist_ok=True)
@@ -47,7 +47,7 @@ def get_db_info():
     """
     Get database information for debugging.
     """
-    db_path = DATABASE_DIR / "race_photos.db"
+    db_path = DATABASE_DIR / "tag_photos.db"
     return {
         "database_url": DATABASE_URL,
         "database_path": str(db_path),

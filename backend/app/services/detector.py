@@ -723,7 +723,7 @@ class NumberDetector:
         # Position boosting is now handled in the Google Vision detection phase
         # to avoid double-boosting and maintain granular control
         
-        # Number length boost: 1-4 digit numbers are most common in races
+        # Number length boost: 1-4 digit numbers are most common in events
         pre_length_confidence = confidence
         if 1 <= len(number) <= 4:
             confidence *= 1.1

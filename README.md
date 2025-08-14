@@ -1,11 +1,11 @@
-# Race Photo Processor
+# TagSort
 
-An intelligent photo processing application that automatically detects and sorts race photos by bib numbers using Google Cloud Vision API and OpenCV.
+An intelligent photo processing application that automatically detects and sorts event photos by bib numbers using Google Cloud Vision API and OpenCV.
 
 ## Features
 
 - **Automatic Bib Number Detection**: Uses Google Cloud Vision API as primary method with Tesseract OCR fallback
-- **Bulk Photo Upload**: Drag & drop interface for uploading multiple race photos
+- **Bulk Photo Upload**: Drag & drop interface for uploading multiple event photos
 - **Real-time Processing**: Live progress tracking with async background processing
 - **Smart Sorting**: Groups photos by detected bib numbers with confidence scoring
 - **Organized Export**: Download sorted photos as ZIP files with organized folder structure
@@ -94,7 +94,7 @@ photo-processor/
 
 ## API Endpoints
 
-- `POST /api/upload/photos` - Upload race photos
+- `POST /api/upload/photos` - Upload event photos
 - `POST /api/process/start` - Start bib number detection
 - `GET /api/process/status/{job_id}` - Check processing progress
 - `GET /api/process/results/{job_id}` - Get grouped results

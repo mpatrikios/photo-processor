@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-The Race Photo Processor is a web application that automatically detects and sorts race photos by bib numbers using computer vision. It combines Google Cloud Vision API with Tesseract OCR for robust text detection.
+TagSort is a web application that automatically detects and sorts event photos by bib numbers using computer vision. It combines Google Cloud Vision API with Tesseract OCR for robust text detection.
 
 ### Technology Stack
 
@@ -150,7 +150,7 @@ backend/service-account-key.json  # Google Cloud credentials (not in git)
 
 ### File Naming Convention
 - Uploaded files: `{uuid}.{original_extension}`
-- Export files: `race_photos_{export_id}.zip`
+- Export files: `tag_photos_{export_id}.zip`
 
 ## Common Development Tasks
 
