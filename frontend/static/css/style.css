@@ -1985,12 +1985,12 @@ body.metadata-panel-visible .photo-viewing-area {
         flex-direction: row;
         min-width: 100px;
     }
-    
+
     .info-label {
         font-size: 0.6rem;
         min-width: 50px;
     }
-    
+
     .info-value {
         font-size: 0.75rem;
     }
@@ -2204,21 +2204,21 @@ html {
         height: 80px;
         margin-bottom: 1rem;
     }
-    
+
     .team-member-item {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .team-member-item .flex-shrink-0 {
         margin-right: 0 !important;
         margin-bottom: 1rem;
     }
-    
+
     .team-member-item:hover {
         transform: none;
     }
-    
+
     #about .fas.fa-3x {
         font-size: 2rem !important;
     }
@@ -2229,11 +2229,11 @@ html {
         width: 70px;
         height: 70px;
     }
-    
+
     #about .team-member-item h4 {
         font-size: 1.3rem;
     }
-    
+
     #about .badge {
         font-size: 0.65rem;
         padding: 0.3rem 0.6rem;
