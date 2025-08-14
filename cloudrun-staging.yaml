@@ -1,0 +1,38 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: tagsort-staging
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: IMAGE_URL
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "2"
+            memory: "2Gi"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: tagsort-secrets
+              key: database_url_staging
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/app/service-account-key.json"
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: tagsort-secrets
+              key: jwt_secret_staging
+        - name: ENVIRONMENT
+          value: "staging"

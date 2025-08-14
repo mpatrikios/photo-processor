@@ -70,9 +70,27 @@ async def startup_event():
     finally:
         db.close()
 
+# Configure CORS based on environment
+allowed_origins = [
+    "http://localhost:5173", 
+    "http://localhost:8000", 
+    "http://127.0.0.1:5173", 
+    "http://127.0.0.1:8000"
+]
+
+# Add production and staging URLs if in cloud environment
+if os.getenv('ENVIRONMENT') in ['production', 'staging']:
+    # Add your Cloud Run URLs here once deployed
+    allowed_origins.extend([
+        "https://tagsort-production-*.a.run.app",
+        "https://tagsort-staging-*.a.run.app",
+        # Add your custom domain if you have one
+        # "https://yourdomain.com"
+    ])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8000", "http://127.0.0.1:5173", "http://127.0.0.1:8000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,  # Enable credentials for authentication
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],

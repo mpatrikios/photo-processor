@@ -1,0 +1,56 @@
+# Development files
+node_modules/
+.git/
+.gitignore
+.env
+*.env.local
+*.env.development
+*.env.test
+*.env.production
+
+# Documentation
+README.md
+DEPLOYMENT.md
+*.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Local database (use cloud database in production)
+backend/*.db
+backend/*.db-*
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+.cache/
