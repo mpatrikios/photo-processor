@@ -77,21 +77,38 @@ class AuthService:
         Returns the payload if valid, None if invalid.
         """
         try:
-            print(f"🔍 Verifying token")
+            print(f"🔍 Verifying token: {token[:20]}..." if token else "🔍 No token provided")
             print(f"🔍 Secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
-            print(f"🔍 Token: {token[:50]}...")
             
+            # Decode and validate the token
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
             print(f"✅ Token decoded successfully. Payload: {payload}")
+            
             user_id: str = payload.get("sub")
             if user_id is None:
                 print("❌ No 'sub' field in token payload")
                 return None
+                
+            # Check token type
+            token_type = payload.get("type")
+            if token_type != "access":
+                print(f"❌ Invalid token type: {token_type}")
+                return None
+            
             print(f"✅ Token verification successful for user_id: {user_id}")
             return {"user_id": int(user_id), "payload": payload}
-        except JWTError as e:
-            print(f"❌ JWT verification failed: {str(e)}")
-            print(f"❌ Failed secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
+            
+        except jwt.ExpiredSignatureError:
+            print("❌ JWT verification failed: Token has expired")
+            return None
+        except jwt.InvalidSignatureError:
+            print("❌ JWT verification failed: Invalid signature")
+            return None
+        except jwt.InvalidTokenError as e:
+            print(f"❌ JWT verification failed: Invalid token - {str(e)}")
+            return None
+        except Exception as e:
+            print(f"❌ JWT verification failed: Unexpected error - {str(e)}")
             return None
 
     def hash_token(self, token: str) -> str:

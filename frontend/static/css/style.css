@@ -1985,12 +1985,12 @@ body.metadata-panel-visible .photo-viewing-area {
         flex-direction: row;
         min-width: 100px;
     }
-    
+
     .info-label {
         font-size: 0.6rem;
         min-width: 50px;
     }
-    
+
     .info-value {
         font-size: 0.75rem;
     }
@@ -2062,7 +2062,7 @@ body.metadata-panel-visible .photo-viewing-area {
     z-index: 1057 !important;
     position: relative !important;
     background-color: white !important;
-    border: 3px solid #ff0000 !important; /* Red debug border */
+    border: none !important;
     border-radius: 0.375rem !important;
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5) !important;
     display: block !important;
@@ -2087,7 +2087,7 @@ body.metadata-panel-visible .photo-viewing-area {
     z-index: 1060 !important;
     background: white !important;
     min-height: 200px !important;
-    border: 2px solid #007bff !important; /* Debug border */
+    border: none !important;
 }
 
 /* Profile modal specific styling */
@@ -2204,21 +2204,21 @@ html {
         height: 80px;
         margin-bottom: 1rem;
     }
-    
+
     .team-member-item {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .team-member-item .flex-shrink-0 {
         margin-right: 0 !important;
         margin-bottom: 1rem;
     }
-    
+
     .team-member-item:hover {
         transform: none;
     }
-    
+
     #about .fas.fa-3x {
         font-size: 2rem !important;
     }
@@ -2229,11 +2229,11 @@ html {
         width: 70px;
         height: 70px;
     }
-    
+
     #about .team-member-item h4 {
         font-size: 1.3rem;
     }
-    
+
     #about .badge {
         font-size: 0.65rem;
         padding: 0.3rem 0.6rem;

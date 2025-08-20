@@ -15,6 +15,42 @@ from app.models import user, usage  # Import models to register them with SQLAlc
 
 from app.api import upload, process, download, feedback, auth, users
 
+# Set up Google Cloud credentials if available
+def setup_google_credentials():
+    # First try loading from environment variable (for deployment)
+    credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if credentials_json:
+        # Create a temporary file for the credentials
+        import tempfile
+        import json
+
+        try:
+            # Parse the JSON to validate it
+            credentials_data = json.loads(credentials_json)
+
+            # Create a temporary file
+            temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
+            json.dump(credentials_data, temp_file)
+            temp_file.close()
+
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_file.name
+            print(f"✅ Google Cloud credentials loaded from environment variable")
+        except json.JSONDecodeError:
+            print("❌ Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON")
+        except Exception as e:
+            print(f"❌ Error setting up credentials from environment: {e}")
+    else:
+        # Fallback to local file (for development)
+        service_account_path = os.path.join(os.path.dirname(__file__), "service-account-key.json")
+
+        if os.path.exists(service_account_path):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_path
+            print(f"✅ Google Cloud credentials loaded: {service_account_path}")
+        else:
+            print("❌ Credentials file not found")
+
+setup_google_credentials()
+
 # Debug: Print environment variables
 google_creds = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 if google_creds:
@@ -41,25 +77,25 @@ async def startup_event():
     """Initialize database tables on startup."""
     print("🔄 Initializing database...")
     create_tables()
-    
+
     db_info = get_db_info()
     print(f"✅ Database initialized: {db_info['database_path']}")
     print(f"📊 Database size: {db_info['database_size_mb']} MB")
-    
+
     # Test AuthService singleton and JWT functionality
     from app.services.auth_service import auth_service
     print(f"🧪 Testing AuthService functionality...")
-    
+
     # Test token creation and verification
     test_token = auth_service.create_access_token(999)  # Test user ID
     print(f"🧪 Test token created: {test_token[:50]}...")
-    
+
     test_result = auth_service.verify_token(test_token)
     if test_result:
         print(f"✅ AuthService test PASSED - tokens work correctly")
     else:
         print(f"❌ AuthService test FAILED - JWT not working properly")
-    
+
     # Clean up expired sessions on startup
     from database import SessionLocal
     db = SessionLocal()
@@ -87,6 +123,13 @@ if os.getenv('ENVIRONMENT') in ['production', 'staging']:
         # Add your custom domain if you have one
         # "https://yourdomain.com"
     ])
+
+# Add Replit deployment URLs
+allowed_origins.extend([
+    "https://photo-processor-2-mpatrikios1.replit.app",
+    "https://*.replit.app",  # Allow all replit.app subdomains
+    "https://*.replit.dev",  # Allow all replit.dev subdomains
+])
 
 app.add_middleware(
     CORSMiddleware,
@@ -146,13 +189,13 @@ async def auth_status():
     """Get authentication system status."""
     from database import SessionLocal
     from app.models.user import User, UserSession
-    
+
     db = SessionLocal()
     try:
         total_users = db.query(User).count()
         active_users = db.query(User).filter(User.is_active == True).count()
         active_sessions = db.query(UserSession).filter(UserSession.is_active == True).count()
-        
+
         return {
             "auth_system": "database",
             "total_users": total_users,
