@@ -39,8 +39,6 @@ class NumberDetector:
         if not photo_path:
             raise FileNotFoundError(f"Photo {photo_id} not found")
         
-        if debug_mode:
-            print(f"🔍 DEBUG: Starting detection for {photo_id} at {photo_path}")
         
         # ⏱️ Time initialization
         init_start_time = time.time()
@@ -60,10 +58,8 @@ class NumberDetector:
                 google_time = time.time() - google_start_time
                 
                 google_result = (bib_number, confidence, bbox)
-                if debug_mode:
-                    print(f"🔍 DEBUG: Google Vision result - Number: {bib_number}, Confidence: {confidence:.3f}")
                 
-                if bib_number and confidence > 0.6:
+                if bib_number and confidence > 0.45:
                     result = DetectionResult(
                         bib_number=bib_number,
                         confidence=confidence,
@@ -97,15 +93,10 @@ class NumberDetector:
         
         tesseract_result = (bib_number, confidence, bbox)
         
-        if debug_mode:
-            print(f"🔍 DEBUG: Tesseract result - Number: {bib_number}, Confidence: {confidence:.3f}")
-            self._log_detection_comparison(google_result, tesseract_result, photo_id)
         
         # If no reliable detection from either method, mark as unknown
-        if not bib_number or confidence < 0.5:
+        if not bib_number or confidence < 0.4:
             print(f"❌ No reliable bib number detected for {photo_id}, marking as unknown")
-            if debug_mode:
-                print(f"🔍 DEBUG: Detection failed - Final confidence {confidence:.3f} below threshold 0.5")
             result = DetectionResult(
                 bib_number="unknown",
                 confidence=0.0,
@@ -128,10 +119,9 @@ class NumberDetector:
         return result
     
     async def _detect_with_google_vision(self, photo_path: str, debug_mode: bool = False) -> Tuple[Optional[str], float, Optional[List[int]]]:
-        # ⏱️ Time file reading
+        # ⏱️ Time image optimization and reading
         file_start_time = time.time()
-        with open(photo_path, 'rb') as image_file:
-            content = image_file.read()
+        content = self._optimize_image_for_api(photo_path, debug_mode)
         file_read_time = time.time() - file_start_time
         
         # ⏱️ Time API call
@@ -151,7 +141,6 @@ class NumberDetector:
         best_number = None
         best_confidence = 0.0
         best_bbox = None
-        all_candidates = []
         
         # Get image dimensions for confidence calculation
         import cv2
@@ -189,9 +178,6 @@ class NumberDetector:
                     center_y = (bbox[1] + bbox[3]) / 2
                     rel_y = center_y / img_shape[0] if img_shape[0] > 0 else 0
                     
-                    # Debug position calculations
-                    if debug_mode:
-                        print(f"    🔍 Y-Position Debug: Number {number} at Y={center_y:.0f}, img_height={img_shape[0]}, rel_y={rel_y:.3f}")
                     
                     # Store original confidence for comparison
                     original_confidence = base_confidence
@@ -217,83 +203,39 @@ class NumberDetector:
                         boost_category = "Middle-Neutral"
                         # No change to base_confidence
                     elif rel_y < 0.4:   # Upper region (cyclist body) - jersey area
-                        boost_factor = 0.6
+                        boost_factor = 0.8
                         boost_category = "Upper-JerseyPenalty"
                         base_confidence *= boost_factor
                     
-                    # Debug boost application
-                    if debug_mode:
-                        print(f"    🔍 Boost Applied: {boost_category} ({boost_factor}x) - Before: {original_confidence:.3f} → After: {base_confidence:.3f}")
-                    
-                    # Store confidence before _calculate_bib_confidence for debugging
-                    pre_bib_calc_confidence = base_confidence
                     
                     # Apply bike-specific confidence boost
                     enhanced_confidence = self._calculate_bib_confidence(
                         number, base_confidence, bbox, img_shape, debug_mode
                     )
                     
-                    if debug_mode:
-                        print(f"    🔍 After bib_confidence calc: {pre_bib_calc_confidence:.3f} → {enhanced_confidence:.3f}")
-                    
-                    # Store confidence before final adjustments
-                    pre_final_confidence = enhanced_confidence
-                    
                     # Additional boost for standalone numbers (likely to be bib numbers)
                     if number_ratio > 0.8:  # Number takes up most of the detected text
                         enhanced_confidence *= 1.1
-                        if debug_mode:
-                            print(f"    🔍 Standalone number boost (1.1x): {pre_final_confidence:.3f} → {enhanced_confidence:.3f}")
                     
                     # Boost for numbers in bike number plate dimensions
                     width = bbox[2] - bbox[0]
                     height = bbox[3] - bbox[1]
                     aspect_ratio = width / height if height > 0 else 0
-                    pre_aspect_confidence = enhanced_confidence
-                    
                     if 1.5 <= aspect_ratio <= 4.0:  # Typical bike number plate ratios
                         enhanced_confidence *= 1.1
-                        if debug_mode:
-                            print(f"    🔍 Plate aspect boost (1.1x, ratio={aspect_ratio:.2f}): {pre_aspect_confidence:.3f} → {enhanced_confidence:.3f}")
                     elif aspect_ratio < 1.0:  # Too tall - likely not a bike bib
                         enhanced_confidence *= 0.9
-                        if debug_mode:
-                            print(f"    🔍 Tall aspect penalty (0.9x, ratio={aspect_ratio:.2f}): {pre_aspect_confidence:.3f} → {enhanced_confidence:.3f}")
                     
                     # Final confidence cap
-                    pre_cap_confidence = enhanced_confidence
                     enhanced_confidence = min(enhanced_confidence, 1.5)  # Allow higher confidence for position-boosted results
                     
-                    if debug_mode and pre_cap_confidence != enhanced_confidence:
-                        print(f"    🔍 Confidence capped at 1.5: {pre_cap_confidence:.3f} → {enhanced_confidence:.3f}")
-                    
-                    if debug_mode:
-                        print(f"    🔍 FINAL CONFIDENCE for '{number}': {enhanced_confidence:.3f}")
-                    
-                    if debug_mode:
-                        all_candidates.append({
-                            'text': detected_text,
-                            'number': number,
-                            'raw_confidence': base_confidence,
-                            'boosted_confidence': enhanced_confidence,
-                            'bbox': bbox,
-                            'position': f"({bbox[0]}, {bbox[1]}, {bbox[2]}, {bbox[3]})"
-                        })
                     
                     if enhanced_confidence > best_confidence:
                         best_number = number
                         best_confidence = enhanced_confidence
                         best_bbox = bbox
         
-        if debug_mode and all_candidates:
-            print(f"🔍 DEBUG: Google Vision candidates ({len(all_candidates)} found):")
-            for i, candidate in enumerate(sorted(all_candidates, key=lambda x: x['boosted_confidence'], reverse=True)[:5]):
-                print(f"  {i+1}. '{candidate['text']}' → Number: {candidate['number']}, Raw: {candidate['raw_confidence']:.3f}, Boosted: {candidate['boosted_confidence']:.3f}, Position: {candidate['position']}")
         
-        # ⏱️ Log timing breakdown for Google Vision
-        processing_time = time.time() - api_start_time - api_call_time
-        if debug_mode:
-            print(f"⏱️ Google Vision timing: file_read={file_read_time:.3f}s, api_call={api_call_time:.3f}s, processing={processing_time:.3f}s")
         
         return best_number, best_confidence, best_bbox
     
@@ -311,13 +253,10 @@ class NumberDetector:
         bib_regions = self._find_bib_regions(enhanced_image)
         region_time = time.time() - region_start_time
         
-        if debug_mode:
-            print(f"🔍 DEBUG: Tesseract found {len(bib_regions)} potential bib regions")
         
         best_number = None
         best_confidence = 0.0
         best_bbox = None
-        region_results = []
         ocr_time = 0
         
         # ⏱️ Time OCR processing on regions
@@ -334,13 +273,6 @@ class NumberDetector:
             # Try multi-scale detection for better accuracy
             number, confidence, rel_bbox = self._multi_scale_ocr(roi)
             
-            if debug_mode and number:
-                region_results.append({
-                    'region': f"({x1}, {y1}, {x2}, {y2})",
-                    'number': number,
-                    'raw_confidence': confidence,
-                    'roi_size': f"{roi.shape[1]}x{roi.shape[0]}"
-                })
             
             if number and confidence > best_confidence:
                 # Apply bib-specific confidence boost
@@ -348,8 +280,6 @@ class NumberDetector:
                     number, confidence, region_bbox, enhanced_image.shape, debug_mode
                 )
                 
-                if debug_mode:
-                    region_results[-1]['boosted_confidence'] = boosted_confidence
                 
                 if boosted_confidence > best_confidence:
                     best_number = number
@@ -377,20 +307,9 @@ class NumberDetector:
                 best_confidence = fallback_conf
                 best_bbox = fallback_bbox
         
-        if debug_mode and region_results:
-            print(f"🔍 DEBUG: Tesseract region results ({len(region_results)} processed):")
-            for i, result in enumerate(sorted(region_results, key=lambda x: x.get('boosted_confidence', x['raw_confidence']), reverse=True)[:3]):
-                conf_info = f"Raw: {result['raw_confidence']:.3f}"
-                if 'boosted_confidence' in result:
-                    conf_info += f", Boosted: {result['boosted_confidence']:.3f}"
-                print(f"  {i+1}. Region {result['region']} → Number: {result['number']}, {conf_info}, ROI: {result['roi_size']}")
         
-        # ⏱️ Log timing breakdown for Tesseract
-        if debug_mode:
-            total_tesseract_time = preprocess_time + region_time + ocr_time + fallback_time
-            print(f"⏱️ Tesseract timing: preprocess={preprocess_time:.3f}s, regions={region_time:.3f}s, ocr={ocr_time:.3f}s, fallback={fallback_time:.3f}s, total={total_tesseract_time:.3f}s")
         
-        if best_number and best_confidence > 0.3:  # Lowered threshold due to better targeting
+        if best_number and best_confidence > 0.4:  # Lowered threshold due to better targeting
             return best_number, best_confidence, best_bbox
         
         return None, 0.0, None
@@ -731,8 +650,6 @@ class NumberDetector:
         """Calculate enhanced confidence score based on bib-specific criteria"""
         confidence = base_confidence
         
-        if debug_mode:
-            print(f"      🔍 _calculate_bib_confidence START: number='{number}', base={base_confidence:.3f}")
         
         # Size boost: prefer medium-sized detections (not too small/large)
         x1, y1, x2, y2 = bbox
@@ -747,35 +664,24 @@ class NumberDetector:
         
         # Adjust optimal area ratios based on image resolution
         if is_high_res:
-            # High-res images (>4000px): smaller relative area ratios
-            min_ratio, max_ratio = 0.0003, 0.02
-            penalty_min, penalty_max = 0.0001, 0.05
+            # High-res images (>4000px): expanded area ratios for better detection
+            min_ratio, max_ratio = 0.0001, 0.03
+            penalty_min, penalty_max = 0.00005, 0.08
         else:
             # Standard resolution images: original thresholds
             min_ratio, max_ratio = 0.001, 0.05
             penalty_min, penalty_max = 0.0005, 0.1
         
-        if debug_mode:
-            print(f"      🔍 Area ratio: {area_ratio:.6f}, img_height={img_height}px, is_high_res={is_high_res}")
-            print(f"      🔍 Area thresholds - optimal: {min_ratio:.6f}-{max_ratio:.6f}, penalty: <{penalty_min:.6f} or >{penalty_max:.6f}")
         
-        pre_area_confidence = confidence
         if min_ratio <= area_ratio <= max_ratio:
             confidence *= 1.2
-            if debug_mode:
-                print(f"      🔍 Area boost (1.2x): {pre_area_confidence:.3f} → {confidence:.3f}")
         elif area_ratio < penalty_min or area_ratio > penalty_max:
-            confidence *= 0.8
-            if debug_mode:
-                print(f"      🔍 Area penalty (0.8x): {pre_area_confidence:.3f} → {confidence:.3f}")
+            confidence *= 0.9
         
         # Aspect ratio boost: bibs are typically wider than tall but not extremely so
         aspect_ratio = width / height if height > 0 else 0
-        pre_aspect_confidence = confidence
         if 1.0 <= aspect_ratio <= 3.0:
             confidence *= 1.1
-            if debug_mode:
-                print(f"      🔍 Aspect boost (1.1x, ratio={aspect_ratio:.2f}): {pre_aspect_confidence:.3f} → {confidence:.3f}")
         
         # Position boost: bike-mounted bibs are in the lower portions of images
         img_h, img_w = image_shape
@@ -786,27 +692,15 @@ class NumberDetector:
         # to avoid double-boosting and maintain granular control
         
         # Number length boost: 1-4 digit numbers are most common in events
-        pre_length_confidence = confidence
         if 1 <= len(number) <= 4:
             confidence *= 1.1
-            if debug_mode:
-                print(f"      🔍 Length boost (1.1x, len={len(number)}): {pre_length_confidence:.3f} → {confidence:.3f}")
         
         # Texture analysis boost: prefer rigid surfaces over fabric
-        pre_texture_confidence = confidence
         texture_score = self._analyze_region_texture(bbox, image_shape)
         confidence *= texture_score
-        if debug_mode:
-            print(f"      🔍 Texture boost ({texture_score:.3f}x): {pre_texture_confidence:.3f} → {confidence:.3f}")
         
         # Final confidence cap
-        pre_cap_confidence = confidence
         final_confidence = min(confidence, 0.99)  # Cap at 99%
-        
-        if debug_mode:
-            if pre_cap_confidence != final_confidence:
-                print(f"      🔍 Capped at 0.99: {pre_cap_confidence:.3f} → {final_confidence:.3f}")
-            print(f"      🔍 _calculate_bib_confidence END: {final_confidence:.3f}")
         
         return final_confidence
     
@@ -851,6 +745,36 @@ class NumberDetector:
         
         return max(texture_score, 0.7)  # Minimum texture score
     
+    def _optimize_image_for_api(self, image_path: str, debug_mode: bool = False) -> bytes:
+        """Optimize image size for Google Vision API while preserving text quality"""
+        # Read image
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"Could not load image {image_path}")
+        
+        height, width = image.shape[:2]
+        original_size = len(cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes())
+        
+        # Resize to max 2400px (preserves text readability while reducing file size)
+        max_dimension = 2400
+        if max(height, width) > max_dimension:
+            if width > height:
+                new_width = max_dimension
+                new_height = int(height * (max_dimension / width))
+            else:
+                new_height = max_dimension
+                new_width = int(width * (max_dimension / height))
+            
+            image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            
+            if debug_mode:
+                optimized_size = len(cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 90])[1].tobytes())
+                print(f"📏 Image optimized: {width}x{height} ({original_size/1024/1024:.1f}MB) → {new_width}x{new_height} ({optimized_size/1024/1024:.1f}MB)")
+        
+        # Compress to JPEG with 90% quality (good balance of size vs quality)
+        _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        return buffer.tobytes()
+
     def _log_detection_comparison(self, google_result, tesseract_result, photo_id: str):
         """Log comparison between Google Vision and Tesseract results"""
         print(f"🔍 DEBUG: Detection comparison for {photo_id}:")
