@@ -87,16 +87,10 @@ async def organize_photos_by_bib(photo_ids: List[str]) -> Dict[str, List[tuple]]
     """Organize photos by bib number with numerical sorting"""
     grouped = defaultdict(list)
     
-    print(f"🔍 DEBUG: Organizing {len(photo_ids)} photos for export")
-    print(f"🔍 DEBUG: Local detector results: {len(detector.results)} photos")
-    print(f"🔍 DEBUG: Process detector results: {len(process_detector.results)} photos")
-    print(f"🔍 DEBUG: Photo IDs to export: {photo_ids[:3]}...")  # Show first 3 photo IDs
-    print(f"🔍 DEBUG: Process detector keys: {list(process_detector.results.keys())[:3]}...")  # Show first 3 keys
     
     for photo_id in photo_ids:
         photo_path = find_photo_path(photo_id)
         if not photo_path:
-            print(f"❌ DEBUG: Photo path not found for {photo_id}")
             continue
             
         # Get detection result from the processing detector instance
@@ -105,16 +99,11 @@ async def organize_photos_by_bib(photo_ids: List[str]) -> Dict[str, List[tuple]]
         
         if detection_result and detection_result.bib_number:
             bib_number = detection_result.bib_number
-            print(f"✅ DEBUG: Photo {photo_id} -> Bib #{bib_number}")
         else:
-            print(f"❌ DEBUG: No detection result found for {photo_id}")
-            print(f"❌ DEBUG: Detection result: {detection_result}")
-            
             # Also check local detector instance as fallback
             fallback_result = detector.results.get(photo_id)
             if fallback_result and fallback_result.bib_number:
                 bib_number = fallback_result.bib_number
-                print(f"✅ DEBUG: Found in fallback detector: Photo {photo_id} -> Bib #{bib_number}")
         
         grouped[bib_number].append((photo_id, photo_path))
     

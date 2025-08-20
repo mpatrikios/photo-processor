@@ -35,9 +35,9 @@ async def process_photos_async(job_id: str):
     job = jobs[job_id]
     job.status = ProcessingStatus.PROCESSING
     
-    # ⏱️ Start timing the entire job
+    # ⏱️ Start timing the entire job for analytics
     job_start_time = time.time()
-    print(f"⏱️ Starting PARALLEL photo processing job {job_id} with {job.total_photos} photos")
+    print(f"⏱️ Starting photo processing job {job_id} with {job.total_photos} photos")
     
     try:
         job.progress = 1  # Show 1% for initialization
@@ -50,16 +50,14 @@ async def process_photos_async(job_id: str):
         
         async def process_photo_with_semaphore(photo_id: str, index: int):
             async with semaphore:
-                # ⏱️ Time individual photo processing
+                # ⏱️ Time individual photo processing for analytics
                 photo_start_time = time.time()
                 
                 try:
                     await detector.process_photo(photo_id, debug_mode=job.debug_mode)
                     
-                    photo_end_time = time.time()
-                    photo_processing_time = photo_end_time - photo_start_time
-                    
-                    print(f"⏱️ Photo {index+1}/{job.total_photos} ({photo_id}) processed in {photo_processing_time:.2f}s")
+                    photo_processing_time = time.time() - photo_start_time
+                    print(f"⏱️ Photo {index+1}/{job.total_photos} processed in {photo_processing_time:.2f}s")
                     return photo_processing_time
                     
                 except Exception as e:
@@ -71,34 +69,23 @@ async def process_photos_async(job_id: str):
             batch_end = min(batch_start + BATCH_SIZE, len(job.photo_ids))
             batch_photo_ids = job.photo_ids[batch_start:batch_end]
             
-            print(f"📦 Processing batch {batch_start//BATCH_SIZE + 1}: photos {batch_start+1}-{batch_end}")
-            
             # Create tasks for the current batch
             batch_tasks = [
                 process_photo_with_semaphore(photo_id, batch_start + i)
                 for i, photo_id in enumerate(batch_photo_ids)
             ]
             
-            # ⏱️ Time batch processing
-            batch_start_time = time.time()
-            
             # Process batch in parallel
-            batch_times = await asyncio.gather(*batch_tasks, return_exceptions=True)
-            
-            batch_end_time = time.time()
-            batch_total_time = batch_end_time - batch_start_time
+            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
             
             # Update timing and progress
-            valid_times = [t for t in batch_times if isinstance(t, (int, float)) and t > 0]
+            valid_times = [t for t in batch_results if isinstance(t, (int, float)) and t > 0]
             total_photo_processing_time += sum(valid_times)
             completed_count = batch_end
             
             # Update progress (1-95% range)
             job.completed_photos = completed_count
             job.progress = max(1, int((completed_count / job.total_photos) * 95))
-            
-            print(f"📦 Batch completed: {len(valid_times)}/{len(batch_photo_ids)} photos successful in {batch_total_time:.2f}s")
-            print(f"📊 Progress: {completed_count}/{job.total_photos} photos ({job.progress}%)")
         
         # Finalization phase
         job.progress = 95
@@ -108,7 +95,7 @@ async def process_photos_async(job_id: str):
         job.progress = 100
         job.status = ProcessingStatus.COMPLETED
         
-        # ⏱️ Calculate and log final timing statistics
+        # ⏱️ Calculate and log final timing statistics for analytics
         job_end_time = time.time()
         total_job_time = job_end_time - job_start_time
         avg_photo_time = total_photo_processing_time / job.total_photos if job.total_photos > 0 else 0

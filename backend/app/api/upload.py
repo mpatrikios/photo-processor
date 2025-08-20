@@ -33,13 +33,6 @@ async def upload_photos(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    print(f"🔄 Upload endpoint called with {len(files) if files else 0} files for user {current_user.id}")
-    
-    # Debug request headers
-    print(f"🔍 Upload endpoint - Request headers:")
-    for name, value in request.headers.items():
-        if name.lower() in ['authorization', 'content-type', 'origin']:
-            print(f"🔍   {name}: {value}")
     
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
@@ -63,8 +56,6 @@ async def upload_photos(
     total_file_size_mb = 0
     
     for file in files:
-        print(f"📁 Processing file: {file.filename}")
-        
         if not is_allowed_file(file.filename):
             raise HTTPException(
                 status_code=400, 
@@ -76,8 +67,6 @@ async def upload_photos(
         new_filename = f"{photo_id}{file_extension}"
         file_path = os.path.join(UPLOAD_DIR, new_filename)
         
-        print(f"💾 Saving to: {file_path}")
-        
         try:
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
@@ -87,7 +76,6 @@ async def upload_photos(
             total_file_size_mb += file_size_mb
             
             photo_ids.append(photo_id)
-            print(f"✅ Saved file with ID: {photo_id} ({file_size_mb:.2f} MB)")
             
         except Exception as e:
             print(f"❌ Failed to save {file.filename}: {str(e)}")
@@ -118,7 +106,6 @@ async def upload_photos(
     # Get updated quota for response
     updated_quota = usage_tracker.get_or_create_user_quota(db, current_user.id)
     
-    print(f"🎉 Successfully uploaded {len(photo_ids)} photos for user {current_user.id}")
     return UploadResponse(
         photo_ids=photo_ids,
         message=f"Successfully uploaded {len(photo_ids)} photos",
