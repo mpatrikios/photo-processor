@@ -3,6 +3,7 @@ import pytesseract
 import numpy as np
 import os
 import re
+import time
 from typing import Dict, List, Optional, Tuple
 from google.cloud import vision
 from google.cloud.vision_v1 import types
@@ -31,6 +32,9 @@ class NumberDetector:
             self.use_google_vision = False
     
     async def process_photo(self, photo_id: str, debug_mode: bool = False) -> DetectionResult:
+        # ⏱️ Start timing the entire photo processing
+        photo_start_time = time.time()
+        
         photo_path = self._find_photo_path(photo_id)
         if not photo_path:
             raise FileNotFoundError(f"Photo {photo_id} not found")
@@ -38,15 +42,23 @@ class NumberDetector:
         if debug_mode:
             print(f"🔍 DEBUG: Starting detection for {photo_id} at {photo_path}")
         
-        # Initialize Google Vision client if needed
+        # ⏱️ Time initialization
+        init_start_time = time.time()
         self._initialize_vision_client()
+        init_time = time.time() - init_start_time
         
         google_result = None
         tesseract_result = None
+        google_time = 0
+        tesseract_time = 0
         
         if self.use_google_vision:
             try:
+                # ⏱️ Time Google Vision processing
+                google_start_time = time.time()
                 bib_number, confidence, bbox = await self._detect_with_google_vision(photo_path, debug_mode)
+                google_time = time.time() - google_start_time
+                
                 google_result = (bib_number, confidence, bbox)
                 if debug_mode:
                     print(f"🔍 DEBUG: Google Vision result - Number: {bib_number}, Confidence: {confidence:.3f}")
@@ -58,17 +70,31 @@ class NumberDetector:
                         bbox=bbox
                     )
                     self.results[photo_id] = result
+                    
+                    # ⏱️ Log timing for successful Google Vision detection
+                    total_time = time.time() - photo_start_time
+                    print(f"⏱️ {photo_id}: Google Vision SUCCESS in {total_time:.2f}s (init: {init_time:.3f}s, google: {google_time:.2f}s)")
                     print(f"🎯 Google Vision detected bib #{bib_number} (confidence: {confidence:.2f}) for {photo_id}")
                     return result
             except Exception as e:
+                google_time = time.time() - google_start_time if 'google_start_time' in locals() else 0
                 print(f"❌ Google Vision failed for {photo_id}: {e}")
         
         print(f"🔄 Using Tesseract fallback for {photo_id}")
+        
+        # ⏱️ Time image loading
+        load_start_time = time.time()
         image = cv2.imread(photo_path)
+        load_time = time.time() - load_start_time
+        
         if image is None:
             raise ValueError(f"Could not load image {photo_path}")
         
+        # ⏱️ Time Tesseract processing
+        tesseract_start_time = time.time()
         bib_number, confidence, bbox = self._detect_with_tesseract(image, debug_mode, photo_id)
+        tesseract_time = time.time() - tesseract_start_time
+        
         tesseract_result = (bib_number, confidence, bbox)
         
         if debug_mode:
@@ -94,14 +120,25 @@ class NumberDetector:
             )
         
         self.results[photo_id] = result
+        
+        # ⏱️ Log final timing breakdown
+        total_time = time.time() - photo_start_time
+        print(f"⏱️ {photo_id}: TOTAL {total_time:.2f}s (init: {init_time:.3f}s, load: {load_time:.3f}s, google: {google_time:.2f}s, tesseract: {tesseract_time:.2f}s)")
+        
         return result
     
     async def _detect_with_google_vision(self, photo_path: str, debug_mode: bool = False) -> Tuple[Optional[str], float, Optional[List[int]]]:
+        # ⏱️ Time file reading
+        file_start_time = time.time()
         with open(photo_path, 'rb') as image_file:
             content = image_file.read()
+        file_read_time = time.time() - file_start_time
         
+        # ⏱️ Time API call
+        api_start_time = time.time()
         image = vision.Image(content=content)
         response = self.vision_client.text_detection(image=image)
+        api_call_time = time.time() - api_start_time
         
         if response.error.message:
             raise Exception(f"Google Vision API error: {response.error.message}")
@@ -253,16 +290,26 @@ class NumberDetector:
             for i, candidate in enumerate(sorted(all_candidates, key=lambda x: x['boosted_confidence'], reverse=True)[:5]):
                 print(f"  {i+1}. '{candidate['text']}' → Number: {candidate['number']}, Raw: {candidate['raw_confidence']:.3f}, Boosted: {candidate['boosted_confidence']:.3f}, Position: {candidate['position']}")
         
+        # ⏱️ Log timing breakdown for Google Vision
+        processing_time = time.time() - api_start_time - api_call_time
+        if debug_mode:
+            print(f"⏱️ Google Vision timing: file_read={file_read_time:.3f}s, api_call={api_call_time:.3f}s, processing={processing_time:.3f}s")
+        
         return best_number, best_confidence, best_bbox
     
     def _detect_with_tesseract(self, image: np.ndarray, debug_mode: bool = False, photo_id: str = None) -> Tuple[Optional[str], float, Optional[List[int]]]:
+        # ⏱️ Time image preprocessing
+        preprocess_start_time = time.time()
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
         # Enhanced preprocessing for better bib number detection
         enhanced_image = self._preprocess_for_bib_detection(gray)
+        preprocess_time = time.time() - preprocess_start_time
         
-        # Find potential bib regions using contour detection
+        # ⏱️ Time region detection
+        region_start_time = time.time()
         bib_regions = self._find_bib_regions(enhanced_image)
+        region_time = time.time() - region_start_time
         
         if debug_mode:
             print(f"🔍 DEBUG: Tesseract found {len(bib_regions)} potential bib regions")
@@ -271,6 +318,10 @@ class NumberDetector:
         best_confidence = 0.0
         best_bbox = None
         region_results = []
+        ocr_time = 0
+        
+        # ⏱️ Time OCR processing on regions
+        ocr_start_time = time.time()
         
         # First try OCR on detected bib regions
         for region_bbox in bib_regions:
@@ -312,9 +363,15 @@ class NumberDetector:
                     else:
                         best_bbox = region_bbox
         
+        # Update OCR timing
+        ocr_time = time.time() - ocr_start_time
+        
         # If no good detection in bib regions, try full image OCR as fallback
+        fallback_time = 0
         if not best_number or best_confidence < 0.4:
+            fallback_start_time = time.time()
             fallback_number, fallback_conf, fallback_bbox = self._run_tesseract_on_roi(enhanced_image)
+            fallback_time = time.time() - fallback_start_time
             if fallback_number and fallback_conf > best_confidence:
                 best_number = fallback_number
                 best_confidence = fallback_conf
@@ -327,6 +384,11 @@ class NumberDetector:
                 if 'boosted_confidence' in result:
                     conf_info += f", Boosted: {result['boosted_confidence']:.3f}"
                 print(f"  {i+1}. Region {result['region']} → Number: {result['number']}, {conf_info}, ROI: {result['roi_size']}")
+        
+        # ⏱️ Log timing breakdown for Tesseract
+        if debug_mode:
+            total_tesseract_time = preprocess_time + region_time + ocr_time + fallback_time
+            print(f"⏱️ Tesseract timing: preprocess={preprocess_time:.3f}s, regions={region_time:.3f}s, ocr={ocr_time:.3f}s, fallback={fallback_time:.3f}s, total={total_tesseract_time:.3f}s")
         
         if best_number and best_confidence > 0.3:  # Lowered threshold due to better targeting
             return best_number, best_confidence, best_bbox

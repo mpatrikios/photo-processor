@@ -412,13 +412,21 @@ class PhotoProcessor {
     async initializeApp() {
         // Check if we have a stored token
         const token = localStorage.getItem('auth_token');
+        console.log('🔐 initializeApp: Found token in localStorage:', token ? `${token.substring(0, 20)}...` : 'NULL');
+        
         if (token) {
             this.authToken = token;
+            console.log('🔐 initializeApp: Set this.authToken to:', this.authToken ? `${this.authToken.substring(0, 20)}...` : 'NULL');
+            
             const isValid = await this.checkAuthStatus();
             if (!isValid) {
+                console.log('🔐 initializeApp: Token validation failed, showing login screen');
                 this.showLoginScreen();
+            } else {
+                console.log('🔐 initializeApp: Token validation succeeded, user authenticated');
             }
         } else {
+            console.log('🔐 initializeApp: No token found, showing login screen');
             this.showLoginScreen();
         }
     }
@@ -988,7 +996,7 @@ class PhotoProcessor {
 
     // File Selection Handler
     handleFileSelect(files, isFolder = false) {
-        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
         const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 
         const validFiles = [];
@@ -1220,12 +1228,21 @@ class PhotoProcessor {
         });
 
         try {
+            // Debug authentication state
+            console.log('🔐 Upload: Debugging authentication state...');
+            console.log('🔐 Upload: this.authToken:', this.authToken ? `${this.authToken.substring(0, 20)}...` : 'NULL');
+            console.log('🔐 Upload: localStorage token:', localStorage.getItem('auth_token') ? `${localStorage.getItem('auth_token').substring(0, 20)}...` : 'NULL');
+            console.log('🔐 Upload: this.isAuthenticated:', this.isAuthenticated);
+            
+            const headers = this.getAuthHeaders(false);
+            console.log('🔐 Upload: Request headers:', headers);
+            
             document.getElementById('upload-btn').disabled = true;
             document.getElementById('upload-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
 
             const response = await fetch(`${this.apiBase}/upload/photos`, {
                 method: 'POST',
-                headers: this.getAuthHeaders(false), // Don't include Content-Type for FormData
+                headers: headers, // Don't include Content-Type for FormData
                 credentials: 'include',
                 body: formData
             });
@@ -1237,7 +1254,16 @@ class PhotoProcessor {
             }
 
             if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`);
+                // Debug the actual error response
+                console.log('❌ Upload failed with status:', response.status, response.statusText);
+                try {
+                    const errorData = await response.json();
+                    console.log('❌ Upload error details:', errorData);
+                    throw new Error(`Upload failed: ${errorData.detail || response.statusText}`);
+                } catch (parseError) {
+                    console.log('❌ Could not parse error response:', parseError);
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
             }
 
             const result = await response.json();
@@ -1251,7 +1277,7 @@ class PhotoProcessor {
             this.startProcessing(result.photo_ids);
 
         } catch (error) {
-            console.error('Upload error:', error);
+            console.error('🔐 Upload error:', error);
             if (error.message.includes('quota') || error.message.includes('limit')) {
                 this.showError(`Quota exceeded: ${error.message}`);
             } else {
