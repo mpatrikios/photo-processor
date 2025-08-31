@@ -10,15 +10,14 @@ from app.models.user import User
 from app.models.usage import ActionType
 from app.api.auth import get_current_user
 from app.services.usage_tracker import usage_tracker
+from app.core.config import settings
 from database import get_db
 
 router = APIRouter()
 
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = settings.upload_dir
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp"}
-
-# Ensure upload directory exists
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+MAX_FILE_SIZE = settings.get_max_file_size_bytes()
 
 def get_file_extension(filename: str) -> str:
     return os.path.splitext(filename.lower())[1]
@@ -65,14 +64,27 @@ async def upload_photos(
         photo_id = str(uuid.uuid4())
         file_extension = get_file_extension(file.filename)
         new_filename = f"{photo_id}{file_extension}"
-        file_path = os.path.join(UPLOAD_DIR, new_filename)
+        
+        # Create user-specific upload directory
+        user_upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
+        os.makedirs(user_upload_dir, exist_ok=True)
+        
+        file_path = os.path.join(user_upload_dir, new_filename)
         
         try:
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            # Calculate file size
-            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+            # Calculate file size and validate
+            file_size_bytes = os.path.getsize(file_path)
+            if file_size_bytes > MAX_FILE_SIZE:
+                os.remove(file_path)  # Clean up the file
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {file.filename} exceeds maximum size of {settings.max_file_size_mb}MB"
+                )
+            
+            file_size_mb = file_size_bytes / (1024 * 1024)
             total_file_size_mb += file_size_mb
             
             photo_ids.append(photo_id)
@@ -118,13 +130,27 @@ async def upload_photos(
     )
 
 @router.get("/photos/{photo_id}")
-async def get_photo_info(photo_id: str):
+async def get_photo_info(
+    photo_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    # Check user's upload directory first
+    user_upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
     file_path = None
+    
     for ext in ALLOWED_EXTENSIONS:
-        test_path = os.path.join(UPLOAD_DIR, f"{photo_id}{ext}")
+        test_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
         if os.path.exists(test_path):
             file_path = test_path
             break
+    
+    # Fallback to legacy uploads directory for backwards compatibility
+    if not file_path:
+        for ext in ALLOWED_EXTENSIONS:
+            test_path = os.path.join(UPLOAD_DIR, f"{photo_id}{ext}")
+            if os.path.exists(test_path):
+                file_path = test_path
+                break
     
     if not file_path:
         raise HTTPException(status_code=404, detail="Photo not found")
@@ -137,14 +163,28 @@ async def get_photo_info(photo_id: str):
     )
 
 @router.get("/serve/{photo_id}")
-async def serve_photo(photo_id: str):
+async def serve_photo(
+    photo_id: str,
+    current_user: User = Depends(get_current_user)
+):
     """Serve photo file by ID"""
+    # Check user's upload directory first
+    user_upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
     file_path = None
+    
     for ext in ALLOWED_EXTENSIONS:
-        test_path = os.path.join(UPLOAD_DIR, f"{photo_id}{ext}")
+        test_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
         if os.path.exists(test_path):
             file_path = test_path
             break
+    
+    # Fallback to legacy uploads directory
+    if not file_path:
+        for ext in ALLOWED_EXTENSIONS:
+            test_path = os.path.join(UPLOAD_DIR, f"{photo_id}{ext}")
+            if os.path.exists(test_path):
+                file_path = test_path
+                break
     
     if not file_path:
         raise HTTPException(status_code=404, detail="Photo not found")

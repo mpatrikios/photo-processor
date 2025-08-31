@@ -1,18 +1,29 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import List, Optional, Dict
 import uuid
 from app.models.schemas import ProcessingJob, ProcessingStatus, GroupedPhotos, ManualLabelRequest
 from app.services.detector import NumberDetector
+from app.api.auth import get_current_user
+from app.models.user import User
+from sqlalchemy.orm import Session
+from database import get_db
 import asyncio
 import time
 
 router = APIRouter()
 
-jobs = {}
+# Store jobs with user association
+# Structure: {job_id: {"job": ProcessingJob, "user_id": int}}
+jobs: Dict[str, dict] = {}
 detector = NumberDetector()
 
 @router.post("/start", response_model=ProcessingJob)
-async def start_processing(photo_ids: List[str], debug: Optional[bool] = Query(True, description="Enable debug mode for detailed logging")):
+async def start_processing(
+    photo_ids: List[str],
+    debug: Optional[bool] = Query(True, description="Enable debug mode for detailed logging"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if not photo_ids:
         raise HTTPException(status_code=400, detail="No photo IDs provided")
     
@@ -25,14 +36,21 @@ async def start_processing(photo_ids: List[str], debug: Optional[bool] = Query(T
         debug_mode=debug
     )
     
-    jobs[job_id] = job
+    # Store job with user association
+    jobs[job_id] = {
+        "job": job,
+        "user_id": current_user.id
+    }
     
     asyncio.create_task(process_photos_async(job_id))
     
     return job
 
 async def process_photos_async(job_id: str):
-    job = jobs[job_id]
+    job_data = jobs.get(job_id)
+    if not job_data:
+        return
+    job = job_data["job"]
     job.status = ProcessingStatus.PROCESSING
     
     # ⏱️ Start timing the entire job for analytics
@@ -113,25 +131,44 @@ async def process_photos_async(job_id: str):
         print(f"⏱️ Processing failed for job {job_id} after {total_job_time:.2f}s: {str(e)}")
 
 @router.get("/status/{job_id}", response_model=ProcessingJob)
-async def get_processing_status(job_id: str):
+async def get_processing_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user)
+):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    return jobs[job_id]
+    job_data = jobs[job_id]
+    # Verify user owns this job
+    if job_data["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    return job_data["job"]
 
 @router.get("/results/{job_id}")
-async def get_processing_results(job_id: str):
+async def get_processing_results(
+    job_id: str,
+    current_user: User = Depends(get_current_user)
+):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     
-    job = jobs[job_id]
+    job_data = jobs[job_id]
+    # Verify user owns this job
+    if job_data["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    job = job_data["job"]
     if job.status != ProcessingStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Processing not completed")
     
     return await detector.get_grouped_results(job.photo_ids)
 
 @router.put("/manual-label")
-async def manual_label_photo(request: ManualLabelRequest):
+async def manual_label_photo(
+    request: ManualLabelRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Manually assign a bib number to a photo"""
     if not request.photo_id or not request.bib_number:
         raise HTTPException(status_code=400, detail="Photo ID and bib number are required")

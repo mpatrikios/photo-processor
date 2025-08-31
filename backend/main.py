@@ -5,15 +5,21 @@ from dotenv import load_dotenv
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=env_path)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Import database setup and models
 from database import create_tables, get_db_info
-from app.models import user, usage  # Import models to register them with SQLAlchemy
+from app.models import user, usage, analytics, processing  # Import models to register them with SQLAlchemy
 
-from app.api import upload, process, download, feedback, auth, users
+from app.api import upload, process, download, feedback, auth, users, batch, analytics
+from app.core.config import settings
+from app.core.security import limiter, custom_rate_limit_handler, SecurityHeaders
+from app.core.errors import register_error_handlers
+import asyncio
 
 # Set up Google Cloud credentials if available
 def setup_google_credentials():
@@ -62,19 +68,73 @@ if google_creds:
 else:
     print("❌ GOOGLE_APPLICATION_CREDENTIALS not set")
 
-# Debug: Check JWT secret key
-jwt_secret = os.getenv('JWT_SECRET_KEY')
-if jwt_secret:
-    print(f"✅ JWT_SECRET_KEY loaded: {jwt_secret[:10]}...")
+# Security check for JWT
+if settings.is_production():
+    print("✅ Running in PRODUCTION mode with secure JWT configuration")
 else:
-    print("❌ JWT_SECRET_KEY not set")
+    print("⚠️  Running in DEVELOPMENT mode")
 
-app = FastAPI(title="Photo Processor API", version="1.0.0")
+app = FastAPI(
+    title="TagSort API",
+    version="2.0.0",
+    description="Secure photo processing API with bib number detection",
+    docs_url="/docs" if settings.debug else None,  # Disable docs in production
+    redoc_url="/redoc" if settings.debug else None  # Disable redoc in production
+)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
+
+# Register error handlers
+register_error_handlers(app)
+
+async def schedule_periodic_cleanup():
+    """
+    Schedule periodic cleanup of expired data.
+    """
+    while True:
+        try:
+            # Wait 1 hour between cleanup runs
+            await asyncio.sleep(3600)
+            
+            from database import SessionLocal
+            from app.services.job_service import job_service
+            from app.services.auth_service import auth_service
+            
+            db = SessionLocal()
+            try:
+                # Clean up expired jobs
+                cleaned_jobs = job_service.cleanup_expired_jobs(db)
+                if cleaned_jobs > 0:
+                    logger.info(f"Periodic cleanup: removed {cleaned_jobs} expired jobs")
+                
+                # Clean up expired sessions
+                cleaned_sessions = auth_service.cleanup_expired_sessions(db)
+                if cleaned_sessions > 0:
+                    logger.info(f"Periodic cleanup: removed {cleaned_sessions} expired sessions")
+                    
+            except Exception as e:
+                logger.error(f"Periodic cleanup failed: {e}")
+            finally:
+                db.close()
+                
+        except Exception as e:
+            logger.error(f"Cleanup scheduler error: {e}")
+            # Continue the loop even if there's an error
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers_middleware(request: Request, call_next):
+    return await SecurityHeaders.add_security_headers(request, call_next)
 
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database tables on startup."""
+    """Initialize database tables and configuration on startup."""
+    # Print configuration info
+    settings.print_startup_info()
+    
     print("🔄 Initializing database...")
     create_tables()
 
@@ -98,38 +158,48 @@ async def startup_event():
 
     # Clean up expired sessions on startup
     from database import SessionLocal
+    from app.services.job_service import job_service
+    
     db = SessionLocal()
     try:
-        cleaned = auth_service.cleanup_expired_sessions(db)
-        if cleaned > 0:
-            print(f"🧹 Cleaned up {cleaned} expired sessions")
+        # Clean up expired sessions
+        cleaned_sessions = auth_service.cleanup_expired_sessions(db)
+        if cleaned_sessions > 0:
+            print(f"🧹 Cleaned up {cleaned_sessions} expired sessions")
+        
+        # Recover stalled processing jobs
+        recovered_jobs = job_service.recover_jobs_on_startup(db)
+        if recovered_jobs > 0:
+            print(f"🔄 Recovered {recovered_jobs} processing jobs")
+        
+        # Clean up expired jobs and exports
+        cleaned_jobs = job_service.cleanup_expired_jobs(db)
+        if cleaned_jobs > 0:
+            print(f"🧹 Cleaned up {cleaned_jobs} expired jobs")
+            
     finally:
         db.close()
+    
+    # Schedule periodic cleanup
+    import asyncio
+    asyncio.create_task(schedule_periodic_cleanup())
 
-# Configure CORS based on environment
-allowed_origins = [
-    "http://localhost:5173", 
-    "http://localhost:8000", 
-    "http://127.0.0.1:5173", 
-    "http://127.0.0.1:8000"
-]
+# Configure CORS from settings
+allowed_origins = settings.cors_origins.copy()
 
-# Add production and staging URLs if in cloud environment
-if os.getenv('ENVIRONMENT') in ['production', 'staging']:
-    # Add your Cloud Run URLs here once deployed
+# Add additional origins for specific environments
+if settings.environment in ['production', 'staging']:
     allowed_origins.extend([
         "https://tagsort-production-*.a.run.app",
         "https://tagsort-staging-*.a.run.app",
-        # Add your custom domain if you have one
-        # "https://yourdomain.com"
     ])
 
-# Add Replit deployment URLs
-allowed_origins.extend([
-    "https://photo-processor-2-mpatrikios1.replit.app",
-    "https://*.replit.app",  # Allow all replit.app subdomains
-    "https://*.replit.dev",  # Allow all replit.dev subdomains
-])
+# Add Replit URLs if needed
+if os.getenv('REPL_OWNER'):
+    allowed_origins.extend([
+        "https://*.replit.app",
+        "https://*.replit.dev",
+    ])
 
 app.add_middleware(
     CORSMiddleware,
@@ -139,47 +209,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create required directories
-upload_dir = os.path.join(os.path.dirname(__file__), "uploads")
-processed_dir = os.path.join(os.path.dirname(__file__), "processed") 
-exports_dir = os.path.join(os.path.dirname(__file__), "exports")
+# Create required directories with proper permissions
+settings.create_directories()
+print(f"✅ Created directories: {settings.upload_dir}, {settings.export_dir}, {settings.temp_dir}")
 
-os.makedirs(upload_dir, exist_ok=True)
-os.makedirs(processed_dir, exist_ok=True)
-os.makedirs(exports_dir, exist_ok=True)
-
-print(f"Created directories: {upload_dir}, {processed_dir}, {exports_dir}")
-
-# Include API routers FIRST - before static file mounts
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
-app.include_router(process.router, prefix="/api/process", tags=["process"])
-app.include_router(download.router, prefix="/api/download", tags=["download"])
-app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
-
-# Mount upload/processed directories for serving files
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/processed", StaticFiles(directory="processed"), name="processed")
-
-# Serve frontend static files LAST - so they don't override API routes
-frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if os.path.exists(frontend_path):
-    app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "static")), name="static")
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
-
-print("✅ API routers registered:")
-print("  - /api/auth")
-print("  - /api/users")
-print("  - /api/upload") 
-print("  - /api/process")
-print("  - /api/download")
-print("  - /api/feedback")
-
-@app.get("/")
-async def root():
-    return {"message": "Photo Processor API is running"}
-
+# Define API route handlers FIRST - before static file mounts
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
@@ -213,3 +247,33 @@ async def database_status():
         "status": "connected",
         "info": get_db_info()
     }
+
+# Include API routers AFTER individual routes but before static file mounts
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
+app.include_router(process.router, prefix="/api/process", tags=["process"])
+app.include_router(download.router, prefix="/api/download", tags=["download"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
+app.include_router(batch.router, prefix="/api/batch", tags=["batch"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+
+# Mount upload/processed directories for serving files
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+app.mount("/processed", StaticFiles(directory="processed"), name="processed")
+
+# Serve frontend static files LAST - so they don't override API routes
+frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "static")), name="static")
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
+print("✅ API routers registered:")
+print("  - /api/auth")
+print("  - /api/users")
+print("  - /api/upload") 
+print("  - /api/process")
+print("  - /api/download")
+print("  - /api/feedback")
+print("  - /api/batch")
+print("  - /api/analytics")

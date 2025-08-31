@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 import os
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models.user import User, UserSession
 from app.models.usage import UsageLog, ActionType, UserQuota
+from app.core.config import settings
 import secrets
 import hashlib
 
@@ -28,17 +29,21 @@ class AuthService:
         if self._initialized:
             return
             
-        # JWT Configuration
-        self.SECRET_KEY = os.getenv("JWT_SECRET_KEY", self._generate_secret_key())
-        self.ALGORITHM = "HS256"
-        self.ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+        # JWT Configuration from centralized settings
+        self.SECRET_KEY = settings.jwt_secret_key
+        self.ALGORITHM = settings.jwt_algorithm
+        self.ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes
+        self.REFRESH_TOKEN_EXPIRE_DAYS = settings.jwt_refresh_token_expire_days
         
-        # Ensure we have a secret key
-        if not os.getenv("JWT_SECRET_KEY"):
-            print(f"⚠️  Warning: Using generated JWT secret key: {self.SECRET_KEY[:10]}... Set JWT_SECRET_KEY environment variable for production.")
+        # Security validation
+        if settings.is_production() and len(self.SECRET_KEY) < 32:
+            raise ValueError("JWT secret key is too short for production use!")
+        
+        # Log initialization (don't log the actual secret!)
+        if settings.is_development():
+            print(f"🔐 AuthService initialized (Development mode)")
         else:
-            print(f"✅ Using JWT_SECRET_KEY from environment: {self.SECRET_KEY[:10]}...")
-        print(f"🔐 AuthService singleton initialized with secret key length: {len(self.SECRET_KEY)}")
+            print(f"🔐 AuthService initialized (Production mode)")
         
         # Mark as initialized
         AuthService._initialized = True
@@ -46,8 +51,38 @@ class AuthService:
     def _generate_secret_key(self) -> str:
         """
         Generate a secure secret key for JWT tokens.
+        This is now handled by the config module.
         """
         return secrets.token_urlsafe(32)
+    
+    def create_refresh_token(self, user_id: int) -> str:
+        """
+        Create a JWT refresh token for a user.
+        Refresh tokens have longer expiration than access tokens.
+        """
+        expire = datetime.utcnow() + timedelta(days=self.REFRESH_TOKEN_EXPIRE_DAYS)
+        
+        to_encode = {
+            "sub": str(user_id),
+            "exp": expire,
+            "iat": int(datetime.utcnow().timestamp()),
+            "type": "refresh",
+            "jti": secrets.token_urlsafe(16)  # Unique token ID for revocation
+        }
+        
+        encoded_jwt = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
+        return encoded_jwt
+    
+    def create_token_pair(self, user_id: int) -> Dict[str, str]:
+        """
+        Create both access and refresh tokens for a user.
+        """
+        return {
+            "access_token": self.create_access_token(user_id),
+            "refresh_token": self.create_refresh_token(user_id),
+            "token_type": "bearer",
+            "expires_in": self.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # in seconds
+        }
 
     def create_access_token(self, user_id: int, expires_delta: Optional[timedelta] = None) -> str:
         """
@@ -62,13 +97,16 @@ class AuthService:
             "sub": str(user_id),  # Subject (user ID)
             "exp": expire,        # Expiration time
             "iat": int(datetime.utcnow().timestamp()),  # Issued at time
-            "type": "access"      # Token type
+            "type": "access",     # Token type
+            "jti": secrets.token_urlsafe(16)  # Unique token ID
         }
         
         encoded_jwt = jwt.encode(to_encode, self.SECRET_KEY, algorithm=self.ALGORITHM)
-        print(f"🔑 Token created for user {user_id}")
-        print(f"🔑 Secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
-        print(f"🔑 Token payload: {to_encode}")
+        
+        # Only log in development mode
+        if settings.is_development():
+            print(f"🔑 Access token created for user {user_id}")
+        
         return encoded_jwt
 
     def verify_token(self, token: str) -> Optional[dict]:
@@ -77,26 +115,29 @@ class AuthService:
         Returns the payload if valid, None if invalid.
         """
         try:
-            print(f"🔍 Verifying token: {token[:20]}..." if token else "🔍 No token provided")
-            print(f"🔍 Secret key: {self.SECRET_KEY[:10]}... (length: {len(self.SECRET_KEY)})")
+            # Only log in development mode
+            if settings.is_development():
+                print(f"🔍 Verifying token...")
             
             # Decode and validate the token
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
-            print(f"✅ Token decoded successfully. Payload: {payload}")
             
             user_id: str = payload.get("sub")
             if user_id is None:
-                print("❌ No 'sub' field in token payload")
                 return None
                 
             # Check token type
             token_type = payload.get("type")
-            if token_type != "access":
-                print(f"❌ Invalid token type: {token_type}")
+            if token_type not in ["access", "refresh"]:
                 return None
             
-            print(f"✅ Token verification successful for user_id: {user_id}")
-            return {"user_id": int(user_id), "payload": payload}
+            # Return user info and token type
+            return {
+                "user_id": int(user_id),
+                "token_type": token_type,
+                "jti": payload.get("jti"),
+                "payload": payload
+            }
             
         except jwt.ExpiredSignatureError:
             print("❌ JWT verification failed: Token has expired")

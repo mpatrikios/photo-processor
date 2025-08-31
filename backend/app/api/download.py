@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from typing import List, Dict, Optional
 import os
@@ -8,20 +8,43 @@ from collections import defaultdict
 from app.models.schemas import ExportRequest
 from app.services.detector import NumberDetector
 from app.api.process import detector as process_detector
+from app.api.auth import get_current_user
+from app.models.user import User
+from sqlalchemy.orm import Session
+from database import get_db
 
 router = APIRouter()
 
 EXPORT_DIR = "exports"
 detector = NumberDetector()
 
+# Store export metadata with user association
+export_metadata: Dict[str, dict] = {}
+
 @router.post("/export")
-async def create_export(request: ExportRequest):
+async def create_export(
+    request: ExportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     if not request.photo_ids:
         raise HTTPException(status_code=400, detail="No photo IDs provided")
     
     export_id = str(uuid.uuid4())
+    
+    # Create user-specific export directory
+    user_export_dir = os.path.join(EXPORT_DIR, str(current_user.id))
+    os.makedirs(user_export_dir, exist_ok=True)
+    
     zip_filename = f"tag_photos_{export_id}.zip"
-    zip_path = os.path.join(EXPORT_DIR, zip_filename)
+    zip_path = os.path.join(user_export_dir, zip_filename)
+    
+    # Store metadata for access control
+    export_metadata[export_id] = {
+        "user_id": current_user.id,
+        "filename": zip_filename,
+        "path": zip_path
+    }
     
     try:
         # Group photos by bib number with hybrid organization
@@ -59,9 +82,28 @@ async def create_export(request: ExportRequest):
         raise HTTPException(status_code=500, detail=f"Failed to create export: {str(e)}")
 
 @router.get("/file/{export_id}")
-async def download_export(export_id: str):
-    zip_filename = f"tag_photos_{export_id}.zip"
-    zip_path = os.path.join(EXPORT_DIR, zip_filename)
+async def download_export(
+    export_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    # Check if export exists and user has access
+    if export_id not in export_metadata:
+        # Try to reconstruct path for backwards compatibility
+        user_export_dir = os.path.join(EXPORT_DIR, str(current_user.id))
+        zip_filename = f"tag_photos_{export_id}.zip"
+        zip_path = os.path.join(user_export_dir, zip_filename)
+        
+        if not os.path.exists(zip_path):
+            # Try legacy path without user directory
+            legacy_path = os.path.join(EXPORT_DIR, zip_filename)
+            if not os.path.exists(legacy_path):
+                raise HTTPException(status_code=404, detail="Export not found")
+            zip_path = legacy_path
+    else:
+        export_info = export_metadata[export_id]
+        if export_info["user_id"] != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        zip_path = export_info["path"]
     
     if not os.path.exists(zip_path):
         raise HTTPException(status_code=404, detail="Export file not found")

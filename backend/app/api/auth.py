@@ -329,3 +329,18 @@ async def get_auth_stats(
         "database_status": "connected"
     }
 
+# Admin authentication dependency
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Dependency to require admin privileges.
+    For now, treats the first user as admin. In production, add proper role system.
+    """
+    # Simple admin check - first user is admin (ID = 1)
+    # In production, implement proper role-based access control
+    if current_user.id != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user
+

@@ -2,6 +2,11 @@
 
 // Global functions for modal and authentication handling
 function showSignInModal() {
+    // Track engagement
+    if (window.analyticsDashboard) {
+        window.analyticsDashboard.trackEngagement('modal_open', 'signInModal');
+    }
+    
     const modal = new bootstrap.Modal(document.getElementById('signInModal'));
     modal.show();
 
@@ -19,6 +24,11 @@ function showSignInModal() {
 }
 
 function showCreateAccountModal() {
+    // Track engagement
+    if (window.analyticsDashboard) {
+        window.analyticsDashboard.trackEngagement('modal_open', 'createAccountModal');
+    }
+    
     const modal = new bootstrap.Modal(document.getElementById('createAccountModal'));
     modal.show();
 
@@ -127,6 +137,14 @@ async function handleSignIn(event) {
         const result = await response.json();
 
         if (response.ok) {
+            // Track successful login
+            if (window.analyticsDashboard) {
+                window.analyticsDashboard.trackEngagement('success_action', 'login_success', {
+                    user_id: result.user?.id,
+                    login_method: 'email'
+                });
+            }
+            
             // Store auth token
             localStorage.setItem('auth_token', result.token);
             
@@ -209,6 +227,14 @@ async function handleCreateAccount(event) {
         const result = await response.json();
 
         if (response.ok) {
+            // Track successful account creation
+            if (window.analyticsDashboard) {
+                window.analyticsDashboard.trackEngagement('success_action', 'account_created', {
+                    user_id: result.user?.id,
+                    signup_method: 'email'
+                });
+            }
+            
             // Store auth token
             localStorage.setItem('auth_token', result.token);
             
@@ -1278,6 +1304,14 @@ class PhotoProcessor {
 
             const result = await response.json();
             
+            // Track successful upload
+            if (window.analyticsDashboard) {
+                window.analyticsDashboard.trackEngagement('success_action', 'photos_uploaded', {
+                    photo_count: this.selectedFiles.length,
+                    upload_size_mb: this.selectedFiles.reduce((total, file) => total + file.size, 0) / (1024 * 1024)
+                });
+            }
+            
             // Update quota display with new information
             if (result.quota_info) {
                 this.updateQuotaDisplay(result.quota_info);
@@ -1397,6 +1431,24 @@ class PhotoProcessor {
 
             this.groupedPhotos = await response.json();
             console.log('Grouped photos received:', this.groupedPhotos);
+            
+            // Track successful processing completion
+            if (window.analyticsDashboard) {
+                const totalPhotos = Object.values(this.groupedPhotos).reduce((sum, group) => sum + group.length, 0);
+                const detectedPhotos = Object.keys(this.groupedPhotos).filter(key => key !== 'unknown').length > 0 
+                    ? Object.keys(this.groupedPhotos).filter(key => key !== 'unknown').reduce((sum, key) => sum + this.groupedPhotos[key].length, 0) 
+                    : 0;
+                const unknownPhotos = this.groupedPhotos.unknown ? this.groupedPhotos.unknown.length : 0;
+                
+                window.analyticsDashboard.trackEngagement('success_action', 'processing_completed', {
+                    total_photos: totalPhotos,
+                    detected_photos: detectedPhotos,
+                    unknown_photos: unknownPhotos,
+                    detection_accuracy: totalPhotos > 0 ? (detectedPhotos / totalPhotos * 100).toFixed(1) : 0,
+                    job_id: this.currentJobId
+                });
+            }
+            
             this.showResultsSection();
 
         } catch (error) {
@@ -1575,6 +1627,13 @@ class PhotoProcessor {
     }
 
     async downloadAllPhotos() {
+        // Track download initiation
+        if (window.analyticsDashboard) {
+            window.analyticsDashboard.trackEngagement('success_action', 'download_initiated', {
+                download_type: 'all_photos'
+            });
+        }
+        
         // Get all photos from all groups
         const allPhotos = this.groupedPhotos.flatMap(group => group.photos);
         const photoIds = allPhotos.map(photo => photo.id);
@@ -1615,6 +1674,15 @@ class PhotoProcessor {
                 // Download the file
                 const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
                 window.open(downloadUrl, '_blank');
+
+                // Track successful download completion
+                if (window.analyticsDashboard) {
+                    window.analyticsDashboard.trackEngagement('success_action', 'download_completed', {
+                        download_type: 'all_photos',
+                        photo_count: photoIds.length,
+                        export_id: result.export_id
+                    });
+                }
 
                 this.showSuccess(`Successfully downloaded ${photoIds.length} photos organized by bib number!`);
 
@@ -1973,6 +2041,15 @@ class PhotoProcessor {
 
     // Enhanced Photo Modal Functions
     showPhotoModal(photoId, filename, groupBibNumber = null) {
+        // Track photo modal open
+        if (window.analyticsDashboard) {
+            window.analyticsDashboard.trackEngagement('click', 'photo_modal_open', {
+                photo_id: photoId,
+                group_bib: groupBibNumber,
+                source: groupBibNumber === 'unknown' ? 'unknown_photos' : 'detected_photos'
+            });
+        }
+        
         // Create a flat list of all photos from all groups for navigation
         this.allPhotosFlat = [];
         this.groupedPhotos.forEach(group => {
@@ -2899,6 +2976,11 @@ class PhotoProcessor {
     }
 
     showFeedbackModal() {
+        // Track feedback modal open
+        if (window.analyticsDashboard) {
+            window.analyticsDashboard.trackEngagement('modal_open', 'feedback_modal');
+        }
+        
         // Reset form
         document.getElementById('feedbackForm').reset();
         document.getElementById('charCount').textContent = '0';
@@ -2965,6 +3047,14 @@ class PhotoProcessor {
             }
 
             const result = await response.json();
+
+            // Track successful feedback submission
+            if (window.analyticsDashboard) {
+                window.analyticsDashboard.trackEngagement('success_action', 'feedback_submitted', {
+                    feedback_type: feedbackData.type,
+                    feedback_category: feedbackData.type
+                });
+            }
 
             // Close modal and show success
             const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
@@ -3138,6 +3228,15 @@ class PhotoProcessor {
     }
 
     async labelPhoto(photoId, bibNumber) {
+        // Track manual labeling action
+        if (window.analyticsDashboard) {
+            window.analyticsDashboard.trackEngagement('success_action', 'manual_label_applied', {
+                photo_id: photoId,
+                bib_number: bibNumber,
+                action_type: 'manual_correction'
+            });
+        }
+        
         const response = await fetch(`${this.apiBase}/process/manual-label`, {
             method: 'PUT',
             headers: {
@@ -3188,6 +3287,10 @@ window.photoProcessor = photoProcessor;
 
 // Profile functionality - CREATE NEW WORKING MODAL
 async function showProfileModal() {
+    // Track profile modal open
+    if (window.analyticsDashboard) {
+        window.analyticsDashboard.trackEngagement('modal_open', 'profile_modal');
+    }
     console.log('showProfileModal called - creating new working modal');
     
     // Remove any existing custom modals
