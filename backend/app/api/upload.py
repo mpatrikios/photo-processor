@@ -191,3 +191,40 @@ async def serve_photo(
     
     return FileResponse(file_path, media_type="image/jpeg")
 
+@router.get("/serve/{photo_id}/view")
+async def serve_photo_with_token(
+    photo_id: str,
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Serve photo file by ID with token authentication for <img> tags"""
+    from app.services.auth_service import auth_service
+    
+    # Verify token
+    user = auth_service.get_user_from_token(db, token)
+    if not user:
+        raise HTTPException(status_code=403, detail="Invalid token")
+    
+    # Check user's upload directory first
+    user_upload_dir = os.path.join(UPLOAD_DIR, str(user.id))
+    file_path = None
+    
+    for ext in ALLOWED_EXTENSIONS:
+        test_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
+        if os.path.exists(test_path):
+            file_path = test_path
+            break
+    
+    # Fallback to legacy uploads directory
+    if not file_path:
+        for ext in ALLOWED_EXTENSIONS:
+            test_path = os.path.join(UPLOAD_DIR, f"{photo_id}{ext}")
+            if os.path.exists(test_path):
+                file_path = test_path
+                break
+    
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Photo not found")
+    
+    return FileResponse(file_path, media_type="image/jpeg")
+

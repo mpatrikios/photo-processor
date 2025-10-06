@@ -31,7 +31,7 @@ class User(Base):
     notification_preferences = Column(Text, nullable=True)  # JSON string
     
     # Relationships
-    processing_jobs = relationship("ProcessingJobDB", back_populates="user", cascade="all, delete-orphan")
+    processing_jobs = relationship("ProcessingJob", back_populates="user", cascade="all, delete-orphan")
     photos = relationship("PhotoDB", foreign_keys="PhotoDB.user_id", back_populates="user", cascade="all, delete-orphan")
     exports = relationship("ExportDB", back_populates="user", cascade="all, delete-orphan")
     batch_operations = relationship("BatchOperationDB", back_populates="user", cascade="all, delete-orphan")

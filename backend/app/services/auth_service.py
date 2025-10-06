@@ -115,10 +115,6 @@ class AuthService:
         Returns the payload if valid, None if invalid.
         """
         try:
-            # Only log in development mode
-            if settings.is_development():
-                print(f"🔍 Verifying token...")
-            
             # Decode and validate the token
             payload = jwt.decode(token, self.SECRET_KEY, algorithms=[self.ALGORITHM])
             
@@ -142,8 +138,8 @@ class AuthService:
         except jwt.ExpiredSignatureError:
             print("❌ JWT verification failed: Token has expired")
             return None
-        except jwt.InvalidSignatureError:
-            print("❌ JWT verification failed: Invalid signature")
+        except jwt.JWTError:
+            print("❌ JWT verification failed: Invalid signature or token")
             return None
         except jwt.InvalidTokenError as e:
             print(f"❌ JWT verification failed: Invalid token - {str(e)}")
@@ -259,14 +255,12 @@ class AuthService:
         """
         Get user from a valid JWT token.
         """
-        print(f"🔍 Verifying token: {token[:20]}..." if token else "🔍 No token to verify")
         token_data = self.verify_token(token)
         if not token_data:
             print("❌ Token verification failed")
             return None
         
         user_id = token_data["user_id"]
-        print(f"🔍 Token verified for user ID: {user_id}")
         user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
         
         if not user:

@@ -12,7 +12,8 @@ import asyncio
 import time
 import logging
 
-from app.models.processing import ProcessingJobDB, PhotoDB, ProcessingStatus
+from app.models.usage import ProcessingJob as ProcessingJobDB
+from app.models.processing import PhotoDB, ProcessingStatus
 from app.models.user import User
 from app.models.schemas import ProcessingJob, ManualLabelRequest
 from app.services.detector import NumberDetector

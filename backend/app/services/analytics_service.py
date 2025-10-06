@@ -18,7 +18,8 @@ from app.models.analytics import (
     AlertLevel
 )
 from app.models.usage import UsageLog, ActionType
-from app.models.processing import ProcessingJobDB, PhotoDB
+from app.models.usage import ProcessingJob as ProcessingJobDB
+from app.models.processing import PhotoDB
 
 logger = logging.getLogger(__name__)
 

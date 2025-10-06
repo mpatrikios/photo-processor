@@ -1,9 +1,11 @@
-from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Float, Boolean, Text, Enum, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import enum
+from app.models.processing import ProcessingStatus
 
 class ActionType(enum.Enum):
     """
@@ -19,15 +21,6 @@ class ActionType(enum.Enum):
     DELETE_PHOTOS = "delete_photos"
     MANUAL_LABEL = "manual_label"
 
-class ProcessingStatus(enum.Enum):
-    """
-    Enum for processing job statuses.
-    """
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
 
 class UsageLog(Base):
     """
@@ -82,14 +75,18 @@ class ProcessingJob(Base):
     __tablename__ = "processing_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)  # Foreign key to users.id
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     job_id = Column(String(255), unique=True, index=True, nullable=False)  # UUID from existing system
     
     # Job status and timing
-    status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING, nullable=False, index=True)
+    status = Column(String(20), default="pending", nullable=False, index=True)
+    progress = Column(Integer, default=0, nullable=False)  # Percentage 0-100
+    debug_mode = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     
     # Photo metrics
     total_photos = Column(Integer, default=0, nullable=False)
@@ -113,19 +110,22 @@ class ProcessingJob(Base):
     
     # Additional metadata
     job_metadata = Column(Text, nullable=True)  # JSON string for additional job details
+    
+    # Relationships
+    user = relationship("User", back_populates="processing_jobs")
 
     def start_processing(self) -> None:
         """
         Mark the job as started.
         """
-        self.status = ProcessingStatus.IN_PROGRESS
+        self.status = "processing"
         self.started_at = datetime.utcnow()
 
     def complete_processing(self, success: bool = True, error_message: Optional[str] = None) -> None:
         """
         Mark the job as completed or failed.
         """
-        self.status = ProcessingStatus.COMPLETED if success else ProcessingStatus.FAILED
+        self.status = "completed" if success else "failed"
         self.completed_at = datetime.utcnow()
         if error_message:
             self.error_message = error_message
@@ -166,6 +166,29 @@ class ProcessingJob(Base):
         else:
             self.error_message = error_message
 
+    def is_expired(self) -> bool:
+        """Check if the job has expired."""
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() > self.expires_at
+    
+    def set_expiration(self, hours: int = 24):
+        """Set job expiration time."""
+        self.expires_at = datetime.utcnow() + timedelta(hours=hours)
+
+    def to_schema(self):
+        """Convert to ProcessingJob schema for API responses."""
+        from app.models.schemas import ProcessingJob
+        return ProcessingJob(
+            job_id=self.job_id,
+            photo_ids=[],  # Will be populated by PhotoDB relationships later
+            status=self.status,
+            progress=self.progress,
+            completed_photos=self.photos_processed,
+            total_photos=self.total_photos,
+            debug_mode=self.debug_mode
+        )
+
     def to_dict(self) -> dict:
         """
         Convert processing job to dictionary for API responses.
@@ -174,10 +197,14 @@ class ProcessingJob(Base):
             "id": self.id,
             "user_id": self.user_id,
             "job_id": self.job_id,
-            "status": self.status.value if self.status else None,
+            "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "progress": self.progress,
+            "debug_mode": self.debug_mode,
             "total_photos": self.total_photos,
             "photos_processed": self.photos_processed,
             "photos_detected": self.photos_detected,

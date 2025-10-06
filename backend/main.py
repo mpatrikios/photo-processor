@@ -172,6 +172,11 @@ async def startup_event():
         if recovered_jobs > 0:
             print(f"🔄 Recovered {recovered_jobs} processing jobs")
         
+        # Load active processing jobs into memory
+        from app.api.process import sync_jobs_from_database, cleanup_old_jobs
+        sync_jobs_from_database()
+        cleanup_old_jobs()
+        
         # Clean up expired jobs and exports
         cleaned_jobs = job_service.cleanup_expired_jobs(db)
         if cleaned_jobs > 0:

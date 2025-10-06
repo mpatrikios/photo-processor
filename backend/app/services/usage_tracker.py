@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import json
 
 from app.models.user import User
-from app.models.usage import UsageLog, ProcessingJob, UserQuota, ActionType, ProcessingStatus
+from app.models.usage import UsageLog, ProcessingJob, UserQuota, ActionType
+from app.models.processing import ProcessingStatus
 
 
 class UsageTracker:
@@ -87,17 +88,31 @@ class UsageTracker:
         """
         Update a processing job with new information.
         """
+        print(f"🔍 DEBUG [usage_tracker]: Looking for job {job_id} in database")
         job = db.query(ProcessingJob).filter(ProcessingJob.job_id == job_id).first()
         
         if not job:
+            print(f"❌ DEBUG [usage_tracker]: Job {job_id} NOT FOUND in database!")
+            # Let's check what jobs ARE in the database
+            all_jobs = db.query(ProcessingJob.job_id).all()
+            print(f"🔍 DEBUG [usage_tracker]: Jobs in database: {[j.job_id for j in all_jobs]}")
             return None
+        
+        print(f"✅ DEBUG [usage_tracker]: Job {job_id} found in database")
+        print(f"🔍 DEBUG [usage_tracker]: Current job status: {job.status}")
         
         for key, value in updates.items():
             if hasattr(job, key):
+                old_value = getattr(job, key)
                 setattr(job, key, value)
+                print(f"🔍 DEBUG [usage_tracker]: Set {key}: {old_value} -> {value}")
+            else:
+                print(f"⚠️ DEBUG [usage_tracker]: Job has no attribute '{key}', skipping")
         
+        print(f"🔍 DEBUG [usage_tracker]: Committing changes for job {job_id}")
         db.commit()
         db.refresh(job)
+        print(f"✅ DEBUG [usage_tracker]: Changes committed successfully")
         
         return job
 
@@ -359,7 +374,7 @@ class UsageTracker:
                 "type": "job",
                 "timestamp": job.created_at.isoformat(),
                 "job_id": job.job_id,
-                "status": job.status.value,
+                "status": job.status,
                 "total_photos": job.total_photos,
                 "photos_detected": job.photos_detected,
                 "photos_unknown": job.photos_unknown,

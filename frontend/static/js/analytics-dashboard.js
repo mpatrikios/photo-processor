@@ -168,12 +168,12 @@ class AnalyticsDashboard {
                                                     <div class="card-body text-center">
                                                         <div class="d-flex align-items-center justify-content-between">
                                                             <div>
-                                                                <h6 class="card-subtitle text-muted mb-1">Success Rate</h6>
-                                                                <h3 class="card-title mb-0" id="success-rate-metric">-</h3>
+                                                                <h6 class="card-subtitle text-muted mb-1">Avg Processing Time</h6>
+                                                                <h3 class="card-title mb-0" id="avg-processing-time-metric">-</h3>
                                                             </div>
-                                                            <i class="fas fa-check-circle fa-2x text-danger opacity-75"></i>
+                                                            <i class="fas fa-clock fa-2x text-info opacity-75"></i>
                                                         </div>
-                                                        <small class="text-success" id="success-trend">+0% this month</small>
+                                                        <small class="text-muted" id="processing-time-trend">Per photo average</small>
                                                     </div>
                                                 </div>
                                             </div>
@@ -284,6 +284,21 @@ class AnalyticsDashboard {
                                                     <div class="card-body">
                                                         <div id="system-metrics-grid" class="row g-3">
                                                             <!-- System metrics will be populated here -->
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row g-4 mt-3">
+                                            <div class="col-12">
+                                                <div class="card border-0 shadow-sm">
+                                                    <div class="card-header bg-white border-bottom">
+                                                        <h6 class="mb-0">Processing Time Breakdown</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div id="processing-time-breakdown" class="row g-3">
+                                                            <!-- Processing time metrics will be populated here -->
                                                         </div>
                                                     </div>
                                                 </div>
@@ -418,12 +433,19 @@ class AnalyticsDashboard {
      * Start auto-refresh
      */
     startAutoRefresh() {
+        // Disable auto-refresh if StateManager is not properly initialized
+        if (!this.state || !this.state.request) {
+            console.warn('Auto-refresh disabled: StateManager not properly initialized');
+            return;
+        }
+        
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval);
         }
         
         this.refreshInterval = setInterval(() => {
             if (this.isVisible) {
+                console.log('Auto-refreshing analytics dashboard...');
                 this.refreshCurrentPanel();
             }
         }, 30000); // 30 seconds
@@ -485,16 +507,70 @@ class AnalyticsDashboard {
      */
     async loadOverviewData() {
         try {
-            const response = await this.state.api.request('GET', '/analytics/user/dashboard');
+            console.log('Loading analytics overview data...');
+            
+            // Check if state is properly initialized
+            if (!this.state) {
+                console.error('StateManager not initialized');
+                this.showNoDataMessage('StateManager not initialized');
+                return;
+            }
+            
+            // Check if request method exists
+            if (!this.state.request) {
+                console.error('StateManager request method not found');
+                this.showNoDataMessage('StateManager request method not found');
+                return;
+            }
+            
+            // Check if API is configured
+            if (!this.state.state || !this.state.state.api || !this.state.state.api.baseUrl) {
+                console.error('API not configured in StateManager');
+                this.showNoDataMessage('API not configured');
+                return;
+            }
+            
+            console.log('API Base URL:', this.state.state.api.baseUrl);
+            console.log('Auth token exists:', !!this.state.state.auth.token);
+            console.log('Is authenticated:', this.state.state.auth.isAuthenticated);
+            
+            // Check authentication before making request
+            if (!this.state.state.auth.isAuthenticated || !this.state.state.auth.token) {
+                console.error('User not authenticated for analytics');
+                this.showNoDataMessage('Please log in to view analytics');
+                return;
+            }
+            
+            const response = await this.state.request('GET', '/analytics/user/dashboard');
+            
+            console.log('Analytics API response status:', response.status);
             
             if (response.ok) {
                 const data = await response.json();
+                console.log('Analytics data received:', data);
                 this.updateOverviewMetrics(data);
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Analytics API error:', response.status, errorData);
+                this.showNoDataMessage(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Failed to load overview data:', error);
-            this.state.addNotification('Failed to load analytics data', 'error');
+            this.showNoDataMessage(`Connection Error: ${error.message}`);
         }
+    }
+    
+    showNoDataMessage(message) {
+        // Update metrics to show error state
+        document.getElementById('total-users-metric').textContent = 'Error';
+        document.getElementById('photos-processed-metric').textContent = 'Error';
+        document.getElementById('accuracy-metric').textContent = 'Error';
+        document.getElementById('avg-processing-time-metric').textContent = 'Error';
+        
+        // Update trend messages
+        document.getElementById('users-growth').textContent = message;
+        document.getElementById('photos-growth').textContent = 'Check console for details';
+        document.getElementById('processing-time-trend').textContent = 'Refresh to retry';
     }
     
     /**
@@ -505,17 +581,21 @@ class AnalyticsDashboard {
         const totalUsers = data.user_stats?.current_quota?.user_id || 0;
         const photosProcessed = data.user_stats?.total_photos_processed || 0;
         const accuracy = data.detection_accuracy?.percentage || 0;
-        const successRate = data.user_stats?.success_rate || 0;
+        const avgProcessingTime = data.detection_accuracy?.avg_processing_time_ms || 0;
         
         document.getElementById('total-users-metric').textContent = totalUsers.toLocaleString();
         document.getElementById('photos-processed-metric').textContent = photosProcessed.toLocaleString();
         document.getElementById('accuracy-metric').textContent = `${accuracy.toFixed(1)}%`;
-        document.getElementById('success-rate-metric').textContent = `${successRate.toFixed(1)}%`;
         
-        // Update trends (placeholder - would calculate from historical data)
-        document.getElementById('users-growth').textContent = '+12% this month';
-        document.getElementById('photos-growth').textContent = '+45% this month';
-        document.getElementById('success-trend').textContent = '+2% this month';
+        // Convert milliseconds to seconds for display
+        const avgTimeSeconds = avgProcessingTime / 1000;
+        document.getElementById('avg-processing-time-metric').textContent = `${avgTimeSeconds.toFixed(2)}s`;
+        
+        // Update trends from real data
+        const currentMonth = data.user_stats?.current_quota?.current_month || 'N/A';
+        document.getElementById('users-growth').textContent = `Active in ${currentMonth}`;
+        document.getElementById('photos-growth').textContent = `${data.user_stats?.uploads || 0} uploads this period`;
+        document.getElementById('processing-time-trend').textContent = `${data.detection_accuracy?.total_photos || 0} photos analyzed`;
         
         // Update charts
         this.updateActivityTrendsChart(data.processing_trends || []);
@@ -547,7 +627,7 @@ class AnalyticsDashboard {
      */
     async loadPerformanceData() {
         try {
-            const response = await this.state.api.request('GET', '/analytics/user/dashboard');
+            const response = await this.state.request('GET', '/analytics/user/dashboard');
             
             if (response.ok) {
                 const data = await response.json();
@@ -563,7 +643,7 @@ class AnalyticsDashboard {
      */
     async loadEngagementData() {
         try {
-            const response = await this.state.api.request('GET', '/analytics/user/engagement');
+            const response = await this.state.request('GET', '/analytics/user/engagement');
             
             if (response.ok) {
                 const data = await response.json();
@@ -595,18 +675,29 @@ class AnalyticsDashboard {
         const canvas = document.getElementById('activity-trends-chart');
         const ctx = canvas.getContext('2d');
         
-        // Simple line chart (would use Chart.js in production)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Draw placeholder chart
+        if (!trendsData || trendsData.length === 0) {
+            // Show no data message
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('No activity data available', canvas.width / 2, canvas.height / 2);
+            ctx.font = '12px Arial';
+            ctx.fillText('Data will appear after users start processing photos', canvas.width / 2, canvas.height / 2 + 25);
+            return;
+        }
+        
+        // Draw real trends data
         ctx.strokeStyle = '#dc3545';
         ctx.lineWidth = 2;
         ctx.beginPath();
         
-        const points = trendsData.length || 7;
-        for (let i = 0; i < points; i++) {
-            const x = (canvas.width / points) * i;
-            const y = canvas.height - (Math.random() * canvas.height * 0.8 + canvas.height * 0.1);
+        const maxValue = Math.max(...trendsData.map(d => d.value || 0));
+        
+        for (let i = 0; i < trendsData.length; i++) {
+            const x = (canvas.width / trendsData.length) * i;
+            const y = canvas.height - ((trendsData[i].value || 0) / maxValue * canvas.height * 0.8);
             
             if (i === 0) {
                 ctx.moveTo(x, y);
@@ -620,8 +711,9 @@ class AnalyticsDashboard {
         // Add labels
         ctx.fillStyle = '#666';
         ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
         ctx.fillText('Activity trends over time', 10, 20);
-        ctx.fillText('Recent trends show steady growth', 10, canvas.height - 10);
+        ctx.fillText(`Peak: ${maxValue} activities`, 10, canvas.height - 10);
     }
     
     /**
@@ -631,34 +723,84 @@ class AnalyticsDashboard {
         const canvas = document.getElementById('processing-methods-chart');
         const ctx = canvas.getContext('2d');
         
-        // Simple pie chart placeholder
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Get real detection data from API response
+        const googleDetections = data.detection_stats?.google_vision_detections || 0;
+        const tesseractDetections = data.detection_stats?.tesseract_detections || 0;
+        const manualLabels = data.detection_stats?.manual_labels || 0;
+        const totalDetections = googleDetections + tesseractDetections + manualLabels;
+        
+        if (totalDetections === 0) {
+            // Show no data message
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('No detection data', canvas.width / 2, canvas.height / 2);
+            ctx.font = '12px Arial';
+            ctx.fillText('available yet', canvas.width / 2, canvas.height / 2 + 20);
+            return;
+        }
         
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
-        const radius = Math.min(centerX, centerY) - 20;
+        const radius = Math.min(centerX, centerY) - 30;
+        
+        // Calculate angles
+        const googleAngle = (googleDetections / totalDetections) * 2 * Math.PI;
+        const tesseractAngle = (tesseractDetections / totalDetections) * 2 * Math.PI;
+        const manualAngle = (manualLabels / totalDetections) * 2 * Math.PI;
+        
+        let currentAngle = 0;
         
         // Google Vision segment
-        ctx.fillStyle = '#dc3545';
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 1.4);
-        ctx.closePath();
-        ctx.fill();
+        if (googleDetections > 0) {
+            ctx.fillStyle = '#dc3545';
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + googleAngle);
+            ctx.closePath();
+            ctx.fill();
+            currentAngle += googleAngle;
+        }
         
         // Tesseract segment
-        ctx.fillStyle = '#28a745';
-        ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, radius, Math.PI * 1.4, Math.PI * 2);
-        ctx.closePath();
-        ctx.fill();
+        if (tesseractDetections > 0) {
+            ctx.fillStyle = '#28a745';
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + tesseractAngle);
+            ctx.closePath();
+            ctx.fill();
+            currentAngle += tesseractAngle;
+        }
+        
+        // Manual labels segment
+        if (manualLabels > 0) {
+            ctx.fillStyle = '#ffc107';
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + manualAngle);
+            ctx.closePath();
+            ctx.fill();
+        }
         
         // Labels
         ctx.fillStyle = '#000';
-        ctx.font = '12px Arial';
-        ctx.fillText('Google Vision (70%)', 10, canvas.height - 30);
-        ctx.fillText('Tesseract (30%)', 10, canvas.height - 15);
+        ctx.font = '11px Arial';
+        ctx.textAlign = 'left';
+        if (googleDetections > 0) {
+            const googlePercent = ((googleDetections / totalDetections) * 100).toFixed(1);
+            ctx.fillText(`Google Vision: ${googlePercent}%`, 10, canvas.height - 45);
+        }
+        if (tesseractDetections > 0) {
+            const tesseractPercent = ((tesseractDetections / totalDetections) * 100).toFixed(1);
+            ctx.fillText(`Tesseract: ${tesseractPercent}%`, 10, canvas.height - 30);
+        }
+        if (manualLabels > 0) {
+            const manualPercent = ((manualLabels / totalDetections) * 100).toFixed(1);
+            ctx.fillText(`Manual: ${manualPercent}%`, 10, canvas.height - 15);
+        }
     }
     
     /**
@@ -668,6 +810,7 @@ class AnalyticsDashboard {
         this.updateDetectionPerformanceChart(data.detection_accuracy || {});
         this.updateProcessingTimeChart(data.processing_trends || []);
         this.updateSystemMetricsGrid();
+        this.updateProcessingTimeBreakdown(data.detection_accuracy || {});
     }
     
     updateDetectionPerformanceChart(accuracyData) {
@@ -676,33 +819,38 @@ class AnalyticsDashboard {
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Draw accuracy trend
-        ctx.strokeStyle = '#28a745';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
+        const accuracy = accuracyData.percentage || 0;
         
-        // Sample trend line
-        const accuracy = accuracyData.percentage || 85;
-        const baseY = canvas.height - (accuracy / 100 * canvas.height * 0.8);
-        
-        for (let i = 0; i < 10; i++) {
-            const x = (canvas.width / 10) * i;
-            const variation = (Math.random() - 0.5) * 20;
-            const y = baseY + variation;
-            
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
+        if (accuracy === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('No detection data available', canvas.width / 2, canvas.height / 2);
+            return;
         }
         
-        ctx.stroke();
+        // Show accuracy as a simple bar
+        const barWidth = canvas.width * 0.8;
+        const barHeight = 30;
+        const barX = (canvas.width - barWidth) / 2;
+        const barY = canvas.height / 2 - barHeight / 2;
+        
+        // Background bar
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Accuracy bar
+        ctx.fillStyle = accuracy > 80 ? '#28a745' : accuracy > 60 ? '#ffc107' : '#dc3545';
+        ctx.fillRect(barX, barY, (accuracy / 100) * barWidth, barHeight);
         
         // Add accuracy percentage
         ctx.fillStyle = '#000';
         ctx.font = 'bold 16px Arial';
-        ctx.fillText(`${accuracy.toFixed(1)}% Average Accuracy`, 10, 25);
+        ctx.textAlign = 'center';
+        ctx.fillText(`${accuracy.toFixed(1)}% Detection Accuracy`, canvas.width / 2, barY - 15);
+        
+        ctx.font = '12px Arial';
+        ctx.fillText(`Based on ${accuracyData.total_photos || 0} photos`, canvas.width / 2, barY + barHeight + 25);
     }
     
     updateProcessingTimeChart(trendsData) {
@@ -711,13 +859,23 @@ class AnalyticsDashboard {
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Draw processing time bars
-        const barWidth = canvas.width / 7;
-        const maxTime = 5000; // 5 seconds max
+        if (!trendsData || trendsData.length === 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('No processing time data', canvas.width / 2, canvas.height / 2);
+            ctx.font = '12px Arial';
+            ctx.fillText('available yet', canvas.width / 2, canvas.height / 2 + 20);
+            return;
+        }
         
-        for (let i = 0; i < 7; i++) {
-            const time = Math.random() * maxTime;
-            const barHeight = (time / maxTime) * canvas.height * 0.8;
+        // Draw bars from real data
+        const barWidth = canvas.width / trendsData.length;
+        const maxTime = Math.max(...trendsData.map(d => d.processing_time || 0));
+        
+        for (let i = 0; i < trendsData.length; i++) {
+            const time = trendsData[i].processing_time || 0;
+            const barHeight = maxTime > 0 ? (time / maxTime) * canvas.height * 0.8 : 0;
             const x = i * barWidth;
             const y = canvas.height - barHeight;
             
@@ -727,29 +885,71 @@ class AnalyticsDashboard {
         
         ctx.fillStyle = '#000';
         ctx.font = '12px Arial';
-        ctx.fillText('Processing time distribution (last 7 days)', 10, 20);
+        ctx.textAlign = 'left';
+        ctx.fillText(`Processing time distribution (${trendsData.length} jobs)`, 10, 20);
     }
     
     updateSystemMetricsGrid() {
         const grid = document.getElementById('system-metrics-grid');
+        grid.innerHTML = `
+            <div class="col-12 text-center text-muted">
+                <i class="fas fa-chart-bar fa-3x mb-2"></i>
+                <p>System metrics not available</p>
+                <small>Real-time system monitoring coming soon</small>
+            </div>
+        `;
+    }
+    
+    updateProcessingTimeBreakdown(accuracyData) {
+        const breakdown = document.getElementById('processing-time-breakdown');
+        const avgTimeMs = accuracyData.avg_processing_time_ms || 0;
+        const totalPhotos = accuracyData.total_photos || 0;
+        
+        // Convert to different time units for better readability
+        const avgTimeSeconds = avgTimeMs / 1000;
+        const avgTimeMinutes = avgTimeSeconds / 60;
+        
+        // Estimate total processing time if all photos were processed
+        const estimatedTotalSeconds = (avgTimeSeconds * totalPhotos);
+        const estimatedTotalMinutes = estimatedTotalSeconds / 60;
+        const estimatedTotalHours = estimatedTotalMinutes / 60;
+        
         const metrics = [
-            { name: 'API Response Time', value: '245ms', status: 'good' },
-            { name: 'Queue Size', value: '12', status: 'warning' },
-            { name: 'Active Sessions', value: '8', status: 'good' },
-            { name: 'Memory Usage', value: '67%', status: 'good' },
-            { name: 'CPU Usage', value: '23%', status: 'good' },
-            { name: 'Error Rate', value: '0.2%', status: 'good' }
+            {
+                name: 'Average Per Photo',
+                value: avgTimeSeconds > 0 ? `${avgTimeSeconds.toFixed(2)}s` : 'No data',
+                icon: 'fas fa-image',
+                color: avgTimeSeconds > 3 ? 'danger' : avgTimeSeconds > 1.5 ? 'warning' : 'success'
+            },
+            {
+                name: 'Total Processing Time',
+                value: estimatedTotalMinutes > 60 ? 
+                    `${estimatedTotalHours.toFixed(1)}h` : 
+                    `${estimatedTotalMinutes.toFixed(1)}m`,
+                icon: 'fas fa-clock',
+                color: 'info'
+            },
+            {
+                name: 'Photos Analyzed',
+                value: totalPhotos.toLocaleString(),
+                icon: 'fas fa-chart-bar',
+                color: 'primary'
+            },
+            {
+                name: 'Processing Speed',
+                value: avgTimeSeconds > 0 ? `${(3600 / avgTimeSeconds).toFixed(0)}/hour` : 'N/A',
+                icon: 'fas fa-tachometer-alt',
+                color: 'secondary'
+            }
         ];
         
-        grid.innerHTML = metrics.map(metric => `
-            <div class="col-lg-2 col-md-4">
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body text-center p-3">
+        breakdown.innerHTML = metrics.map(metric => `
+            <div class="col-lg-3 col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body text-center">
+                        <i class="${metric.icon} fa-2x text-${metric.color} mb-2"></i>
                         <h6 class="card-subtitle text-muted mb-1">${metric.name}</h6>
-                        <h4 class="card-title mb-0 text-${this.getStatusColor(metric.status)}">${metric.value}</h4>
-                        <small class="badge bg-${this.getStatusColor(metric.status)} bg-opacity-10 text-${this.getStatusColor(metric.status)}">
-                            ${metric.status.toUpperCase()}
-                        </small>
+                        <h4 class="card-title mb-0 text-${metric.color}">${metric.value}</h4>
                     </div>
                 </div>
             </div>
@@ -760,16 +960,20 @@ class AnalyticsDashboard {
      * Update engagement visualizations
      */
     updateEngagementVisualizations(engagementData) {
-        // Update conversion funnel
         const funnelContainer = document.getElementById('conversion-funnel');
         
-        const funnelSteps = [
-            { name: 'Landing View', count: 1000, percentage: 100 },
-            { name: 'Sign Up', count: 350, percentage: 35 },
-            { name: 'First Upload', count: 280, percentage: 28 },
-            { name: 'First Process', count: 245, percentage: 24.5 },
-            { name: 'First Export', count: 210, percentage: 21 }
-        ];
+        if (!engagementData || !engagementData.funnel_steps) {
+            funnelContainer.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-chart-line fa-3x mb-2"></i>
+                    <p>No conversion data available</p>
+                    <small>Funnel metrics will appear after user activity</small>
+                </div>
+            `;
+            return;
+        }
+        
+        const funnelSteps = engagementData.funnel_steps;
         
         funnelContainer.innerHTML = funnelSteps.map((step, index) => `
             <div class="d-flex align-items-center mb-3">
@@ -849,7 +1053,7 @@ class AnalyticsDashboard {
             }
             
             // Make the API request
-            const response = await this.state.api.request('GET', endpoint);
+            const response = await this.state.request('GET', endpoint);
             
             if (response.ok) {
                 // Handle the download
@@ -903,10 +1107,10 @@ class AnalyticsDashboard {
                 timestamp: new Date().toISOString()
             };
             
-            // Send to analytics API (don't await to avoid blocking UI)
-            this.state.api.request('POST', '/analytics/engagement/track', eventData).catch(err => {
-                console.warn('Failed to track engagement:', err);
-            });
+            // Send to analytics API (disabled until engagement endpoints are implemented)
+            // this.state.request('POST', '/analytics/engagement/track', eventData).catch(err => {
+            //     console.warn('Failed to track engagement:', err);
+            // });
             
         } catch (error) {
             console.warn('Engagement tracking error:', error);
@@ -928,26 +1132,38 @@ class AnalyticsDashboard {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.stateManager) {
-        window.analyticsDashboard = new AnalyticsDashboard(window.stateManager);
-        
-        // Track page view
-        if (window.analyticsDashboard) {
-            window.analyticsDashboard.trackEngagement('page_view');
+    // Wait a bit for StateManager to be fully initialized
+    setTimeout(() => {
+        if (window.stateManager) {
+            console.log('Initializing AnalyticsDashboard with StateManager');
+            window.analyticsDashboard = new AnalyticsDashboard(window.stateManager);
+            
+            // Track page view (disabled until engagement endpoints are implemented)
+            // if (window.analyticsDashboard) {
+            //     window.analyticsDashboard.trackEngagement('page_view');
+            // }
+        } else {
+            console.error('StateManager not found on window object');
+            // Try to create a new StateManager if it doesn't exist
+            if (typeof StateManager !== 'undefined') {
+                console.log('Creating new StateManager instance for analytics');
+                window.stateManager = new StateManager();
+                window.analyticsDashboard = new AnalyticsDashboard(window.stateManager);
+            }
         }
-    }
+    }, 100); // Small delay to ensure StateManager is ready
 });
 
-// Track common user interactions
-document.addEventListener('click', (e) => {
-    if (window.analyticsDashboard && e.target.id) {
-        window.analyticsDashboard.trackEngagement('click', e.target.id);
-    }
-});
+// Track common user interactions (disabled until engagement endpoints are implemented)
+// document.addEventListener('click', (e) => {
+//     if (window.analyticsDashboard && e.target.id) {
+//         window.analyticsDashboard.trackEngagement('click', e.target.id);
+//     }
+// });
 
-// Track modal opens
-document.addEventListener('show.bs.modal', (e) => {
-    if (window.analyticsDashboard) {
-        window.analyticsDashboard.trackEngagement('modal_open', e.target.id);
-    }
-});
+// Track modal opens (disabled until engagement endpoints are implemented)
+// document.addEventListener('show.bs.modal', (e) => {
+//     if (window.analyticsDashboard) {
+//         window.analyticsDashboard.trackEngagement('modal_open', e.target.id);
+//     }
+// });

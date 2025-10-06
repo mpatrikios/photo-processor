@@ -12,7 +12,7 @@ from sqlalchemy import func, desc
 
 from app.models.user import User
 from app.models.usage import UsageLog, ActionType
-from app.models.processing import ProcessingJobDB
+from app.models.usage import ProcessingJob as ProcessingJobDB
 from app.models.analytics import (
     UserEngagement, SystemMetric, BusinessMetric, DetectionAccuracyLog,
     ConversionFunnel, AlertHistory, UserRetentionCohort

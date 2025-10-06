@@ -285,7 +285,9 @@ class StateManager {
                 throw new Error('No refresh token available');
             }
             
-            const response = await fetch(`${this.state.api.baseUrl}/auth/refresh`, {
+            // Use original fetch to avoid interceptor recursion
+            const fetchToUse = this.originalFetch || fetch;
+            const response = await fetchToUse(`${this.state.api.baseUrl}/auth/refresh`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -318,6 +320,8 @@ class StateManager {
      */
     setupRequestInterceptor() {
         const originalFetch = window.fetch;
+        this.originalFetch = originalFetch; // Store for use in refreshToken
+        this.refreshInProgress = false; // Prevent multiple simultaneous refreshes
         
         window.fetch = async (url, options = {}) => {
             // Add auth header if authenticated
@@ -338,14 +342,25 @@ class StateManager {
                 const response = await originalFetch(url, options);
                 clearTimeout(timeoutId);
                 
-                // Handle 401 responses (token expired)
-                if (response.status === 401 && this.state.auth.isAuthenticated) {
-                    // Try to refresh token
-                    const refreshed = await this.refreshToken();
-                    if (refreshed) {
-                        // Retry the original request with new token
-                        options.headers['Authorization'] = `Bearer ${this.state.auth.token}`;
-                        return await originalFetch(url, options);
+                // Handle auth errors (401 or 403) - but prevent refresh loops
+                if ((response.status === 401 || response.status === 403) && 
+                    this.state.auth.isAuthenticated && 
+                    !this.refreshInProgress &&
+                    !url.includes('/auth/refresh') && // Don't refresh the refresh endpoint
+                    !url.includes('/auth/validate')) { // Don't refresh validate calls
+                    
+                    this.refreshInProgress = true;
+                    
+                    try {
+                        // Try to refresh token
+                        const refreshed = await this.refreshToken();
+                        if (refreshed) {
+                            // Retry the original request with new token
+                            options.headers['Authorization'] = `Bearer ${this.state.auth.token}`;
+                            return await originalFetch(url, options);
+                        }
+                    } finally {
+                        this.refreshInProgress = false;
                     }
                 }
                 
@@ -414,6 +429,27 @@ class StateManager {
             };
         }
         return {};
+    }
+    
+    /**
+     * Make authenticated API request using the fetch interceptor
+     */
+    async request(method, endpoint, data = null) {
+        const url = `${this.state.api.baseUrl}${endpoint}`;
+        
+        const options = {
+            method: method.toUpperCase(),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
+        
+        if (data && (method.toUpperCase() === 'POST' || method.toUpperCase() === 'PUT')) {
+            options.body = JSON.stringify(data);
+        }
+        
+        // The fetch interceptor will automatically add auth headers
+        return await fetch(url, options);
     }
     
     /**

@@ -73,7 +73,28 @@ function showLandingPage() {
 function showAppSection() {
     document.getElementById('landing-page').classList.add('d-none');
     document.getElementById('app-section').classList.remove('d-none');
+    
+    // Update PhotoProcessor's auth token if it exists
+    if (window.photoProcessor) {
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            window.photoProcessor.authToken = token;
+            window.photoProcessor.isAuthenticated = true;
+            // Skip validation after fresh login - just show the upload section
+            window.photoProcessor.showUploadSection();
+        }
+    }
 }
+
+// Make critical functions globally accessible IMMEDIATELY for onclick handlers
+// This ensures they work even if PhotoProcessor initialization fails later
+window.showSignInModal = showSignInModal;
+window.showCreateAccountModal = showCreateAccountModal;
+window.switchToCreateAccount = switchToCreateAccount;
+window.switchToSignIn = switchToSignIn;
+window.showLandingPage = showLandingPage;
+window.showAppSection = showAppSection;
+window.logout = logout;
 
 function logout() {
     // Clear auth token and show landing page
@@ -322,8 +343,11 @@ class PhotoProcessor {
         this.searchTerm = '';
         this.confidenceFilter = 0;
         this.photoCountFilter = 1;
-        this.isAuthenticated = false;
-        this.authToken = null;
+        
+        // Initialize authentication from localStorage
+        const storedToken = localStorage.getItem('auth_token');
+        this.authToken = storedToken || null;
+        this.isAuthenticated = !!storedToken;
         this.isEditMode = false; // For inline labeling
         this.zoomLevel = 1;
         this.panX = 0;
@@ -446,24 +470,38 @@ class PhotoProcessor {
     }
 
     async initializeApp() {
-        // Check if we have a stored token
-        const token = localStorage.getItem('auth_token');
-        console.log('🔐 initializeApp: Found token in localStorage:', token ? `${token.substring(0, 20)}...` : 'NULL');
+        // Prevent multiple initialization calls
+        if (this.initializationInProgress) {
+            return;
+        }
+        this.initializationInProgress = true;
         
-        if (token) {
-            this.authToken = token;
-            console.log('🔐 initializeApp: Set this.authToken to:', this.authToken ? `${this.authToken.substring(0, 20)}...` : 'NULL');
+        try {
+            // Check if we have a stored token
+            const token = localStorage.getItem('auth_token');
             
-            const isValid = await this.checkAuthStatus();
-            if (!isValid) {
-                console.log('🔐 initializeApp: Token validation failed, showing login screen');
-                this.showLoginScreen();
+            if (token) {
+                this.authToken = token;
+                
+                const isValid = await this.checkAuthStatus();
+                if (!isValid) {
+                    this.showLoginScreen();
+                } else {
+                    // Update StateManager auth state if it exists
+                    try {
+                        if (window.stateManager && window.stateManager.state && window.stateManager.state.auth) {
+                            window.stateManager.state.auth.isAuthenticated = true;
+                            window.stateManager.state.auth.token = token;
+                        }
+                    } catch (error) {
+                        console.log('StateManager not available or not properly initialized:', error);
+                    }
+                }
             } else {
-                console.log('🔐 initializeApp: Token validation succeeded, user authenticated');
+                this.showLoginScreen();
             }
-        } else {
-            console.log('🔐 initializeApp: No token found, showing login screen');
-            this.showLoginScreen();
+        } finally {
+            this.initializationInProgress = false;
         }
     }
 
@@ -521,8 +559,8 @@ class PhotoProcessor {
         chooseFolderBtn.addEventListener('click', () => folderInput.click());
 
         // File input change events
-        fileInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files, false));
-        folderInput.addEventListener('change', (e) => this.handleFileSelect(e.target.files, true));
+        fileInput.addEventListener('change', async (e) => await this.handleFileSelect(e.target.files, false));
+        folderInput.addEventListener('change', async (e) => await this.handleFileSelect(e.target.files, true));
 
         // Upload button
         uploadBtn.addEventListener('click', this.uploadFiles.bind(this));
@@ -971,7 +1009,7 @@ class PhotoProcessor {
                         <div class="photo-grid">
                             ${group.photos.slice(0, 4).map((photo, index) => `
                                 <div class="photo-item" onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', '${group.bib_number}')">
-                                    <img src="${this.apiBase}/upload/serve/${photo.id}" 
+                                    <img src="${this.getImageUrl(photo.id)}" 
                                          alt="${photo.filename}" 
                                          style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--border-radius);"
                                          onerror="console.error('Failed to load image:', this.src); this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -1018,7 +1056,7 @@ class PhotoProcessor {
         document.getElementById('upload-area').classList.remove('dragover');
     }
 
-    handleDrop(e) {
+    async handleDrop(e) {
         e.preventDefault();
         e.stopPropagation();
         document.getElementById('upload-area').classList.remove('dragover');
@@ -1027,30 +1065,83 @@ class PhotoProcessor {
             file.type.startsWith('image/')
         );
 
-        this.handleFileSelect(files);
+        await this.handleFileSelect(files);
     }
 
     // File Selection Handler
-    handleFileSelect(files, isFolder = false) {
+    async handleFileSelect(files, isFolder = false) {
         const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
         const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        const COMPRESS_THRESHOLD = 4 * 1024 * 1024; // Compress files larger than 4MB
 
-        const validFiles = [];
         const invalidFiles = [];
-        const oversizedFiles = [];
-
+        const toProcess = [];
+        
+        // First pass: filter invalid files
         Array.from(files).forEach(file => {
             if (!SUPPORTED_FORMATS.includes(file.type)) {
                 invalidFiles.push(file.name);
-            } else if (file.size > MAX_FILE_SIZE) {
-                oversizedFiles.push(file.name);
             } else {
-                validFiles.push(file);
+                toProcess.push(file);
             }
         });
 
+        // Show compression progress if needed
+        const needsCompression = toProcess.some(file => file.size > COMPRESS_THRESHOLD);
+        let progressModal = null;
+        
+        if (needsCompression && toProcess.length > 0) {
+            progressModal = this.showCompressionProgress(toProcess.length);
+        }
+
+        // Process files with compression
+        const processedFiles = [];
+        let processedCount = 0;
+        
+        for (const file of toProcess) {
+            try {
+                let finalFile = file;
+                
+                // Compress if file is larger than threshold
+                if (file.size > COMPRESS_THRESHOLD) {
+                    const options = {
+                        maxSizeMB: 4,
+                        maxWidthOrHeight: 4000,
+                        useWebWorker: true,
+                        fileType: file.type,
+                        preserveExif: true,
+                        initialQuality: 0.9
+                    };
+                    
+                    console.log(`Compressing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+                    finalFile = await imageCompression(file, options);
+                    
+                    // Preserve original filename
+                    finalFile = new File([finalFile], file.name, { type: finalFile.type });
+                    console.log(`Compressed to: ${(finalFile.size / 1024 / 1024).toFixed(1)}MB`);
+                }
+                
+                processedFiles.push(finalFile);
+                processedCount++;
+                
+                // Update progress
+                if (progressModal) {
+                    this.updateCompressionProgress(processedCount, toProcess.length);
+                }
+                
+            } catch (error) {
+                console.error(`Failed to process ${file.name}:`, error);
+                invalidFiles.push(file.name);
+            }
+        }
+
+        // Hide progress modal
+        if (progressModal) {
+            this.hideCompressionProgress();
+        }
+
         // Add to existing files instead of replacing
-        this.selectedFiles = [...this.selectedFiles, ...validFiles];
+        this.selectedFiles = [...this.selectedFiles, ...processedFiles];
 
         // Remove duplicates based on file name and size
         this.selectedFiles = this.selectedFiles.filter((file, index, self) =>
@@ -1060,16 +1151,13 @@ class PhotoProcessor {
         this.displaySelectedFiles();
 
         // Show feedback messages
-        if (validFiles.length > 0) {
-            this.showSuccess(`Added ${validFiles.length} photos${isFolder ? ' from folder' : ''}`);
+        if (processedFiles.length > 0) {
+            const compressionNote = needsCompression ? ' (compressed for optimal upload)' : '';
+            this.showSuccess(`Added ${processedFiles.length} photos${isFolder ? ' from folder' : ''}${compressionNote}`);
         }
 
         if (invalidFiles.length > 0) {
-            this.showError(`${invalidFiles.length} files skipped (unsupported format)`);
-        }
-
-        if (oversizedFiles.length > 0) {
-            this.showError(`${oversizedFiles.length} files skipped (too large)`);
+            this.showError(`${invalidFiles.length} files skipped (unsupported or processing failed)`);
         }
     }
 
@@ -1161,6 +1249,50 @@ class PhotoProcessor {
             headers['Authorization'] = `Bearer ${token}`;
         }
         return headers;
+    }
+
+    // Helper method to download files with authentication
+    async downloadAuthenticatedFile(url, filename) {
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.getAuthHeaders(false),
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Download failed: ${response.statusText}`);
+            }
+
+            // Get the blob from response
+            const blob = await response.blob();
+            
+            // Create a temporary URL for the blob
+            const blobUrl = window.URL.createObjectURL(blob);
+            
+            // Create a temporary anchor element and trigger download
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename || 'download.zip';
+            document.body.appendChild(link);
+            link.click();
+            
+            // Cleanup
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+            
+        } catch (error) {
+            console.error('Download failed:', error);
+            throw error;
+        }
+    }
+
+    getImageUrl(photoId) {
+        const token = this.authToken || localStorage.getItem('auth_token');
+        if (token) {
+            return `${this.apiBase}/upload/serve/${photoId}/view?token=${encodeURIComponent(token)}`;
+        }
+        return `${this.apiBase}/upload/serve/${photoId}`;
     }
 
     // Get current user quota
@@ -1337,9 +1469,8 @@ class PhotoProcessor {
         try {
             const response = await fetch(`${this.apiBase}/process/start`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(true),
+                credentials: 'include',
                 body: JSON.stringify(photoIds)
             });
 
@@ -1361,7 +1492,19 @@ class PhotoProcessor {
         if (!this.currentJobId) return;
 
         try {
-            const response = await fetch(`${this.apiBase}/process/status/${this.currentJobId}`);
+            const response = await fetch(`${this.apiBase}/process/status/${this.currentJobId}`, {
+                headers: this.getAuthHeaders(true),
+                credentials: 'include'
+            });
+            
+            if (response.status === 404) {
+                // Job not found - likely server restarted and lost job data
+                console.warn(`Job ${this.currentJobId} not found (404). Server may have restarted.`);
+                this.showError('Processing job was lost due to server restart. Please upload your photos again.');
+                this.resetApp();
+                return;
+            }
+            
             if (!response.ok) throw new Error(`Status check failed: ${response.statusText}`);
 
             const job = await response.json();
@@ -1377,13 +1520,22 @@ class PhotoProcessor {
                 setTimeout(() => this.fetchResults(), 500);
             } else if (job.status === 'failed') {
                 this.showError('Processing failed. Please try again.');
+                this.resetApp();
             } else {
                 setTimeout(() => this.pollProcessingStatus(), 500);
             }
 
         } catch (error) {
             console.error('Status check error:', error);
-            setTimeout(() => this.pollProcessingStatus(), 1000);
+            // Don't retry indefinitely - stop after certain conditions
+            if (error.message.includes('404') || error.message.includes('not found')) {
+                console.warn('Stopping polling due to job not found');
+                this.showError('Processing job not found. Please upload your photos again.');
+                this.resetApp();
+            } else {
+                // Continue polling for other errors, but with longer delay
+                setTimeout(() => this.pollProcessingStatus(), 2000);
+            }
         }
     }
 
@@ -1413,8 +1565,19 @@ class PhotoProcessor {
 
     async fetchResults(retryCount = 0) {
         try {
-            const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`);
+            const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`, {
+                headers: this.getAuthHeaders(true),
+                credentials: 'include'
+            });
             if (!response.ok) {
+                // Handle 404 job not found
+                if (response.status === 404) {
+                    console.warn(`Job ${this.currentJobId} not found when fetching results (404). Server may have restarted.`);
+                    this.showError('Processing job was lost due to server restart. Please upload your photos again.');
+                    this.resetApp();
+                    return;
+                }
+                
                 // If results aren't ready yet and we haven't retried too many times, try again
                 if (response.status === 400 && retryCount < 3) {
                     console.log(`Results not ready yet, retrying in 1 second... (attempt ${retryCount + 1})`);
@@ -1587,9 +1750,8 @@ class PhotoProcessor {
 
             const response = await fetch(`${this.apiBase}/download/export`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(true),
+                credentials: 'include',
                 body: JSON.stringify(exportData)
             });
 
@@ -1601,12 +1763,12 @@ class PhotoProcessor {
             this.updateExportProgress(75, 'Generating ZIP file...');
 
             // Simulate additional progress steps
-            setTimeout(() => {
+            setTimeout(async () => {
                 this.updateExportProgress(100, 'Download ready!');
 
-                // Download the file
+                // Download the file with authentication
                 const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
-                window.open(downloadUrl, '_blank');
+                await this.downloadAuthenticatedFile(downloadUrl, `tag_photos_${result.export_id}.zip`);
 
                 this.showSuccess(`Successfully exported ${photoIds.length} photos from ${this.selectedGroups.length} groups!`);
 
@@ -1658,9 +1820,8 @@ class PhotoProcessor {
 
             const response = await fetch(`${this.apiBase}/download/export`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(true),
+                credentials: 'include',
                 body: JSON.stringify(exportData)
             });
 
@@ -1668,12 +1829,12 @@ class PhotoProcessor {
             const result = await response.json();
 
             // Show completion and download
-            setTimeout(() => {
+            setTimeout(async () => {
                 this.updateExportProgress(100, 'Download ready!');
 
-                // Download the file
+                // Download the file with authentication
                 const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
-                window.open(downloadUrl, '_blank');
+                await this.downloadAuthenticatedFile(downloadUrl, `tag_photos_${result.export_id}.zip`);
 
                 // Track successful download completion
                 if (window.analyticsDashboard) {
@@ -1733,6 +1894,66 @@ class PhotoProcessor {
         document.getElementById('upload-btn').innerHTML = '<i class="fas fa-upload me-2"></i>Upload Photos';
 
         this.showUploadSection();
+    }
+
+    showCompressionProgress(totalFiles) {
+        // Create a progress modal for compression
+        const progressHtml = `
+            <div id="compressionProgressModal" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-body text-center p-4">
+                            <h5 class="mb-3">Optimizing Photos for Upload</h5>
+                            <div class="progress mb-3" style="height: 25px;">
+                                <div id="compressionProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%">
+                                    <span id="compressionProgressText">0 / ${totalFiles}</span>
+                                </div>
+                            </div>
+                            <p class="text-muted mb-0">Compressing large images for faster upload...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to body if not exists
+        if (!document.getElementById('compressionProgressModal')) {
+            document.body.insertAdjacentHTML('beforeend', progressHtml);
+        }
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('compressionProgressModal'));
+        modal.show();
+        
+        return modal;
+    }
+    
+    updateCompressionProgress(current, total) {
+        const progressBar = document.getElementById('compressionProgressBar');
+        const progressText = document.getElementById('compressionProgressText');
+        
+        if (progressBar && progressText) {
+            const percentage = Math.round((current / total) * 100);
+            progressBar.style.width = `${percentage}%`;
+            progressText.textContent = `${current} / ${total}`;
+        }
+    }
+    
+    hideCompressionProgress() {
+        const modalEl = document.getElementById('compressionProgressModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) {
+                modal.hide();
+            }
+            // Clean up modal after hiding
+            setTimeout(() => {
+                if (modalEl.parentNode) {
+                    modalEl.parentNode.removeChild(modalEl);
+                }
+            }, 500);
+        }
     }
 
     showError(message) {
@@ -1962,9 +2183,8 @@ class PhotoProcessor {
             // Process new photos
             const processResponse = await fetch(`${this.apiBase}/process/start`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(true),
+                credentials: 'include',
                 body: JSON.stringify(result.photo_ids)
             });
 
@@ -1992,14 +2212,20 @@ class PhotoProcessor {
 
     async pollAdditionalProcessing(jobId) {
         try {
-            const response = await fetch(`${this.apiBase}/process/status/${jobId}`);
+            const response = await fetch(`${this.apiBase}/process/status/${jobId}`, {
+                headers: this.getAuthHeaders(true),
+                credentials: 'include'
+            });
             if (!response.ok) throw new Error(`Status check failed: ${response.statusText}`);
 
             const job = await response.json();
 
             if (job.status === 'completed') {
                 // Fetch new results
-                const resultsResponse = await fetch(`${this.apiBase}/process/results/${jobId}`);
+                const resultsResponse = await fetch(`${this.apiBase}/process/results/${jobId}`, {
+                    headers: this.getAuthHeaders(true),
+                    credentials: 'include'
+                });
                 if (!resultsResponse.ok) throw new Error(`Results fetch failed: ${resultsResponse.statusText}`);
 
                 const newGroupedPhotos = await resultsResponse.json();
@@ -2061,6 +2287,9 @@ class PhotoProcessor {
                 });
             });
         });
+        
+        console.log('🔍 DEBUG: Built allPhotosFlat array with', this.allPhotosFlat.length, 'photos');
+        console.log('🔍 DEBUG: Groups included:', this.groupedPhotos.map(g => `${g.bib_number} (${g.photos.length} photos)`));
 
         // Find the current photo index in the flat list
         this.currentPhotoIndex = this.allPhotosFlat.findIndex(photo => photo.id === photoId);
@@ -2205,11 +2434,13 @@ class PhotoProcessor {
 
     showPhotoInLightbox(index) {
         if (!this.allPhotosFlat || index < 0 || index >= this.allPhotosFlat.length) {
+            console.log('🔍 DEBUG: showPhotoInLightbox failed - invalid index:', index, 'array length:', this.allPhotosFlat?.length);
             return;
         }
 
         this.currentPhotoIndex = index;
         const photo = this.allPhotosFlat[index];
+        console.log('🔍 DEBUG: Showing photo', index + 1, 'of', this.allPhotosFlat.length, '- Group:', photo.groupBibNumber, 'ID:', photo.id);
 
         // Show loading spinner
         document.getElementById('photoLoader').style.display = 'block';
@@ -2219,7 +2450,7 @@ class PhotoProcessor {
         modalImage.onload = () => {
             document.getElementById('photoLoader').style.display = 'none';
         };
-        modalImage.src = `${this.apiBase}/upload/serve/${photo.id}`;
+        modalImage.src = this.getImageUrl(photo.id);
         modalImage.alt = photo.filename;
 
         // Update metadata
@@ -2310,21 +2541,39 @@ class PhotoProcessor {
             }
         });
 
-        // Only allow numbers - use input event for better control
+        // Allow numbers and "unknown" - use input event for validation
         freshInput.addEventListener('input', (e) => {
-            // Remove any non-numeric characters
             const value = e.target.value;
-            const numericValue = value.replace(/[^0-9]/g, '');
-            if (value !== numericValue) {
-                e.target.value = numericValue;
+            // Allow "unknown" (case insensitive) or pure numbers
+            if (value.toLowerCase() === 'unknown' || value.toLowerCase().startsWith('unkn')) {
+                // Allow typing "unknown"
+                return;
+            } else {
+                // For other values, only allow numbers
+                const numericValue = value.replace(/[^0-9]/g, '');
+                if (value !== numericValue) {
+                    e.target.value = numericValue;
+                }
             }
         });
 
-        // Also prevent non-numeric input on keypress
+        // Allow typing "unknown" and numbers on keypress
         freshInput.addEventListener('keypress', (e) => {
-            // Allow numbers (0-9) and control keys
             const char = String.fromCharCode(e.which);
-            if (!/[0-9]/.test(char) && !e.ctrlKey && !e.metaKey && e.which != 8 && e.which != 0) {
+            const currentValue = e.target.value.toLowerCase();
+            
+            // Allow control keys
+            if (e.ctrlKey || e.metaKey || e.which === 8 || e.which === 0) {
+                return;
+            }
+            
+            // If typing "unknown", allow relevant letters
+            if (currentValue.startsWith('unkn') || 'unknown'.startsWith(currentValue + char.toLowerCase())) {
+                return;
+            }
+            
+            // Otherwise, only allow numbers
+            if (!/[0-9]/.test(char)) {
                 e.preventDefault();
             }
         });
@@ -2340,6 +2589,15 @@ class PhotoProcessor {
                 this.closeLightbox();
             }
         });
+        
+        // Add event listener for "No Bib Visible" button
+        const noBibBtn = document.getElementById('noBibVisibleBtn');
+        if (noBibBtn) {
+            noBibBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.saveInlineLabelAsNoBib();
+            });
+        }
         
         // Removed infinite loop focus fix that was causing console spam
 
@@ -2395,15 +2653,23 @@ class PhotoProcessor {
             <div class="inline-labeling-form">
                 <span class="labeling-icon"><i class="fas fa-tag"></i></span>
                 <span class="labeling-text">Label:</span>
-                <input type="text" 
-                       class="form-control" 
-                       id="inlineBibInput" 
-                       placeholder="Bib #" 
-                       maxlength="6" 
-                       pattern="[0-9]{1,6}"
-                       autocomplete="off"
-                       spellcheck="false"
-                       value="${currentBibNumber}">
+                <div class="d-flex gap-2">
+                    <input type="text" 
+                           class="form-control" 
+                           id="inlineBibInput" 
+                           placeholder="Bib #" 
+                           maxlength="6" 
+                           pattern="[0-9]{1,6}"
+                           autocomplete="off"
+                           spellcheck="false"
+                           value="${currentBibNumber}">
+                    <button type="button" 
+                            class="btn btn-outline-secondary btn-sm" 
+                            id="noBibVisibleBtn"
+                            title="Mark as no bib visible">
+                        <i class="fas fa-eye-slash"></i> No Bib
+                    </button>
+                </div>
                 ${compactDetectionNote}
             </div>
         `;
@@ -2561,6 +2827,111 @@ class PhotoProcessor {
         }
     }
 
+    async saveInlineLabelAsNoBib() {
+        const input = document.getElementById('inlineBibInput');
+        if (!input) {
+            console.error('Inline bib input not found');
+            return;
+        }
+
+        if (!this.allPhotosFlat || this.currentPhotoIndex < 0 || this.currentPhotoIndex >= this.allPhotosFlat.length) {
+            this.showError('No photo selected for labeling');
+            return;
+        }
+
+        const photo = this.allPhotosFlat[this.currentPhotoIndex];
+        const bibNumber = 'unknown'; // Special value for "no bib visible"
+
+        // Store the original photo state before making changes
+        const wasEditingDetectedPhoto = this.isEditMode;
+        const wasUnknownPhoto = photo.groupBibNumber === 'unknown' || 
+                               !photo.detection_result || 
+                               photo.detection_result.bib_number === 'unknown';
+
+        try {
+            // Show loading state in input
+            input.style.opacity = '0.6';
+            input.value = 'No bib visible...';
+
+            console.log(`Marking photo ${photo.id} as no bib visible`);
+
+            // Save the label with timeout protection
+            await Promise.race([
+                this.labelPhoto(photo.id, bibNumber),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 10000))
+            ]);
+
+            // Show success
+            this.showSuccess('Photo marked as "no bib visible"');
+
+            // Refresh data with timeout protection
+            await Promise.race([
+                this.refreshAfterLabeling(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 8000))
+            ]);
+
+            // Smart navigation based on original photo state
+            if (wasEditingDetectedPhoto) {
+                // For editing detected photos: stay in current photo, just refresh display
+                this.isEditMode = false;
+                const staticContainer = document.getElementById('photoBibNumberContainer');
+                const inlineContainer = document.getElementById('inlineLabelContainer');
+                if (staticContainer && inlineContainer) {
+                    staticContainer.classList.remove('d-none');
+                    inlineContainer.classList.add('d-none');
+                }
+                console.log('Staying on current photo after editing detected photo');
+            } else if (wasUnknownPhoto) {
+                // For unknown photos: advance to next unknown for rapid labeling
+                console.log('Advancing to next unknown photo after marking as no bib visible');
+                this.advanceToNextUnknownPhoto();
+            } else {
+                // Fallback: stay on current photo
+                console.log('Staying on current photo (fallback case)');
+            }
+            
+            // Restore input field state after successful completion
+            input.disabled = false;
+            input.style.opacity = '1';
+            input.style.pointerEvents = 'auto';
+            
+            // Clear the input for unknown photos, or show "No Bib" for detected photos
+            if (wasUnknownPhoto && !wasEditingDetectedPhoto) {
+                input.value = ''; // Clear for next unknown photo
+                input.focus(); // Keep focus for rapid labeling
+            } else {
+                input.value = 'No Bib'; // Show the saved state for detected photos
+                input.blur(); // Remove focus since we're done editing
+            }
+            
+            console.log('Input field restored after successful no bib save');
+
+        } catch (error) {
+            console.error('Failed to mark photo as no bib visible:', error);
+            
+            // Handle timeout vs other errors differently
+            let errorMessage;
+            if (error.message === 'Save timeout') {
+                errorMessage = 'Save operation timed out. Please try again.';
+            } else if (error.message === 'Refresh timeout') {
+                errorMessage = 'Save completed but refresh timed out. Photo may still be labeled correctly.';
+            } else {
+                errorMessage = `Failed to mark photo: ${error.message}`;
+            }
+            
+            this.showError(errorMessage);
+            
+            // Always restore input field state on any error
+            input.disabled = false;
+            input.style.opacity = '1';
+            input.value = ''; // Clear the input on error
+            input.style.pointerEvents = 'auto';
+            input.focus();
+            
+            console.log('Input field fully restored after error:', error.message);
+        }
+    }
+
     cancelInlineLabel() {
         const input = document.getElementById('inlineBibInput');
         const staticContainer = document.getElementById('photoBibNumberContainer');
@@ -2616,7 +2987,7 @@ class PhotoProcessor {
             thumbnailDiv.onclick = () => this.showPhotoInLightbox(globalIndex);
 
             const img = document.createElement('img');
-            img.src = `${this.apiBase}/upload/serve/${photo.id}`;
+            img.src = this.getImageUrl(photo.id);
             img.alt = photo.filename;
 
             thumbnailDiv.appendChild(img);
@@ -2643,14 +3014,20 @@ class PhotoProcessor {
     }
 
     previousPhoto() {
+        console.log('🔍 DEBUG: previousPhoto called, current index:', this.currentPhotoIndex, 'total photos:', this.allPhotosFlat?.length);
         if (this.currentPhotoIndex > 0) {
             this.showPhotoInLightbox(this.currentPhotoIndex - 1);
+        } else {
+            console.log('🔍 DEBUG: Already at first photo');
         }
     }
 
     nextPhoto() {
+        console.log('🔍 DEBUG: nextPhoto called, current index:', this.currentPhotoIndex, 'total photos:', this.allPhotosFlat?.length);
         if (this.currentPhotoIndex < this.allPhotosFlat.length - 1) {
             this.showPhotoInLightbox(this.currentPhotoIndex + 1);
+        } else {
+            console.log('🔍 DEBUG: Already at last photo');
         }
     }
 
@@ -2771,7 +3148,7 @@ class PhotoProcessor {
     downloadCurrentPhoto() {
         if (this.currentLightboxGroup && this.currentPhotoIndex >= 0) {
             const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
-            window.open(`${this.apiBase}/upload/serve/${photo.id}`, '_blank');
+            window.open(this.getImageUrl(photo.id), '_blank');
         }
     }
 
@@ -2861,13 +3238,13 @@ class PhotoProcessor {
         container.innerHTML = unknownGroup.photos.map(photo => `
             <div class="col-md-4 mb-3">
                 <div class="card">
-                    <img src="${this.apiBase}/upload/serve/${photo.id}" 
+                    <img src="${this.getImageUrl(photo.id)}" 
                          class="card-img-top" 
                          style="height: 150px; object-fit: cover;"
                          alt="${photo.filename}">
                     <div class="card-body p-2">
                         <small class="text-muted d-block mb-2">${photo.filename}</small>
-                        <div class="input-group input-group-sm">
+                        <div class="input-group input-group-sm mb-2">
                             <input type="text" 
                                    class="form-control manual-label-input" 
                                    data-photo-id="${photo.id}"
@@ -2880,6 +3257,12 @@ class PhotoProcessor {
                                 <i class="fas fa-check"></i>
                             </button>
                         </div>
+                        <button class="btn btn-outline-secondary btn-sm w-100" 
+                                type="button" 
+                                onclick="photoProcessor.applyNoBibToPhoto('${photo.id}', this)"
+                                title="Mark as no bib visible">
+                            <i class="fas fa-eye-slash"></i> No Bib Visible
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2930,9 +3313,8 @@ class PhotoProcessor {
 
             const response = await fetch(`${this.apiBase}/process/manual-label`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: this.getAuthHeaders(),
+                credentials: 'include',
                 body: JSON.stringify({
                     photo_id: photoId,
                     bib_number: bibNumber
@@ -2961,11 +3343,51 @@ class PhotoProcessor {
         }
     }
 
+    async applyNoBibToPhoto(photoId, buttonElement) {
+        try {
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Marking...';
+
+            const response = await fetch(`${this.apiBase}/process/manual-label`, {
+                method: 'PUT',
+                headers: this.getAuthHeaders(),
+                credentials: 'include',
+                body: JSON.stringify({
+                    photo_id: photoId,
+                    bib_number: 'unknown'  // Special value for "no bib visible"
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to mark photo');
+            }
+
+            // Success - remove the photo from the unknown group and refresh display
+            buttonElement.closest('.col-md-3').remove();
+
+            // Refresh the grouped photos from backend
+            await this.refreshGroupedPhotos();
+
+            this.showSuccess('Photo marked as "no bib visible"!');
+
+        } catch (error) {
+            console.error('No bib marking error:', error);
+            this.showError(`Failed to mark photo: ${error.message}`);
+        } finally {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="fas fa-eye-slash"></i> No Bib Visible';
+        }
+    }
+
     async refreshGroupedPhotos() {
         if (!this.currentJobId) return;
 
         try {
-            const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`);
+            const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`, {
+                headers: this.getAuthHeaders(true),
+                credentials: 'include'
+            });
             if (response.ok) {
                 this.groupedPhotos = await response.json();
                 this.displayResults();
@@ -3102,7 +3524,7 @@ class PhotoProcessor {
             <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
                 <div class="card h-100 unknown-photo-card" data-photo-id="${photo.id}">
                     <div class="position-relative">
-                        <img src="${this.apiBase}/upload/serve/${photo.id}" 
+                        <img src="${this.getImageUrl(photo.id)}" 
                              class="card-img-top" 
                              style="height: 200px; object-fit: cover; cursor: pointer;"
                              onclick="photoProcessor.showPhotoModal('${photo.id}', '${photo.filename}', 'unknown')"
@@ -3147,7 +3569,7 @@ class PhotoProcessor {
         if (!photo) return;
 
         // Set up modal content
-        document.getElementById('labelPhotoPreview').src = `${this.apiBase}/upload/serve/${photoId}`;
+        document.getElementById('labelPhotoPreview').src = this.getImageUrl(photoId);
         document.getElementById('labelPhotoFilename').textContent = photo.filename;
         document.getElementById('manualBibNumber').value = '';
 
@@ -3215,6 +3637,11 @@ class PhotoProcessor {
 
     // Helper Methods
     validateBibNumber(bibNumber) {
+        // Allow "unknown" as a special case for "no bib visible"
+        if (bibNumber.toLowerCase() === 'unknown') {
+            return true;
+        }
+        // Standard numeric validation
         const num = parseInt(bibNumber);
         return /^\d{1,6}$/.test(bibNumber) && num >= 1 && num <= 99999;
     }
@@ -3239,9 +3666,8 @@ class PhotoProcessor {
         
         const response = await fetch(`${this.apiBase}/process/manual-label`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: this.getAuthHeaders(),
+            credentials: 'include',
             body: JSON.stringify({
                 photo_id: photoId,
                 bib_number: bibNumber
@@ -3260,7 +3686,10 @@ class PhotoProcessor {
         // Refresh the grouped photos data
         if (this.currentJobId) {
             try {
-                const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`);
+                const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`, {
+                    headers: this.getAuthHeaders(true),
+                    credentials: 'include'
+                });
                 if (response.ok) {
                     this.groupedPhotos = await response.json();
                     this.updateStatsCards();
@@ -3279,11 +3708,22 @@ class PhotoProcessor {
 
 }
 
-// Initialize the application
-const photoProcessor = new PhotoProcessor();
-
-// Make it globally accessible for onclick handlers
-window.photoProcessor = photoProcessor;
+// Initialize the application with error handling
+let photoProcessor;
+try {
+    photoProcessor = new PhotoProcessor();
+    // Make it globally accessible for onclick handlers
+    window.photoProcessor = photoProcessor;
+    console.log('PhotoProcessor initialized successfully');
+} catch (error) {
+    console.error('Failed to initialize PhotoProcessor:', error);
+    // Still assign a basic object to prevent undefined errors
+    window.photoProcessor = {
+        isAuthenticated: false,
+        authToken: null,
+        initializeApp: () => console.log('PhotoProcessor not fully initialized')
+    };
+}
 
 // Profile functionality - CREATE NEW WORKING MODAL
 async function showProfileModal() {
@@ -3591,13 +4031,7 @@ function editProfile() {
     alert('Edit profile feature coming soon!');
 }
 
-// Make functions globally accessible for onclick handlers
-window.showSignInModal = showSignInModal;
-window.showCreateAccountModal = showCreateAccountModal;
-window.switchToCreateAccount = switchToCreateAccount;
-window.switchToSignIn = switchToSignIn;
-window.showLandingPage = showLandingPage;
-window.showAppSection = showAppSection;
+// Keep existing duplicate assignments for backward compatibility
 window.logout = logout;
 window.showProfileModal = showProfileModal;
 window.showChangePasswordModal = showChangePasswordModal;

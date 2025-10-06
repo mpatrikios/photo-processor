@@ -31,11 +31,11 @@ class NumberDetector:
             self.vision_client = None
             self.use_google_vision = False
     
-    async def process_photo(self, photo_id: str, debug_mode: bool = False) -> DetectionResult:
+    async def process_photo(self, photo_id: str, debug_mode: bool = False, user_id: Optional[int] = None) -> DetectionResult:
         # ⏱️ Start timing the entire photo processing for analytics
         photo_start_time = time.time()
         
-        photo_path = self._find_photo_path(photo_id)
+        photo_path = self._find_photo_path(photo_id, user_id)
         if not photo_path:
             raise FileNotFoundError(f"Photo {photo_id} not found")
         
@@ -749,9 +749,18 @@ class NumberDetector:
         number = int(text)
         return 1 <= number <= 99999
     
-    def _find_photo_path(self, photo_id: str) -> Optional[str]:
+    def _find_photo_path(self, photo_id: str, user_id: Optional[int] = None) -> Optional[str]:
         extensions = [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]
         
+        # Check user-specific directory first if user_id provided
+        if user_id:
+            user_upload_dir = os.path.join("uploads", str(user_id))
+            for ext in extensions:
+                path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
+                if os.path.exists(path):
+                    return path
+        
+        # Fallback to legacy directories for backwards compatibility
         for directory in ["uploads", "processed"]:
             for ext in extensions:
                 path = os.path.join(directory, f"{photo_id}{ext}")
@@ -760,12 +769,12 @@ class NumberDetector:
         
         return None
     
-    async def get_grouped_results(self, photo_ids: List[str]) -> List[GroupedPhotos]:
+    async def get_grouped_results(self, photo_ids: List[str], user_id: Optional[int] = None) -> List[GroupedPhotos]:
         groups: Dict[str, List[PhotoInfo]] = {}
         
         for photo_id in photo_ids:
             result = self.results.get(photo_id)
-            photo_path = self._find_photo_path(photo_id)
+            photo_path = self._find_photo_path(photo_id, user_id)
             
             photo_info = PhotoInfo(
                 id=photo_id,

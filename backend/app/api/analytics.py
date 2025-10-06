@@ -12,8 +12,9 @@ import json
 from database import get_db
 from app.api.auth import get_current_user, require_admin
 from app.models.user import User
-from app.models.usage import UsageLog, ActionType, ProcessingJob as UsageProcessingJob
-from app.models.processing import ProcessingJobDB, PhotoDB
+from app.models.usage import UsageLog, ActionType, ProcessingJob
+from app.models.usage import ProcessingJob as ProcessingJobDB
+from app.models.processing import PhotoDB
 from app.models.analytics import (
     UserEngagement, ConversionFunnel, SystemMetric, BusinessMetric, 
     PerformanceBenchmark, UserRetentionCohort, DetectionAccuracyLog,
@@ -24,6 +25,11 @@ from app.services.usage_tracker import usage_tracker
 router = APIRouter()
 
 # User-level analytics endpoints
+
+@router.get("/test")
+async def test_analytics():
+    """Simple test endpoint to verify analytics API is working"""
+    return {"status": "Analytics API is working", "timestamp": datetime.utcnow().isoformat()}
 
 @router.get("/user/dashboard")
 async def get_user_dashboard(
@@ -39,16 +45,34 @@ async def get_user_dashboard(
     # Get recent activity timeline
     timeline = usage_tracker.get_user_activity_timeline(db, current_user.id, 7)
     
-    # Get detection accuracy for user's photos
-    accuracy_stats = db.query(
-        func.count(DetectionAccuracyLog.id).label('total'),
-        func.count(DetectionAccuracyLog.id).filter(DetectionAccuracyLog.is_correct == True).label('correct'),
-        func.avg(DetectionAccuracyLog.processing_time_ms).label('avg_time')
-    ).filter(DetectionAccuracyLog.user_id == current_user.id).first()
+    # Get processing job statistics for accuracy and timing
+    processing_jobs = db.query(ProcessingJob).filter(
+        ProcessingJob.user_id == current_user.id,
+        ProcessingJob.created_at >= datetime.utcnow() - timedelta(days=days),
+        ProcessingJob.status == "completed"  # Only include completed jobs for accurate metrics
+    ).all()
     
+    # Calculate accuracy based on manual labeling
+    # Use photos_processed (actually processed) instead of total_photos (uploaded)
+    total_photos_processed = sum(job.photos_processed or 0 for job in processing_jobs)
+    total_photos_detected = sum(job.photos_detected or 0 for job in processing_jobs)
+    total_manual_labels = sum(job.manual_labels or 0 for job in processing_jobs)
+    total_processing_time = sum(job.total_processing_time_seconds or 0 for job in processing_jobs)
+    
+    # Fallback to total_photos if photos_processed is 0 (for legacy data)
+    if total_photos_processed == 0:
+        total_photos_processed = sum(job.total_photos or 0 for job in processing_jobs)
+    
+    # Accuracy = photos that didn't need manual labeling / total photos
     accuracy_percentage = 0
-    if accuracy_stats.total and accuracy_stats.total > 0:
-        accuracy_percentage = (accuracy_stats.correct / accuracy_stats.total) * 100
+    if total_photos_processed > 0:
+        photos_correctly_detected = max(0, total_photos_detected - total_manual_labels)
+        accuracy_percentage = (photos_correctly_detected / total_photos_processed) * 100
+    
+    # Calculate average processing time per photo
+    avg_processing_time = 0
+    if total_photos_processed > 0 and total_processing_time > 0:
+        avg_processing_time = (total_processing_time / total_photos_processed) * 1000  # Convert to ms
     
     # Get processing time trends (last 7 days)
     processing_trends = db.query(
@@ -65,12 +89,19 @@ async def get_user_dashboard(
         "recent_activity": timeline[:10],  # Last 10 activities
         "detection_accuracy": {
             "percentage": round(accuracy_percentage, 2),
-            "total_photos": accuracy_stats.total or 0,
-            "avg_processing_time_ms": round(accuracy_stats.avg_time or 0, 2)
+            "total_photos": total_photos_processed,
+            "photos_detected": total_photos_detected,
+            "manual_labels": total_manual_labels,
+            "avg_processing_time_ms": round(avg_processing_time, 2)
+        },
+        "detection_stats": {
+            "google_vision_detections": sum(job.google_vision_detections or 0 for job in processing_jobs),
+            "tesseract_detections": sum(job.tesseract_detections or 0 for job in processing_jobs),
+            "manual_labels": total_manual_labels
         },
         "processing_trends": [
             {
-                "date": trend.date.isoformat(),
+                "date": trend.date,
                 "avg_progress": round(trend.avg_progress or 0, 2),
                 "job_count": trend.job_count
             }

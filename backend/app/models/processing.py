@@ -30,63 +30,6 @@ class BatchOperationType(str, Enum):
     REPROCESS = "reprocess"
     MOVE_GROUP = "move_group"
 
-class ProcessingJobDB(Base):
-    """
-    Persistent storage for photo processing jobs.
-    Replaces the in-memory jobs dictionary.
-    """
-    __tablename__ = "processing_jobs_v2"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(String(36), unique=True, index=True, nullable=False)  # UUID
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
-    # Job configuration
-    total_photos = Column(Integer, nullable=False)
-    debug_mode = Column(Boolean, default=False)
-    
-    # Job status
-    status = Column(SQLEnum(ProcessingStatus), default=ProcessingStatus.PENDING, index=True)
-    progress = Column(Integer, default=0)  # Percentage 0-100
-    completed_photos = Column(Integer, default=0)
-    
-    # Error tracking
-    error_message = Column(Text, nullable=True)
-    failed_photos = Column(JSON, nullable=True)  # List of photo IDs that failed
-    
-    # Timing
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Relationships
-    user = relationship("User", back_populates="processing_jobs")
-    photos = relationship("PhotoDB", back_populates="processing_job", cascade="all, delete-orphan")
-    
-    def to_schema(self):
-        """Convert to ProcessingJob schema for API responses."""
-        from app.models.schemas import ProcessingJob
-        return ProcessingJob(
-            job_id=self.job_id,
-            photo_ids=[photo.photo_id for photo in self.photos],
-            status=self.status,
-            progress=self.progress,
-            completed_photos=self.completed_photos,
-            total_photos=self.total_photos,
-            debug_mode=self.debug_mode
-        )
-    
-    def is_expired(self) -> bool:
-        """Check if the job has expired."""
-        if not self.expires_at:
-            return False
-        return datetime.utcnow() > self.expires_at
-    
-    def set_expiration(self, hours: int = 24):
-        """Set job expiration time."""
-        self.expires_at = datetime.utcnow() + timedelta(hours=hours)
 
 class PhotoDB(Base):
     """
@@ -97,7 +40,7 @@ class PhotoDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     photo_id = Column(String(36), unique=True, index=True, nullable=False)  # UUID
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    processing_job_id = Column(Integer, ForeignKey("processing_jobs_v2.id"), nullable=True, index=True)
+    processing_job_id = Column(Integer, ForeignKey("processing_jobs.id"), nullable=True, index=True)
     
     # File information
     original_filename = Column(String(255), nullable=False)
@@ -131,7 +74,6 @@ class PhotoDB(Base):
     
     # Relationships
     user = relationship("User", foreign_keys=[user_id], back_populates="photos")
-    processing_job = relationship("ProcessingJobDB", back_populates="photos")
     manual_labeler = relationship("User", foreign_keys=[manual_label_by])
     
     @property
