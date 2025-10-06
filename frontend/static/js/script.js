@@ -2276,9 +2276,19 @@ class PhotoProcessor {
             });
         }
         
-        // Create a flat list of all photos from all groups for navigation
+        // Sort groups by bib number before creating flat list for logical navigation
+        const sortedGroups = [...this.groupedPhotos].sort((a, b) => {
+            // Put 'unknown' group at the end
+            if (a.bib_number === 'unknown') return 1;
+            if (b.bib_number === 'unknown') return -1;
+            
+            // Sort numeric bib numbers
+            return parseInt(a.bib_number) - parseInt(b.bib_number);
+        });
+
+        // Create a flat list of all photos from sorted groups for navigation
         this.allPhotosFlat = [];
-        this.groupedPhotos.forEach(group => {
+        sortedGroups.forEach(group => {
             group.photos.forEach(photo => {
                 this.allPhotosFlat.push({
                     ...photo,
@@ -2289,7 +2299,7 @@ class PhotoProcessor {
         });
         
         console.log('🔍 DEBUG: Built allPhotosFlat array with', this.allPhotosFlat.length, 'photos');
-        console.log('🔍 DEBUG: Groups included:', this.groupedPhotos.map(g => `${g.bib_number} (${g.photos.length} photos)`));
+        console.log('🔍 DEBUG: Groups in sorted order:', sortedGroups.map(g => `${g.bib_number} (${g.photos.length} photos)`));
 
         // Find the current photo index in the flat list
         this.currentPhotoIndex = this.allPhotosFlat.findIndex(photo => photo.id === photoId);

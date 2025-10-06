@@ -63,11 +63,32 @@ async def get_user_dashboard(
     if total_photos_processed == 0:
         total_photos_processed = sum(job.total_photos or 0 for job in processing_jobs)
     
-    # Accuracy = photos that didn't need manual labeling / total photos
-    accuracy_percentage = 0
-    if total_photos_processed > 0:
-        photos_correctly_detected = max(0, total_photos_detected - total_manual_labels)
-        accuracy_percentage = (photos_correctly_detected / total_photos_processed) * 100
+    # Count "no bib visible" labels from usage logs to exclude from accuracy calculation
+    no_bib_labels = db.query(UsageLog).filter(
+        UsageLog.user_id == current_user.id,
+        UsageLog.action_type == ActionType.MANUAL_LABEL,
+        UsageLog.created_at >= datetime.utcnow() - timedelta(days=days),
+        func.json_extract(UsageLog.details, '$.bib_number') == 'unknown'
+    ).count()
+    
+    # Count manual corrections to previously detected photos (these count against accuracy)
+    # This includes labels where the photo originally had a detection result (was_unknown = false)
+    corrections_to_detected_photos = db.query(UsageLog).filter(
+        UsageLog.user_id == current_user.id,
+        UsageLog.action_type == ActionType.MANUAL_LABEL,
+        UsageLog.created_at >= datetime.utcnow() - timedelta(days=days),
+        func.json_extract(UsageLog.details, '$.bib_number') != 'unknown',  # Not "no bib visible"
+        func.json_extract(UsageLog.details, '$.was_unknown') == False  # Was originally detected
+    ).count()
+    
+    # Total manual corrections = corrections to detected photos only
+    manual_corrections = corrections_to_detected_photos
+    
+    # Accuracy = (photos detected - corrections to detected photos) / photos that actually had bibs
+    # Exclude "no bib visible" photos from denominator
+    photos_with_bibs = max(1, total_photos_processed - no_bib_labels)  # Avoid division by zero
+    photos_correctly_detected = max(0, total_photos_detected - manual_corrections)
+    accuracy_percentage = (photos_correctly_detected / photos_with_bibs) * 100
     
     # Calculate average processing time per photo
     avg_processing_time = 0
@@ -92,12 +113,20 @@ async def get_user_dashboard(
             "total_photos": total_photos_processed,
             "photos_detected": total_photos_detected,
             "manual_labels": total_manual_labels,
+            "no_bib_labels": no_bib_labels,
+            "manual_corrections": manual_corrections,
+            "corrections_to_detected_photos": corrections_to_detected_photos,
+            "photos_with_bibs": photos_with_bibs,
+            "photos_correctly_detected": photos_correctly_detected,
             "avg_processing_time_ms": round(avg_processing_time, 2)
         },
         "detection_stats": {
             "google_vision_detections": sum(job.google_vision_detections or 0 for job in processing_jobs),
             "tesseract_detections": sum(job.tesseract_detections or 0 for job in processing_jobs),
-            "manual_labels": total_manual_labels
+            "manual_labels": total_manual_labels,
+            "no_bib_labels": no_bib_labels,
+            "manual_corrections": manual_corrections,
+            "corrections_to_detected_photos": corrections_to_detected_photos
         },
         "processing_trends": [
             {
