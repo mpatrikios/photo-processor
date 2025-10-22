@@ -4,11 +4,15 @@ import numpy as np
 import os
 import re
 import time
+import logging
 from typing import Dict, List, Optional, Tuple
 from google.cloud import vision
 from google.cloud.vision_v1 import types
 import io
 from app.models.schemas import DetectionResult, PhotoInfo, ProcessingStatus, GroupedPhotos
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 class NumberDetector:
     def __init__(self):
@@ -22,12 +26,23 @@ class NumberDetector:
             return  # Already initialized
             
         try:
-            self.vision_client = vision.ImageAnnotatorClient()
-            self.use_google_vision = True
-            print("✅ Google Cloud Vision API initialized successfully")
+            # Import the function to get credentials
+            from main import get_google_credentials
+            
+            credentials = get_google_credentials()
+            if credentials:
+                # Use in-memory credentials
+                self.vision_client = vision.ImageAnnotatorClient(credentials=credentials)
+                self.use_google_vision = True
+                logger.info("✅ Google Cloud Vision API initialized successfully with secure in-memory credentials")
+            else:
+                # No credentials available
+                self.vision_client = None
+                self.use_google_vision = False
+                logger.info("🔄 No Google Cloud credentials available - using Tesseract OCR only")
         except Exception as e:
-            print(f"❌ Google Cloud Vision API not available: {e}")
-            print("🔄 Falling back to Tesseract OCR only")
+            logger.warning(f"❌ Google Cloud Vision API initialization failed: {e}")
+            logger.info("🔄 Falling back to Tesseract OCR only")
             self.vision_client = None
             self.use_google_vision = False
     
@@ -65,11 +80,11 @@ class NumberDetector:
                     
                     # ⏱️ Log timing for successful Google Vision detection (analytics)
                     total_time = time.time() - photo_start_time
-                    print(f"⏱️ {photo_id}: Google Vision SUCCESS in {total_time:.2f}s (google: {google_time:.2f}s)")
+                    logger.debug(f"⏱️ {photo_id}: Google Vision SUCCESS in {total_time:.2f}s (google: {google_time:.2f}s)")
                     return result
             except Exception as e:
                 google_time = time.time() - google_start_time if 'google_start_time' in locals() else 0
-                print(f"❌ Google Vision failed for {photo_id}: {e}")
+                logger.warning(f"❌ Google Vision failed for {photo_id}: {e}")
         
         image = cv2.imread(photo_path)
         if image is None:
@@ -101,7 +116,7 @@ class NumberDetector:
         
         # ⏱️ Log final timing breakdown for analytics
         total_time = time.time() - photo_start_time
-        print(f"⏱️ {photo_id}: TOTAL {total_time:.2f}s (google: {google_time:.2f}s, tesseract: {tesseract_time:.2f}s)")
+        logger.debug(f"⏱️ {photo_id}: TOTAL {total_time:.2f}s (google: {google_time:.2f}s, tesseract: {tesseract_time:.2f}s)")
         
         return result
     
@@ -117,7 +132,7 @@ class NumberDetector:
         texts = response.text_annotations
         
         if debug_mode:
-            print(f"🔍 DEBUG: Google Vision found {len(texts)} text annotations")
+            logger.debug(f"🔍 DEBUG: Google Vision found {len(texts)} text annotations")
         
         best_number = None
         best_confidence = 0.0
@@ -732,7 +747,7 @@ class NumberDetector:
             
             if debug_mode:
                 optimized_size = len(cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 90])[1].tobytes())
-                print(f"📏 Image optimized: {width}x{height} ({original_size/1024/1024:.1f}MB) → {new_width}x{new_height} ({optimized_size/1024/1024:.1f}MB)")
+                logger.debug(f"📏 Image optimized: {width}x{height} ({original_size/1024/1024:.1f}MB) → {new_width}x{new_height} ({optimized_size/1024/1024:.1f}MB)")
         
         # Compress to JPEG with 90% quality (good balance of size vs quality)
         _, buffer = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -824,5 +839,5 @@ class NumberDetector:
             return True
             
         except Exception as e:
-            print(f"❌ Failed to manually label photo {photo_id}: {e}")
+            logger.error(f"❌ Failed to manually label photo {photo_id}: {e}")
             return False

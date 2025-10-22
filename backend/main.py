@@ -20,59 +20,78 @@ from app.core.config import settings
 from app.core.security import limiter, custom_rate_limit_handler, SecurityHeaders
 from app.core.errors import register_error_handlers
 import asyncio
+import logging
 
-# Set up Google Cloud credentials if available
+# Configure logger for this module
+logger = logging.getLogger(__name__)
+
+# Global variable to store credentials for Vision API
+_google_credentials = None
+
+# Set up Google Cloud credentials securely (in-memory only)
 def setup_google_credentials():
+    """
+    Set up Google Cloud credentials from environment variable
+    Uses in-memory credentials - NEVER writes to disk
+    """
+    global _google_credentials
+    import json
+    
     # First try loading from environment variable (for deployment)
     credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if credentials_json:
-        # Create a temporary file for the credentials
-        import tempfile
-        import json
-
         try:
-            # Parse the JSON to validate it
+            from google.oauth2 import service_account
+            
+            # Parse the JSON and create credentials directly in memory
             credentials_data = json.loads(credentials_json)
-
-            # Create a temporary file
-            temp_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json')
-            json.dump(credentials_data, temp_file)
-            temp_file.close()
-
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_file.name
-            print(f"✅ Google Cloud credentials loaded from environment variable")
+            
+            # Create credentials object in memory - NO temp file!
+            _google_credentials = service_account.Credentials.from_service_account_info(
+                credentials_data,
+                scopes=['https://www.googleapis.com/auth/cloud-vision']
+            )
+            
+            logger.info("✅ Google Cloud credentials loaded securely from environment (in-memory)")
         except json.JSONDecodeError:
-            print("❌ Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON")
+            logger.error("❌ Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON")
+            _google_credentials = None
         except Exception as e:
-            print(f"❌ Error setting up credentials from environment: {e}")
+            logger.error(f"❌ Error setting up credentials from environment: {e}")
+            _google_credentials = None
     else:
-        # Fallback to local file (for development)
+        # Fallback to local file (for development only)
         service_account_path = os.path.join(os.path.dirname(__file__), "service-account-key.json")
-
+        
         if os.path.exists(service_account_path):
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = service_account_path
-            print(f"✅ Google Cloud credentials loaded: {service_account_path}")
+            try:
+                from google.oauth2 import service_account
+                
+                _google_credentials = service_account.Credentials.from_service_account_file(
+                    service_account_path,
+                    scopes=['https://www.googleapis.com/auth/cloud-vision']
+                )
+                logger.info(f"✅ Google Cloud credentials loaded from file (development): {service_account_path}")
+            except Exception as e:
+                logger.error(f"❌ Error loading credentials from file: {e}")
+                _google_credentials = None
         else:
-            print("❌ Credentials file not found")
+            logger.warning("❌ No Google Cloud credentials found - Vision API will not be available")
+            _google_credentials = None
+
+def get_google_credentials():
+    """Get the in-memory Google credentials"""
+    return _google_credentials
 
 setup_google_credentials()
 
-# Debug: Print environment variables
-google_creds = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-if google_creds:
-    print(f"✅ Google Cloud credentials loaded: {google_creds}")
-    if os.path.exists(google_creds):
-        print("✅ Credentials file exists")
-    else:
-        print("❌ Credentials file not found")
-else:
-    print("❌ GOOGLE_APPLICATION_CREDENTIALS not set")
+# Credentials are now stored in-memory, no need to check file paths
 
 # Security check for JWT
 if settings.is_production():
-    print("✅ Running in PRODUCTION mode with secure JWT configuration")
+    logger.info("✅ Running in PRODUCTION mode with secure JWT configuration")
 else:
-    print("⚠️  Running in DEVELOPMENT mode")
+    logger.warning("⚠️  Running in DEVELOPMENT mode")
 
 app = FastAPI(
     title="TagSort API",
@@ -135,26 +154,26 @@ async def startup_event():
     # Print configuration info
     settings.print_startup_info()
     
-    print("🔄 Initializing database...")
+    logger.info("🔄 Initializing database...")
     create_tables()
 
     db_info = get_db_info()
-    print(f"✅ Database initialized: {db_info['database_path']}")
-    print(f"📊 Database size: {db_info['database_size_mb']} MB")
+    logger.info(f"✅ Database initialized: {db_info['database_path']}")
+    logger.info(f"📊 Database size: {db_info['database_size_mb']} MB")
 
     # Test AuthService singleton and JWT functionality
     from app.services.auth_service import auth_service
-    print(f"🧪 Testing AuthService functionality...")
+    logger.info("🧪 Testing AuthService functionality...")
 
     # Test token creation and verification
     test_token = auth_service.create_access_token(999)  # Test user ID
-    print(f"🧪 Test token created: {test_token[:50]}...")
+    logger.debug(f"🧪 Test token created: {test_token[:50]}...")
 
     test_result = auth_service.verify_token(test_token)
     if test_result:
-        print(f"✅ AuthService test PASSED - tokens work correctly")
+        logger.info("✅ AuthService test PASSED - tokens work correctly")
     else:
-        print(f"❌ AuthService test FAILED - JWT not working properly")
+        logger.error("❌ AuthService test FAILED - JWT not working properly")
 
     # Clean up expired sessions on startup
     from database import SessionLocal
@@ -165,12 +184,12 @@ async def startup_event():
         # Clean up expired sessions
         cleaned_sessions = auth_service.cleanup_expired_sessions(db)
         if cleaned_sessions > 0:
-            print(f"🧹 Cleaned up {cleaned_sessions} expired sessions")
+            logger.info(f"🧹 Cleaned up {cleaned_sessions} expired sessions")
         
         # Recover stalled processing jobs
         recovered_jobs = job_service.recover_jobs_on_startup(db)
         if recovered_jobs > 0:
-            print(f"🔄 Recovered {recovered_jobs} processing jobs")
+            logger.info(f"🔄 Recovered {recovered_jobs} processing jobs")
         
         # Load active processing jobs into memory
         from app.api.process import sync_jobs_from_database, cleanup_old_jobs
@@ -180,7 +199,7 @@ async def startup_event():
         # Clean up expired jobs and exports
         cleaned_jobs = job_service.cleanup_expired_jobs(db)
         if cleaned_jobs > 0:
-            print(f"🧹 Cleaned up {cleaned_jobs} expired jobs")
+            logger.info(f"🧹 Cleaned up {cleaned_jobs} expired jobs")
             
     finally:
         db.close()
@@ -216,7 +235,7 @@ app.add_middleware(
 
 # Create required directories with proper permissions
 settings.create_directories()
-print(f"✅ Created directories: {settings.upload_dir}, {settings.export_dir}, {settings.temp_dir}")
+logger.info(f"✅ Created directories: {settings.upload_dir}, {settings.export_dir}, {settings.temp_dir}")
 
 # Define API route handlers FIRST - before static file mounts
 @app.get("/health")
@@ -273,12 +292,12 @@ if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=os.path.join(frontend_path, "static")), name="static")
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
-print("✅ API routers registered:")
-print("  - /api/auth")
-print("  - /api/users")
-print("  - /api/upload") 
-print("  - /api/process")
-print("  - /api/download")
-print("  - /api/feedback")
-print("  - /api/batch")
-print("  - /api/analytics")
+logger.info("✅ API routers registered:")
+logger.info("  - /api/auth")
+logger.info("  - /api/users")
+logger.info("  - /api/upload") 
+logger.info("  - /api/process")
+logger.info("  - /api/download")
+logger.info("  - /api/feedback")
+logger.info("  - /api/batch")
+logger.info("  - /api/analytics")

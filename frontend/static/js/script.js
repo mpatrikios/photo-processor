@@ -84,7 +84,104 @@ function showAppSection() {
             window.photoProcessor.showUploadSection();
         }
     }
+    
+    // Update StateManager auth state
+    if (window.stateManager) {
+        const token = localStorage.getItem('auth_token');
+        const userInfo = localStorage.getItem('user_info');
+        if (token) {
+            try {
+                window.stateManager.set('auth.isAuthenticated', true);
+                window.stateManager.set('auth.token', token);
+                if (userInfo) {
+                    window.stateManager.set('auth.user', JSON.parse(userInfo));
+                }
+                console.log('StateManager auth state updated after login');
+            } catch (error) {
+                console.error('Failed to update StateManager auth state:', error);
+            }
+        }
+    }
 }
+
+// Simple routing system for the application
+class AppRouter {
+    constructor() {
+        this.routes = {
+            '': this.showHome.bind(this),
+            'home': this.showHome.bind(this),
+            'analytics': this.showAnalytics.bind(this),
+            'app': this.showApp.bind(this)
+        };
+        
+        // Listen for hash changes
+        window.addEventListener('hashchange', () => this.handleRouteChange());
+        
+        // Handle initial route
+        window.addEventListener('DOMContentLoaded', () => this.handleRouteChange());
+    }
+    
+    handleRouteChange() {
+        const hash = window.location.hash.slice(1); // Remove #
+        const route = hash.toLowerCase();
+        
+        // Check if user is authenticated for protected routes
+        const token = localStorage.getItem('auth_token');
+        const protectedRoutes = ['analytics', 'app'];
+        
+        if (protectedRoutes.includes(route) && !token) {
+            // Redirect to login if trying to access protected route
+            window.location.hash = '';
+            showLandingPage();
+            return;
+        }
+        
+        // Execute route handler
+        if (this.routes[route]) {
+            this.routes[route]();
+        } else if (token) {
+            // Default to app if authenticated
+            this.showApp();
+        } else {
+            // Default to home if not authenticated
+            this.showHome();
+        }
+    }
+    
+    showHome() {
+        // Check if already authenticated
+        const token = localStorage.getItem('auth_token');
+        if (token && window.photoProcessor) {
+            // If authenticated, show app instead
+            window.location.hash = 'app';
+            return;
+        }
+        showLandingPage();
+    }
+    
+    showAnalytics() {
+        // Hide landing page and app section
+        document.getElementById('landing-page').classList.add('d-none');
+        document.getElementById('app-section').classList.add('d-none');
+        
+        // Show analytics dashboard
+        if (window.analyticsDashboard) {
+            window.analyticsDashboard.showDashboard();
+        }
+    }
+    
+    showApp() {
+        showAppSection();
+    }
+    
+    navigateTo(route) {
+        window.location.hash = route;
+    }
+}
+
+// Initialize router
+const appRouter = new AppRouter();
+window.appRouter = appRouter;
 
 // Make critical functions globally accessible IMMEDIATELY for onclick handlers
 // This ensures they work even if PhotoProcessor initialization fails later
@@ -99,12 +196,28 @@ window.logout = logout;
 function logout() {
     // Clear auth token and show landing page
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_info');
+    
+    // Navigate to home
+    window.location.hash = '';
     showLandingPage();
 
     // Reset any app state
     if (window.photoProcessor) {
         window.photoProcessor.isAuthenticated = false;
         window.photoProcessor.authToken = null;
+    }
+    
+    // Clear StateManager auth state
+    if (window.stateManager) {
+        try {
+            window.stateManager.set('auth.isAuthenticated', false);
+            window.stateManager.set('auth.token', null);
+            window.stateManager.set('auth.user', null);
+            console.log('StateManager auth state cleared after logout');
+        } catch (error) {
+            console.error('Failed to clear StateManager auth state:', error);
+        }
     }
 }
 
@@ -179,7 +292,8 @@ async function handleSignIn(event) {
             // Clear form
             form.reset();
 
-            // Show app section
+            // Navigate to app
+            window.location.hash = 'app';
             showAppSection();
 
             showNotification(result.message || 'Welcome back!', 'success');
@@ -269,7 +383,8 @@ async function handleCreateAccount(event) {
             // Clear form
             form.reset();
 
-            // Show app section
+            // Navigate to app
+            window.location.hash = 'app';
             showAppSection();
 
             showNotification(result.message || 'Account created successfully!', 'success');
@@ -344,6 +459,10 @@ class PhotoProcessor {
         this.confidenceFilter = 0;
         this.photoCountFilter = 1;
         
+        // Processing state for warnings
+        this.isActivelyProcessing = false;
+        this.beforeUnloadHandler = null;
+        
         // Initialize authentication from localStorage
         const storedToken = localStorage.getItem('auth_token');
         this.authToken = storedToken || null;
@@ -370,6 +489,27 @@ class PhotoProcessor {
             return false;
         }
 
+        // First, assume the token is valid if it exists (optimistic approach)
+        this.isAuthenticated = true;
+        this.authToken = token;
+        
+        // Update StateManager auth state immediately
+        if (window.stateManager) {
+            const userInfo = localStorage.getItem('user_info');
+            try {
+                window.stateManager.set('auth.isAuthenticated', true);
+                window.stateManager.set('auth.token', token);
+                if (userInfo) {
+                    window.stateManager.set('auth.user', JSON.parse(userInfo));
+                }
+            } catch (error) {
+                console.error('Failed to update StateManager auth state:', error);
+            }
+        }
+        
+        showAppSection();
+        
+        // Then validate in the background (non-blocking)
         try {
             const response = await fetch(`${this.apiBase}/auth/validate`, {
                 method: 'POST',
@@ -383,32 +523,151 @@ class PhotoProcessor {
             if (response.ok) {
                 const data = await response.json();
                 if (data.valid) {
-                    this.isAuthenticated = true;
-                    this.authToken = token;
-                    
-                    // Store user info if available
+                    // Token is valid, update user info if available
                     if (data.user) {
                         localStorage.setItem('user_info', JSON.stringify(data.user));
+                        if (window.stateManager) {
+                            window.stateManager.set('auth.user', data.user);
+                        }
                     }
                     
-                    showAppSection();
+                    // Check for recent completed jobs and restore if found
+                    await this.checkAndRestoreRecentJob();
+                    
                     return true;
                 }
             }
+            
+            // Only clear auth if we got a definitive rejection (401/403)
+            if (response.status === 401 || response.status === 403) {
+                console.warn('Token validation failed, logging out');
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_info');
+                this.isAuthenticated = false;
+                this.authToken = null;
+                
+                // Clear StateManager auth state
+                if (window.stateManager) {
+                    window.stateManager.set('auth.isAuthenticated', false);
+                    window.stateManager.set('auth.token', null);
+                    window.stateManager.set('auth.user', null);
+                }
+                
+                this.showLoginScreen();
+                return false;
+            }
         } catch (error) {
-            console.error('Auth check failed:', error);
+            // Network error or server down - keep user logged in
+            console.warn('Auth validation failed (network error), keeping user logged in:', error);
         }
         
-        // If we get here, auth failed - clear token and show login
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user_info');
-        this.showLoginScreen();
-        return false;
+        return true;
     }
 
     showLoginScreen() {
         // Make sure we're on the landing page, not showing API response
         showLandingPage();
+    }
+
+    showProcessingWarning() {
+        // Add warning banner if not already present
+        let warningBanner = document.getElementById('processing-warning-banner');
+        if (!warningBanner) {
+            warningBanner = document.createElement('div');
+            warningBanner.id = 'processing-warning-banner';
+            warningBanner.className = 'alert alert-warning alert-dismissible d-flex align-items-center position-fixed';
+            warningBanner.style.cssText = 'top: 80px; left: 50%; transform: translateX(-50%); z-index: 1060; max-width: 600px;';
+            warningBanner.innerHTML = `
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <div>
+                    <strong>Processing in Progress</strong><br>
+                    Don't close or reload this page! Your photos are being processed.
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(warningBanner);
+        }
+        
+        // Add beforeunload warning
+        this.beforeUnloadHandler = (e) => {
+            if (this.isActivelyProcessing) {
+                const message = 'Photo processing is still in progress. Leaving now will lose your work.';
+                e.preventDefault();
+                e.returnValue = message;
+                return message;
+            }
+        };
+        window.addEventListener('beforeunload', this.beforeUnloadHandler);
+        
+        this.isActivelyProcessing = true;
+        console.log('Processing warning activated');
+    }
+
+    hideProcessingWarning() {
+        // Remove warning banner
+        const warningBanner = document.getElementById('processing-warning-banner');
+        if (warningBanner) {
+            warningBanner.remove();
+        }
+        
+        // Remove beforeunload warning
+        if (this.beforeUnloadHandler) {
+            window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+            this.beforeUnloadHandler = null;
+        }
+        
+        this.isActivelyProcessing = false;
+        console.log('Processing warning deactivated');
+    }
+
+    async checkAndRestoreRecentJob() {
+        try {
+            // Check if StateManager has a recent completed job
+            if (!window.stateManager || !window.stateManager.hasRecentCompletedJob()) {
+                console.log('No recent completed job found in localStorage');
+                return;
+            }
+
+            const lastJobId = window.stateManager.get('processing.lastCompletedJobId');
+            const lastCompleted = window.stateManager.get('processing.lastCompletedAt');
+            
+            console.log(`Found recent completed job: ${lastJobId} completed at ${lastCompleted}`);
+            
+            // Fetch the job results from the server
+            const response = await fetch(`${this.apiBase}/process/results/${lastJobId}`, {
+                headers: {
+                    'Authorization': `Bearer ${this.authToken}`
+                }
+            });
+            
+            if (response.ok) {
+                const results = await response.json();
+                console.log('Successfully restored job results:', results);
+                
+                // Update current state
+                this.currentJobId = lastJobId;
+                window.stateManager.set('processing.currentJobId', lastJobId);
+                window.stateManager.set('photos.groupedPhotos', results.groups || []);
+                
+                // Show results section instead of upload section
+                this.groupedPhotos = results.groups || [];
+                this.showResultsSection();
+                
+                // Show restoration notification
+                showNotification(`Restored your previous session (${results.groups?.length || 0} photo groups)`, 'info');
+                
+            } else {
+                console.warn('Failed to restore job results, clearing saved state');
+                window.stateManager.clearCompletedJob();
+            }
+            
+        } catch (error) {
+            console.error('Error restoring recent job:', error);
+            // Clear invalid state
+            if (window.stateManager) {
+                window.stateManager.clearCompletedJob();
+            }
+        }
     }
 
     showMainContent() {
@@ -1070,6 +1329,12 @@ class PhotoProcessor {
 
     // File Selection Handler
     async handleFileSelect(files, isFolder = false) {
+        // Clear any previous completed job state when starting new upload
+        if (window.stateManager) {
+            window.stateManager.clearCompletedJob();
+            console.log('Cleared previous job state for new upload');
+        }
+        
         const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
         const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
         const COMPRESS_THRESHOLD = 4 * 1024 * 1024; // Compress files larger than 4MB
@@ -1450,6 +1715,7 @@ class PhotoProcessor {
             }
             
             this.showProcessingSection();
+            this.showProcessingWarning(); // Show warning during active processing
             this.startProcessing(result.photo_ids);
 
         } catch (error) {
@@ -1612,6 +1878,15 @@ class PhotoProcessor {
                 });
             }
             
+            // Save job completion state to localStorage for persistence
+            if (window.stateManager && this.currentJobId) {
+                window.stateManager.markJobCompleted(this.currentJobId, 'completed');
+                console.log(`Job ${this.currentJobId} completion state saved to localStorage`);
+            }
+            
+            // Hide processing warning since job is now completed
+            this.hideProcessingWarning();
+            
             this.showResultsSection();
 
         } catch (error) {
@@ -1627,6 +1902,7 @@ class PhotoProcessor {
                 }
                 setTimeout(() => this.fetchResults(1), 2000);
             } else {
+                this.hideProcessingWarning(); // Hide warning if error occurs
                 this.showError('Failed to fetch results. Please try again.');
             }
         }
@@ -1888,6 +2164,15 @@ class PhotoProcessor {
         this.currentJobId = null;
         this.groupedPhotos = [];
         this.selectedGroups = [];
+
+        // Clear completed job state from localStorage
+        if (window.stateManager) {
+            window.stateManager.clearCompletedJob();
+            console.log('Cleared completed job state - starting fresh');
+        }
+        
+        // Hide any processing warnings
+        this.hideProcessingWarning();
 
         document.getElementById('file-input').value = '';
         document.getElementById('upload-btn').disabled = false;

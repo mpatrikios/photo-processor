@@ -394,6 +394,53 @@ async def get_processing_status(
     
     return job
 
+@router.get("/recent-jobs")
+async def get_recent_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user's recent completed jobs (last 24 hours).
+    Used for restoring processing state after page reload.
+    """
+    try:
+        from datetime import datetime, timedelta
+        
+        # Get jobs completed in the last 24 hours
+        cutoff_time = datetime.utcnow() - timedelta(hours=24)
+        
+        recent_jobs = db.query(ProcessingJobDB).filter(
+            ProcessingJobDB.user_id == current_user.id,
+            ProcessingJobDB.status == "completed",
+            ProcessingJobDB.completed_at >= cutoff_time
+        ).order_by(ProcessingJobDB.completed_at.desc()).limit(5).all()
+        
+        jobs_data = []
+        for job in recent_jobs:
+            # Count photos for this job by checking detector results
+            photo_count = len(detector.results) if hasattr(detector, 'results') else 0
+            
+            jobs_data.append({
+                "job_id": job.job_id,
+                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "total_photos": job.total_photos,
+                "photos_processed": job.photos_processed,
+                "status": job.status,
+                "photo_count": photo_count
+            })
+        
+        return {
+            "recent_jobs": jobs_data,
+            "count": len(jobs_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get recent jobs for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve recent jobs"
+        )
+
 @router.get("/results/{job_id}")
 async def get_processing_results(
     job_id: str,

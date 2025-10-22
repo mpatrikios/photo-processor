@@ -3,8 +3,9 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
 import bcrypt
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+from app.core.security_config import BCRYPT_ROUNDS
 
 class User(Base):
     """
@@ -39,9 +40,10 @@ class User(Base):
 
     def set_password(self, password: str) -> None:
         """
-        Hash and set the user's password using bcrypt.
+        Hash and set the user's password using bcrypt with cost factor 12.
         """
-        salt = bcrypt.gensalt()
+        # Use configured cost factor for enhanced security
+        salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
         self.password_hash = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
     def verify_password(self, password: str) -> bool:
@@ -57,7 +59,7 @@ class User(Base):
         """
         Update the last login timestamp.
         """
-        self.last_login = datetime.utcnow()
+        self.last_login = datetime.now(timezone.utc)
 
     def increment_photos_uploaded(self, count: int = 1) -> None:
         """
@@ -127,13 +129,13 @@ class UserSession(Base):
         """
         Check if the session is expired.
         """
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def update_last_used(self) -> None:
         """
         Update the last used timestamp.
         """
-        self.last_used = datetime.utcnow()
+        self.last_used = datetime.now(timezone.utc)
 
     def deactivate(self) -> None:
         """

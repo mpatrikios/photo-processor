@@ -35,7 +35,10 @@ class StateManager {
                 currentJobId: null,
                 jobs: {},
                 isProcessing: false,
-                progress: 0
+                progress: 0,
+                lastCompletedJobId: null,
+                lastCompletedAt: null,
+                lastJobStatus: null
             },
             
             // Photo Groups
@@ -199,6 +202,23 @@ class StateManager {
                 }
             }
             
+            // Load processing state
+            const lastJobId = localStorage.getItem('last_completed_job_id');
+            const lastCompletedAt = localStorage.getItem('last_completed_at');
+            const lastJobStatus = localStorage.getItem('last_job_status');
+            
+            if (lastJobId) {
+                this.state.processing.lastCompletedJobId = lastJobId;
+            }
+            
+            if (lastCompletedAt) {
+                this.state.processing.lastCompletedAt = new Date(lastCompletedAt);
+            }
+            
+            if (lastJobStatus) {
+                this.state.processing.lastJobStatus = lastJobStatus;
+            }
+            
             // Load UI preferences
             const savedFilter = localStorage.getItem('current_filter');
             if (savedFilter) {
@@ -237,6 +257,25 @@ class StateManager {
                 localStorage.removeItem('refresh_token');
                 localStorage.removeItem('user_info');
                 localStorage.removeItem('token_expires_at');
+            }
+            
+            // Save processing state
+            if (this.state.processing.lastCompletedJobId) {
+                localStorage.setItem('last_completed_job_id', this.state.processing.lastCompletedJobId);
+            } else {
+                localStorage.removeItem('last_completed_job_id');
+            }
+            
+            if (this.state.processing.lastCompletedAt) {
+                localStorage.setItem('last_completed_at', this.state.processing.lastCompletedAt.toISOString());
+            } else {
+                localStorage.removeItem('last_completed_at');
+            }
+            
+            if (this.state.processing.lastJobStatus) {
+                localStorage.setItem('last_job_status', this.state.processing.lastJobStatus);
+            } else {
+                localStorage.removeItem('last_job_status');
             }
             
             // Save UI preferences
@@ -483,6 +522,49 @@ class StateManager {
     removeNotification(notificationId) {
         const currentNotifications = this.get('ui.notifications') || [];
         this.set('ui.notifications', currentNotifications.filter(n => n.id !== notificationId));
+    }
+    
+    /**
+     * Mark a job as completed and save to localStorage
+     */
+    markJobCompleted(jobId, status = 'completed') {
+        this.set('processing.lastCompletedJobId', jobId);
+        this.set('processing.lastCompletedAt', new Date());
+        this.set('processing.lastJobStatus', status);
+        this.set('processing.currentJobId', null);
+        this.set('processing.isProcessing', false);
+        
+        console.log(`Job ${jobId} marked as ${status} and saved to localStorage`);
+    }
+    
+    /**
+     * Clear completed job state (when starting fresh)
+     */
+    clearCompletedJob() {
+        this.set('processing.lastCompletedJobId', null);
+        this.set('processing.lastCompletedAt', null);
+        this.set('processing.lastJobStatus', null);
+        this.set('photos.groupedPhotos', []);
+        
+        console.log('Completed job state cleared');
+    }
+    
+    /**
+     * Check if we have a recent completed job (within 24 hours)
+     */
+    hasRecentCompletedJob() {
+        const lastCompleted = this.get('processing.lastCompletedAt');
+        const lastJobId = this.get('processing.lastCompletedJobId');
+        const lastStatus = this.get('processing.lastJobStatus');
+        
+        if (!lastCompleted || !lastJobId || lastStatus !== 'completed') {
+            return false;
+        }
+        
+        const now = new Date();
+        const hoursSinceCompletion = (now - lastCompleted) / (1000 * 60 * 60);
+        
+        return hoursSinceCompletion < 24;
     }
     
     /**

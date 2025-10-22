@@ -37,7 +37,8 @@ class AnalyticsDashboard {
             button.title = 'View analytics dashboard';
             
             button.addEventListener('click', () => {
-                this.showDashboard();
+                // Navigate to analytics route instead of directly showing modal
+                window.location.hash = 'analytics';
             });
             
             // Insert before profile button
@@ -62,13 +63,16 @@ class AnalyticsDashboard {
                                 Analytics Dashboard
                             </h5>
                             <div class="d-flex align-items-center">
+                                <button type="button" class="btn btn-outline-light btn-sm me-3" onclick="window.location.hash='app'">
+                                    <i class="fas fa-arrow-left me-1"></i> Back to App
+                                </button>
                                 <div class="form-check form-switch me-3">
                                     <input class="form-check-input" type="checkbox" id="auto-refresh-toggle" checked>
                                     <label class="form-check-label text-white" for="auto-refresh-toggle">
                                         Auto Refresh (30s)
                                     </label>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="window.location.hash='app'"></button>
                             </div>
                         </div>
                         <div class="modal-body p-0">

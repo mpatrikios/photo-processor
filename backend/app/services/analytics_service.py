@@ -3,7 +3,7 @@ Analytics service for advanced business intelligence and performance tracking.
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, and_, or_, extract, text
+from sqlalchemy import func, desc, and_, or_, extract
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import asyncio
