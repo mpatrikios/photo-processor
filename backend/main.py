@@ -9,7 +9,9 @@ load_dotenv(dotenv_path=env_path)
 import asyncio
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Depends
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
@@ -25,7 +27,8 @@ from app.models import (  # Import models to register them with SQLAlchemy
 )
 
 # Import database setup and models
-from database import create_tables, get_db_info
+from database import create_tables, get_db_info, get_db
+from datetime import datetime
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
@@ -275,8 +278,18 @@ logger.info(
 
 # Define API route handlers FIRST - before static file mounts
 @app.get("/health")
-async def health():
-    return {"status": "healthy"}
+async def health_check(db: Session = Depends(get_db)):
+    """Health check for monitoring"""
+    try:
+        # Check database connectivity
+        db.execute(text("SELECT 1"))
+        return {
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "database": "connected"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail="Service unhealthy")
 
 
 @app.get("/auth-status")
