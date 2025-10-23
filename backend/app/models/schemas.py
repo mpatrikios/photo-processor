@@ -1,6 +1,8 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel
+
 
 class ProcessingStatus(str, Enum):
     PENDING = "pending"
@@ -8,10 +10,12 @@ class ProcessingStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+
 class DetectionResult(BaseModel):
     bib_number: Optional[str]
     confidence: float
     bbox: Optional[List[int]] = None
+
 
 class PhotoInfo(BaseModel):
     id: str
@@ -21,9 +25,11 @@ class PhotoInfo(BaseModel):
     detection_result: Optional[DetectionResult] = None
     status: ProcessingStatus = ProcessingStatus.PENDING
 
+
 class UploadResponse(BaseModel):
     photo_ids: List[str]
     message: str
+
 
 class ProcessingJob(BaseModel):
     job_id: str
@@ -34,18 +40,22 @@ class ProcessingJob(BaseModel):
     total_photos: int
     debug_mode: bool = False
 
+
 class GroupedPhotos(BaseModel):
     bib_number: str
     photos: List[PhotoInfo]
     count: int
 
+
 class ExportRequest(BaseModel):
     photo_ids: List[str]
     format: str = "zip"
 
+
 class ManualLabelRequest(BaseModel):
     photo_id: str
     bib_number: str
+
 
 class FeedbackRequest(BaseModel):
     type: str  # bug, suggestion, improvement, general

@@ -1,8 +1,8 @@
-from sqlalchemy import create_engine, MetaData
+from pathlib import Path
+
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from pathlib import Path
 
 # Database file path
 DATABASE_DIR = Path(__file__).parent
@@ -13,9 +13,9 @@ DATABASE_DIR.mkdir(exist_ok=True)
 
 # Create engine with SQLite-specific settings
 engine = create_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     connect_args={"check_same_thread": False},  # Required for SQLite with FastAPI
-    echo=False  # Set to True for SQL query logging during development
+    echo=False,  # Set to True for SQL query logging during development
 )
 
 # Session factory
@@ -23,6 +23,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base class for all models
 Base = declarative_base()
+
 
 # Dependency to get database session
 def get_db():
@@ -36,12 +37,14 @@ def get_db():
     finally:
         db.close()
 
+
 def create_tables():
     """
     Create all database tables.
     This will be called on startup to ensure tables exist.
     """
     Base.metadata.create_all(bind=engine)
+
 
 def get_db_info():
     """
@@ -52,5 +55,7 @@ def get_db_info():
         "database_url": DATABASE_URL,
         "database_path": str(db_path),
         "database_exists": db_path.exists(),
-        "database_size_mb": round(db_path.stat().st_size / 1024 / 1024, 2) if db_path.exists() else 0
+        "database_size_mb": (
+            round(db_path.stat().st_size / 1024 / 1024, 2) if db_path.exists() else 0
+        ),
     }
