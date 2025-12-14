@@ -63,7 +63,7 @@ class AnalyticsDashboard {
                                 Analytics Dashboard
                             </h5>
                             <div class="d-flex align-items-center">
-                                <button type="button" class="btn btn-outline-light btn-sm me-3" onclick="window.location.hash='app'">
+                                <button type="button" class="btn btn-outline-light btn-sm me-3" onclick="window.location.hash='results'">
                                     <i class="fas fa-arrow-left me-1"></i> Back to App
                                 </button>
                                 <div class="form-check form-switch me-3">
@@ -72,7 +72,7 @@ class AnalyticsDashboard {
                                         Auto Refresh (30s)
                                     </label>
                                 </div>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="window.location.hash='app'"></button>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="window.location.hash='results'"></button>
                             </div>
                         </div>
                         <div class="modal-body p-0">

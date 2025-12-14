@@ -33,6 +33,7 @@ class StateManager {
             // Processing
             processing: {
                 currentJobId: null,
+                currentJobStatus: null,  // 'pending', 'processing', 'completed', 'failed'
                 jobs: {},
                 isProcessing: false,
                 progress: 0,
@@ -206,9 +207,19 @@ class StateManager {
             const lastJobId = localStorage.getItem('last_completed_job_id');
             const lastCompletedAt = localStorage.getItem('last_completed_at');
             const lastJobStatus = localStorage.getItem('last_job_status');
+            const currentJobId = localStorage.getItem('current_job_id');
+            const currentJobStatus = localStorage.getItem('current_job_status');
             
             if (lastJobId) {
                 this.state.processing.lastCompletedJobId = lastJobId;
+            }
+            
+            if (currentJobId) {
+                this.state.processing.currentJobId = currentJobId;
+            }
+            
+            if (currentJobStatus) {
+                this.state.processing.currentJobStatus = currentJobStatus;
             }
             
             if (lastCompletedAt) {
@@ -264,6 +275,18 @@ class StateManager {
                 localStorage.setItem('last_completed_job_id', this.state.processing.lastCompletedJobId);
             } else {
                 localStorage.removeItem('last_completed_job_id');
+            }
+            
+            if (this.state.processing.currentJobId) {
+                localStorage.setItem('current_job_id', this.state.processing.currentJobId);
+            } else {
+                localStorage.removeItem('current_job_id');
+            }
+            
+            if (this.state.processing.currentJobStatus) {
+                localStorage.setItem('current_job_status', this.state.processing.currentJobStatus);
+            } else {
+                localStorage.removeItem('current_job_status');
             }
             
             if (this.state.processing.lastCompletedAt) {
@@ -532,6 +555,7 @@ class StateManager {
         this.set('processing.lastCompletedAt', new Date());
         this.set('processing.lastJobStatus', status);
         this.set('processing.currentJobId', null);
+        this.set('processing.currentJobStatus', null);  // Clear current job status
         this.set('processing.isProcessing', false);
         
         console.log(`Job ${jobId} marked as ${status} and saved to localStorage`);

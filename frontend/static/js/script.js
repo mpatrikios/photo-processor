@@ -80,8 +80,18 @@ function showAppSection() {
         if (token) {
             window.photoProcessor.authToken = token;
             window.photoProcessor.isAuthenticated = true;
-            // Skip validation after fresh login - just show the upload section
-            window.photoProcessor.showUploadSection();
+            
+            // Check if there are existing results to preserve
+            if (AppRouter.hasValidResults()) {
+                // Preserve existing results - show results section
+                window.photoProcessor.showResultsSection();
+            } else if (window.stateManager && window.stateManager.hasRecentCompletedJob()) {
+                // Try to restore recent job instead of going to upload
+                window.photoProcessor.checkAndRestoreRecentJob();
+            } else {
+                // No existing data - show upload section
+                window.photoProcessor.showUploadSection();
+            }
         }
     }
     
@@ -111,8 +121,15 @@ class AppRouter {
             '': this.showHome.bind(this),
             'home': this.showHome.bind(this),
             'analytics': this.showAnalytics.bind(this),
-            'app': this.showApp.bind(this)
+            'app': this.showApp.bind(this),
+            'upload': this.showUpload.bind(this),
+            'results': this.showResults.bind(this),
+            'processing': this.showProcessing.bind(this)
         };
+        
+        // Track navigation to prevent infinite loops
+        this._lastRoute = null;
+        this._routeCount = 0;
         
         // Listen for hash changes
         window.addEventListener('hashchange', () => this.handleRouteChange());
@@ -121,13 +138,68 @@ class AppRouter {
         window.addEventListener('DOMContentLoaded', () => this.handleRouteChange());
     }
     
+    /**
+     * Helper method to check if PhotoProcessor has valid results to display
+     * @returns {boolean} True if there are displayable results
+     */
+    hasValidResults() {
+        return AppRouter.hasValidResults();
+    }
+    
+    /**
+     * Static helper to check if PhotoProcessor has valid results to display
+     * @returns {boolean} True if there are displayable results
+     */
+    static hasValidResults() {
+        if (!window.photoProcessor || !window.photoProcessor.groupedPhotos) {
+            return false;
+        }
+        
+        const results = window.photoProcessor.groupedPhotos;
+        return Array.isArray(results) ? 
+            results.length > 0 : 
+            Object.keys(results).length > 0;
+    }
+    
+    /**
+     * Safely update URL without triggering navigation events
+     * @param {string} hash - The hash to set (without #)
+     */
+    static safeReplaceState(hash) {
+        try {
+            if (window.location.hash !== `#${hash}`) {
+                history.replaceState(null, null, `#${hash}`);
+            }
+        } catch (error) {
+            console.warn(`Failed to update URL to #${hash}:`, error);
+            // Gracefully degrade - the app will still work without URL updates
+        }
+    }
+    
     handleRouteChange() {
         const hash = window.location.hash.slice(1); // Remove #
         const route = hash.toLowerCase();
         
+        // Prevent infinite loops
+        if (route === this._lastRoute) {
+            this._routeCount++;
+            if (this._routeCount > 3) {
+                console.warn('Route loop detected, falling back to upload');
+                if (route !== 'upload') {
+                    this._routeCount = 0;
+                    this._lastRoute = null;
+                    window.location.hash = 'upload';
+                    return;
+                }
+            }
+        } else {
+            this._routeCount = 0;
+        }
+        this._lastRoute = route;
+        
         // Check if user is authenticated for protected routes
         const token = localStorage.getItem('auth_token');
-        const protectedRoutes = ['analytics', 'app'];
+        const protectedRoutes = ['analytics', 'app', 'upload', 'results', 'processing'];
         
         if (protectedRoutes.includes(route) && !token) {
             // Redirect to login if trying to access protected route
@@ -140,8 +212,8 @@ class AppRouter {
         if (this.routes[route]) {
             this.routes[route]();
         } else if (token) {
-            // Default to app if authenticated
-            this.showApp();
+            // Default to smart routing based on current state
+            this.showApp(); // This will determine the appropriate view without redirects
         } else {
             // Default to home if not authenticated
             this.showHome();
@@ -152,8 +224,8 @@ class AppRouter {
         // Check if already authenticated
         const token = localStorage.getItem('auth_token');
         if (token && window.photoProcessor) {
-            // If authenticated, show app instead
-            window.location.hash = 'app';
+            // If authenticated, show upload by default
+            window.location.hash = 'upload';
             return;
         }
         showLandingPage();
@@ -171,7 +243,54 @@ class AppRouter {
     }
     
     showApp() {
+        // Legacy 'app' route - determine appropriate route without redirecting
         showAppSection();
+        
+        if (window.photoProcessor) {
+            // Use the same logic as showAppSection() but don't trigger navigation
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                // Let showAppSection handle the state determination
+                // This avoids redirect loops while maintaining state restoration
+                return;
+            }
+        }
+    }
+    
+    showUpload() {
+        showAppSection();
+        // Ensure we show the upload section specifically
+        if (window.photoProcessor) {
+            window.photoProcessor.showUploadSection();
+        }
+    }
+    
+    showResults() {
+        showAppSection();
+        // Ensure we show the results section specifically
+        if (window.photoProcessor) {
+            // Check if we have results to show
+            if (this.hasValidResults()) {
+                window.photoProcessor.showResultsSection();
+            } else if (window.stateManager && window.stateManager.hasRecentCompletedJob()) {
+                // Try to restore recent job - this will call showResultsSection if successful
+                window.photoProcessor.checkAndRestoreRecentJob();
+            } else {
+                // No results available - show upload section instead of redirecting
+                // This prevents redirect loops
+                window.photoProcessor.showUploadSection();
+                // Update URL to reflect actual state
+                AppRouter.safeReplaceState('upload');
+            }
+        }
+    }
+    
+    showProcessing() {
+        showAppSection();
+        // Ensure we show the processing section specifically
+        if (window.photoProcessor) {
+            window.photoProcessor.showProcessingSection();
+        }
     }
     
     navigateTo(route) {
@@ -292,8 +411,8 @@ async function handleSignIn(event) {
             // Clear form
             form.reset();
 
-            // Navigate to app
-            window.location.hash = 'app';
+            // Navigate to upload
+            window.location.hash = 'upload';
             showAppSection();
 
             showNotification(result.message || 'Welcome back!', 'success');
@@ -383,8 +502,8 @@ async function handleCreateAccount(event) {
             // Clear form
             form.reset();
 
-            // Navigate to app
-            window.location.hash = 'app';
+            // Navigate to upload
+            window.location.hash = 'upload';
             showAppSection();
 
             showNotification(result.message || 'Account created successfully!', 'success');
@@ -581,7 +700,7 @@ class PhotoProcessor {
                 <i class="fas fa-exclamation-triangle me-2"></i>
                 <div>
                     <strong>Processing in Progress</strong><br>
-                    Don't close or reload this page! Your photos are being processed.
+                    <small>Don't close or reload this page! Your photos are being processed and manual labels are being saved. Progress is automatically saved and will resume if the page refreshes.</small>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             `;
@@ -591,7 +710,7 @@ class PhotoProcessor {
         // Add beforeunload warning
         this.beforeUnloadHandler = (e) => {
             if (this.isActivelyProcessing) {
-                const message = 'Photo processing is still in progress. Leaving now will lose your work.';
+                const message = 'Photo processing is in progress. Manual labels are saved, but leaving now may interrupt processing. Are you sure you want to leave?';
                 e.preventDefault();
                 e.returnValue = message;
                 return message;
@@ -622,6 +741,67 @@ class PhotoProcessor {
 
     async checkAndRestoreRecentJob() {
         try {
+            // First check for active/interrupted processing jobs
+            const currentJobId = window.stateManager?.get('processing.currentJobId');
+            const currentJobStatus = window.stateManager?.get('processing.currentJobStatus');
+            
+            if (currentJobId && currentJobStatus && currentJobStatus !== 'completed') {
+                console.log(`Found active job to resume: ${currentJobId} (status: ${currentJobStatus})`);
+                
+                // Try to resume the active job
+                try {
+                    const statusResponse = await fetch(`${this.apiBase}/process/status/${currentJobId}`, {
+                        headers: { 'Authorization': `Bearer ${this.authToken}` }
+                    });
+                    
+                    if (statusResponse.ok) {
+                        const jobStatus = await statusResponse.json();
+                        this.currentJobId = currentJobId;
+                        
+                        if (jobStatus.status === 'completed') {
+                            console.log('Active job was completed while offline, fetching results');
+                            // Job completed while we were offline, get results
+                            const resultsResponse = await fetch(`${this.apiBase}/process/results/${currentJobId}`, {
+                                headers: { 'Authorization': `Bearer ${this.authToken}` }
+                            });
+                            
+                            if (resultsResponse.ok) {
+                                this.groupedPhotos = await resultsResponse.json();
+                                window.stateManager.markJobCompleted(currentJobId, 'completed');
+                                this.showResultsSection();
+                                return;
+                            }
+                        } else if (jobStatus.status === 'processing' || jobStatus.status === 'pending') {
+                            console.log('Resuming active processing job');
+                            this.showProcessingSection();
+                            this.showProcessingWarning(); // Activate reload protection
+                            
+                            // Show a brief message that job was resumed
+                            const progressText = document.getElementById('progress-text');
+                            if (progressText) {
+                                progressText.innerHTML = '<i class="fas fa-play text-success me-2"></i>Resuming processing job...';
+                                setTimeout(() => {
+                                    // Will be updated by polling
+                                }, 1000);
+                            }
+                            
+                            this.pollProcessingStatus();
+                            return;
+                        } else if (jobStatus.status === 'failed') {
+                            console.log('Active job failed, marking as failed');
+                            window.stateManager.markJobCompleted(currentJobId, 'failed');
+                        }
+                    } else {
+                        console.warn(`Active job ${currentJobId} not found on server, clearing from localStorage`);
+                        window.stateManager.set('processing.currentJobId', null);
+                        window.stateManager.set('processing.currentJobStatus', null);
+                    }
+                } catch (error) {
+                    console.error('Error resuming active job:', error);
+                    // Don't clear the job state in case of network error - user might retry
+                }
+            }
+            
             // Check if StateManager has a recent completed job
             if (!window.stateManager || !window.stateManager.hasRecentCompletedJob()) {
                 console.log('No recent completed job found in localStorage');
@@ -647,14 +827,14 @@ class PhotoProcessor {
                 // Update current state
                 this.currentJobId = lastJobId;
                 window.stateManager.set('processing.currentJobId', lastJobId);
-                window.stateManager.set('photos.groupedPhotos', results.groups || []);
+                window.stateManager.set('photos.groupedPhotos', results);
                 
                 // Show results section instead of upload section
-                this.groupedPhotos = results.groups || [];
+                this.groupedPhotos = results;
                 this.showResultsSection();
                 
                 // Show restoration notification
-                showNotification(`Restored your previous session (${results.groups?.length || 0} photo groups)`, 'info');
+                showNotification(`Restored your previous session (${Array.isArray(results) ? results.length : 0} photo groups)`, 'info');
                 
             } else {
                 console.warn('Failed to restore job results, clearing saved state');
@@ -1746,6 +1926,14 @@ class PhotoProcessor {
 
             const job = await response.json();
             this.currentJobId = job.job_id;
+            
+            // Immediately save job ID and status to localStorage for reload recovery
+            if (window.stateManager) {
+                window.stateManager.set('processing.currentJobId', this.currentJobId);
+                window.stateManager.set('processing.currentJobStatus', 'processing');
+                console.log(`Active job ${this.currentJobId} saved to localStorage for reload recovery`);
+            }
+            
             this.pollProcessingStatus();
 
         } catch (error) {
@@ -1913,6 +2101,8 @@ class PhotoProcessor {
         document.getElementById('upload-section').classList.add('d-none');
         document.getElementById('processing-section').classList.remove('d-none');
         document.getElementById('results-section').classList.add('d-none');
+        // Update URL without triggering route change if we're not already on processing route
+        AppRouter.safeReplaceState('processing');
     }
 
     showResultsSection() {
@@ -1921,12 +2111,16 @@ class PhotoProcessor {
         document.getElementById('results-section').classList.remove('d-none');
 
         this.displayResults();
+        // Update URL without triggering route change if we're not already on results route
+        AppRouter.safeReplaceState('results');
     }
 
     showUploadSection() {
         document.getElementById('upload-section').classList.remove('d-none');
         document.getElementById('processing-section').classList.add('d-none');
         document.getElementById('results-section').classList.add('d-none');
+        // Update URL without triggering route change if we're not already on upload route
+        AppRouter.safeReplaceState('upload');
     }
 
     // Results Display - Simplified
@@ -2165,10 +2359,12 @@ class PhotoProcessor {
         this.groupedPhotos = [];
         this.selectedGroups = [];
 
-        // Clear completed job state from localStorage
+        // Clear both completed and current job state from localStorage
         if (window.stateManager) {
             window.stateManager.clearCompletedJob();
-            console.log('Cleared completed job state - starting fresh');
+            window.stateManager.set('processing.currentJobId', null);
+            window.stateManager.set('processing.currentJobStatus', null);
+            console.log('Cleared all job state - starting fresh');
         }
         
         // Hide any processing warnings
