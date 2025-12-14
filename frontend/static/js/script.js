@@ -82,12 +82,7 @@ function showAppSection() {
             window.photoProcessor.isAuthenticated = true;
             
             // Check if there are existing results to preserve
-            const hasResults = window.photoProcessor.groupedPhotos && 
-                (Array.isArray(window.photoProcessor.groupedPhotos) ? 
-                    window.photoProcessor.groupedPhotos.length > 0 : 
-                    Object.keys(window.photoProcessor.groupedPhotos).length > 0);
-            
-            if (hasResults) {
+            if (AppRouter.hasValidResults()) {
                 // Preserve existing results - show results section
                 window.photoProcessor.showResultsSection();
             } else if (window.stateManager && window.stateManager.hasRecentCompletedJob()) {
@@ -132,6 +127,10 @@ class AppRouter {
             'processing': this.showProcessing.bind(this)
         };
         
+        // Track navigation to prevent infinite loops
+        this._lastRoute = null;
+        this._routeCount = 0;
+        
         // Listen for hash changes
         window.addEventListener('hashchange', () => this.handleRouteChange());
         
@@ -139,9 +138,64 @@ class AppRouter {
         window.addEventListener('DOMContentLoaded', () => this.handleRouteChange());
     }
     
+    /**
+     * Helper method to check if PhotoProcessor has valid results to display
+     * @returns {boolean} True if there are displayable results
+     */
+    hasValidResults() {
+        return AppRouter.hasValidResults();
+    }
+    
+    /**
+     * Static helper to check if PhotoProcessor has valid results to display
+     * @returns {boolean} True if there are displayable results
+     */
+    static hasValidResults() {
+        if (!window.photoProcessor || !window.photoProcessor.groupedPhotos) {
+            return false;
+        }
+        
+        const results = window.photoProcessor.groupedPhotos;
+        return Array.isArray(results) ? 
+            results.length > 0 : 
+            Object.keys(results).length > 0;
+    }
+    
+    /**
+     * Safely update URL without triggering navigation events
+     * @param {string} hash - The hash to set (without #)
+     */
+    static safeReplaceState(hash) {
+        try {
+            if (window.location.hash !== `#${hash}`) {
+                history.replaceState(null, null, `#${hash}`);
+            }
+        } catch (error) {
+            console.warn(`Failed to update URL to #${hash}:`, error);
+            // Gracefully degrade - the app will still work without URL updates
+        }
+    }
+    
     handleRouteChange() {
         const hash = window.location.hash.slice(1); // Remove #
         const route = hash.toLowerCase();
+        
+        // Prevent infinite loops
+        if (route === this._lastRoute) {
+            this._routeCount++;
+            if (this._routeCount > 3) {
+                console.warn('Route loop detected, falling back to upload');
+                if (route !== 'upload') {
+                    this._routeCount = 0;
+                    this._lastRoute = null;
+                    window.location.hash = 'upload';
+                    return;
+                }
+            }
+        } else {
+            this._routeCount = 0;
+        }
+        this._lastRoute = route;
         
         // Check if user is authenticated for protected routes
         const token = localStorage.getItem('auth_token');
@@ -158,8 +212,8 @@ class AppRouter {
         if (this.routes[route]) {
             this.routes[route]();
         } else if (token) {
-            // Default to upload if authenticated and no specific route
-            this.navigateTo('upload');
+            // Default to smart routing based on current state
+            this.showApp(); // This will determine the appropriate view without redirects
         } else {
             // Default to home if not authenticated
             this.showHome();
@@ -189,26 +243,17 @@ class AppRouter {
     }
     
     showApp() {
-        // Legacy 'app' route - redirect to appropriate specific route
-        const token = localStorage.getItem('auth_token');
-        if (token && window.photoProcessor) {
-            // Check if there are existing results to show
-            const hasResults = window.photoProcessor.groupedPhotos && 
-                (Array.isArray(window.photoProcessor.groupedPhotos) ? 
-                    window.photoProcessor.groupedPhotos.length > 0 : 
-                    Object.keys(window.photoProcessor.groupedPhotos).length > 0);
-            
-            if (hasResults) {
-                this.navigateTo('results');
-            } else if (window.stateManager && window.stateManager.hasRecentCompletedJob()) {
-                // Try to restore recent job, which will set the appropriate route
-                showAppSection();
-                window.photoProcessor.checkAndRestoreRecentJob();
-            } else {
-                this.navigateTo('upload');
+        // Legacy 'app' route - determine appropriate route without redirecting
+        showAppSection();
+        
+        if (window.photoProcessor) {
+            // Use the same logic as showAppSection() but don't trigger navigation
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                // Let showAppSection handle the state determination
+                // This avoids redirect loops while maintaining state restoration
+                return;
             }
-        } else {
-            showAppSection();
         }
     }
     
@@ -225,19 +270,17 @@ class AppRouter {
         // Ensure we show the results section specifically
         if (window.photoProcessor) {
             // Check if we have results to show
-            const hasResults = window.photoProcessor.groupedPhotos && 
-                (Array.isArray(window.photoProcessor.groupedPhotos) ? 
-                    window.photoProcessor.groupedPhotos.length > 0 : 
-                    Object.keys(window.photoProcessor.groupedPhotos).length > 0);
-            
-            if (hasResults) {
+            if (this.hasValidResults()) {
                 window.photoProcessor.showResultsSection();
             } else if (window.stateManager && window.stateManager.hasRecentCompletedJob()) {
-                // Try to restore recent job
+                // Try to restore recent job - this will call showResultsSection if successful
                 window.photoProcessor.checkAndRestoreRecentJob();
             } else {
-                // No results available, redirect to upload
-                this.navigateTo('upload');
+                // No results available - show upload section instead of redirecting
+                // This prevents redirect loops
+                window.photoProcessor.showUploadSection();
+                // Update URL to reflect actual state
+                AppRouter.safeReplaceState('upload');
             }
         }
     }
@@ -2059,9 +2102,7 @@ class PhotoProcessor {
         document.getElementById('processing-section').classList.remove('d-none');
         document.getElementById('results-section').classList.add('d-none');
         // Update URL without triggering route change if we're not already on processing route
-        if (window.location.hash !== '#processing') {
-            history.replaceState(null, null, '#processing');
-        }
+        AppRouter.safeReplaceState('processing');
     }
 
     showResultsSection() {
@@ -2071,9 +2112,7 @@ class PhotoProcessor {
 
         this.displayResults();
         // Update URL without triggering route change if we're not already on results route
-        if (window.location.hash !== '#results') {
-            history.replaceState(null, null, '#results');
-        }
+        AppRouter.safeReplaceState('results');
     }
 
     showUploadSection() {
@@ -2081,9 +2120,7 @@ class PhotoProcessor {
         document.getElementById('processing-section').classList.add('d-none');
         document.getElementById('results-section').classList.add('d-none');
         // Update URL without triggering route change if we're not already on upload route
-        if (window.location.hash !== '#upload') {
-            history.replaceState(null, null, '#upload');
-        }
+        AppRouter.safeReplaceState('upload');
     }
 
     // Results Display - Simplified
