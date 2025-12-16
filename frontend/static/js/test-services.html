@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TagSort Services Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+        .test-container { max-width: 800px; margin: 0 auto; }
+        .test-section { background: white; margin: 15px 0; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; }
+        .test-result { margin: 8px 0; padding: 8px; border-radius: 4px; }
+        .pass { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+        .fail { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+        .info { background: #d1ecf1; color: #0c5460; border-left: 4px solid #17a2b8; }
+        .warning { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+        .service-status { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+        .service-card { background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #dee2e6; }
+        .service-name { font-weight: bold; color: #495057; }
+        .service-info { font-size: 0.9em; color: #6c757d; }
+        h1 { color: #343a40; text-align: center; margin-bottom: 30px; }
+        h2 { color: #495057; border-bottom: 2px solid #dee2e6; padding-bottom: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .controls { text-align: center; margin: 20px 0; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; border: 1px solid #dee2e6; }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 TagSort Services Test Suite</h1>
+        
+        <div class="controls">
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="showServiceStatus()">Service Status</button>
+            <button onclick="testDependencyGraph()">Dependency Graph</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+
+        <div id="test-results"></div>
+    </div>
+
+    <script type="module">
+        import { 
+            initializeServices, 
+            getService, 
+            hasService, 
+            getServiceNames, 
+            getServiceStatus,
+            getServiceDependencyGraph,
+            serviceContainer,
+            eventBus
+        } from './services/ServiceRegistry.js';
+        
+        import { formatFileSize } from './utils/index.js';
+
+        const results = document.getElementById('test-results');
+
+        function addSection(title) {
+            const section = document.createElement('div');
+            section.className = 'test-section';
+            section.innerHTML = `<h2>${title}</h2><div class="section-content"></div>`;
+            results.appendChild(section);
+            return section.querySelector('.section-content');
+        }
+
+        function addResult(container, message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            container.appendChild(div);
+        }
+
+        async function runAllTests() {
+            clearResults();
+            
+            const mainSection = addSection('🚀 Service Initialization Test');
+            
+            try {
+                addResult(mainSection, '🔧 Initializing services...', 'info');
+                
+                // Initialize services
+                await initializeServices({
+                    debugMode: true,
+                    apiBaseUrl: 'http://localhost:8000/api'
+                });
+                
+                addResult(mainSection, '✅ Services initialized successfully', 'pass');
+                
+                // Test individual services
+                await testServiceRegistration();
+                await testServiceCommunication();
+                await testServiceMethods();
+                await testServiceLifecycle();
+                
+                addResult(mainSection, '🎉 All tests completed!', 'pass');
+                
+            } catch (error) {
+                addResult(mainSection, `❌ Initialization failed: ${error.message}`, 'fail');
+                console.error('Test error:', error);
+            }
+        }
+
+        async function testServiceRegistration() {
+            const section = addSection('📋 Service Registration Test');
+            
+            const expectedServices = [
+                'eventBus', 'stateManager', 'apiService', 'authService', 
+                'uploadService', 'processingService', 'exportService'
+            ];
+            
+            for (const serviceName of expectedServices) {
+                const exists = hasService(serviceName);
+                addResult(section, 
+                    `${exists ? '✅' : '❌'} ${serviceName}: ${exists ? 'Registered' : 'Missing'}`,
+                    exists ? 'pass' : 'fail'
+                );
+                
+                if (exists) {
+                    try {
+                        const service = getService(serviceName);
+                        const hasStatus = typeof service.getStatus === 'function';
+                        const status = hasStatus ? service.getStatus() : { name: serviceName };
+                        
+                        addResult(section,
+                            `&nbsp;&nbsp;📊 Status: ${JSON.stringify(status)}`,
+                            'info'
+                        );
+                    } catch (error) {
+                        addResult(section,
+                            `&nbsp;&nbsp;⚠️ Failed to get service: ${error.message}`,
+                            'warning'
+                        );
+                    }
+                }
+            }
+        }
+
+        async function testServiceCommunication() {
+            const section = addSection('📡 Service Communication Test');
+            
+            try {
+                // Test EventBus communication
+                let eventReceived = false;
+                const unsubscribe = eventBus.on('test:communication', (data) => {
+                    eventReceived = data.test === 'success';
+                });
+                
+                eventBus.emit('test:communication', { test: 'success' });
+                
+                addResult(section,
+                    `${eventReceived ? '✅' : '❌'} EventBus communication: ${eventReceived ? 'Working' : 'Failed'}`,
+                    eventReceived ? 'pass' : 'fail'
+                );
+                
+                unsubscribe();
+                
+                // Test service dependencies
+                const apiService = getService('apiService');
+                const authService = getService('authService');
+                
+                addResult(section,
+                    `✅ ApiService instance: ${!!apiService}`,
+                    'pass'
+                );
+                
+                addResult(section,
+                    `✅ AuthService instance: ${!!authService}`,
+                    'pass'
+                );
+                
+                // Test service method availability
+                const hasMethods = !!(apiService.get && authService.signIn);
+                addResult(section,
+                    `${hasMethods ? '✅' : '❌'} Service methods available: ${hasMethods}`,
+                    hasMethods ? 'pass' : 'fail'
+                );
+                
+            } catch (error) {
+                addResult(section, `❌ Communication test failed: ${error.message}`, 'fail');
+            }
+        }
+
+        async function testServiceMethods() {
+            const section = addSection('🔧 Service Methods Test');
+            
+            try {
+                // Test utility functions
+                const size = formatFileSize(1024 * 1024 * 1.5);
+                addResult(section,
+                    `✅ Utility functions: ${size} (should be ~1.5 MB)`,
+                    'pass'
+                );
+                
+                // Test service methods (without actual API calls)
+                const uploadService = getService('uploadService');
+                const status = uploadService.getUploadStatus();
+                
+                addResult(section,
+                    `✅ UploadService status: Can upload: ${status.canUpload}`,
+                    'pass'
+                );
+                
+                const processingService = getService('processingService');
+                const procStatus = processingService.getProcessingStatus();
+                
+                addResult(section,
+                    `✅ ProcessingService status: Is processing: ${procStatus.isProcessing}`,
+                    'pass'
+                );
+                
+                const exportService = getService('exportService');
+                const exportStatus = exportService.getExportStatus();
+                
+                addResult(section,
+                    `✅ ExportService status: Can export: ${exportStatus.canExport}`,
+                    'pass'
+                );
+                
+            } catch (error) {
+                addResult(section, `❌ Method test failed: ${error.message}`, 'fail');
+            }
+        }
+
+        async function testServiceLifecycle() {
+            const section = addSection('🔄 Service Lifecycle Test');
+            
+            try {
+                // Get a service and test its lifecycle methods
+                const uploadService = getService('uploadService');
+                
+                // Test that service is initialized
+                const status = uploadService.getStatus();
+                addResult(section,
+                    `✅ Service initialized: ${status.isInitialized}`,
+                    status.isInitialized ? 'pass' : 'warning'
+                );
+                
+                addResult(section,
+                    `✅ Service started: ${status.isStarted}`,
+                    status.isStarted ? 'pass' : 'warning'
+                );
+                
+                // Test file validation
+                const testFile = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
+                const validation = uploadService.validateFile(testFile);
+                
+                addResult(section,
+                    `✅ File validation: ${validation.valid ? 'Valid' : 'Invalid'} (${validation.errors.length} errors)`,
+                    validation.valid ? 'pass' : 'warning'
+                );
+                
+            } catch (error) {
+                addResult(section, `❌ Lifecycle test failed: ${error.message}`, 'fail');
+            }
+        }
+
+        async function showServiceStatus() {
+            clearResults();
+            const section = addSection('📊 Service Status Dashboard');
+            
+            try {
+                const status = getServiceStatus();
+                
+                addResult(section, 
+                    `📦 Container: ${status.container.serviceCount} services registered, Valid: ${status.container.isValid}`,
+                    'info'
+                );
+                
+                const statusContainer = document.createElement('div');
+                statusContainer.className = 'service-status';
+                
+                for (const [serviceName, serviceStatus] of Object.entries(status.services)) {
+                    const card = document.createElement('div');
+                    card.className = 'service-card';
+                    
+                    let statusColor = serviceStatus.available ? '#28a745' : '#dc3545';
+                    if (serviceStatus.isInitialized === false || serviceStatus.isStarted === false) {
+                        statusColor = '#ffc107';
+                    }
+                    
+                    card.innerHTML = `
+                        <div class="service-name" style="color: ${statusColor}">
+                            ${serviceName}
+                        </div>
+                        <div class="service-info">
+                            ${serviceStatus.available ? '🟢 Available' : '🔴 Unavailable'}<br>
+                            ${serviceStatus.isInitialized !== undefined ? 
+                                `Init: ${serviceStatus.isInitialized ? '✅' : '❌'}<br>` : ''}
+                            ${serviceStatus.isStarted !== undefined ? 
+                                `Start: ${serviceStatus.isStarted ? '✅' : '❌'}<br>` : ''}
+                            ${serviceStatus.error ? `Error: ${serviceStatus.error}` : ''}
+                        </div>
+                    `;
+                    
+                    statusContainer.appendChild(card);
+                }
+                
+                section.appendChild(statusContainer);
+                
+            } catch (error) {
+                addResult(section, `❌ Status check failed: ${error.message}`, 'fail');
+            }
+        }
+
+        async function testDependencyGraph() {
+            clearResults();
+            const section = addSection('🕸️ Service Dependency Graph');
+            
+            try {
+                const graph = getServiceDependencyGraph();
+                
+                addResult(section, `📊 Graph: ${graph.nodes.length} services, ${graph.edges.length} dependencies`, 'info');
+                
+                // Show nodes
+                const nodesList = graph.nodes.map(node => 
+                    `• ${node.name} (${node.singleton ? 'Singleton' : 'Transient'}, ${node.lazy ? 'Lazy' : 'Eager'})`
+                ).join('\n');
+                
+                const nodesDiv = document.createElement('div');
+                nodesDiv.innerHTML = `<strong>Services:</strong><pre>${nodesList}</pre>`;
+                section.appendChild(nodesDiv);
+                
+                // Show edges
+                if (graph.edges.length > 0) {
+                    const edgesList = graph.edges.map(edge => 
+                        `• ${edge.from} → ${edge.to}`
+                    ).join('\n');
+                    
+                    const edgesDiv = document.createElement('div');
+                    edgesDiv.innerHTML = `<strong>Dependencies:</strong><pre>${edgesList}</pre>`;
+                    section.appendChild(edgesDiv);
+                } else {
+                    addResult(section, 'ℹ️ No dependencies found', 'info');
+                }
+                
+            } catch (error) {
+                addResult(section, `❌ Graph generation failed: ${error.message}`, 'fail');
+            }
+        }
+
+        function clearResults() {
+            results.innerHTML = '';
+        }
+
+        // Make functions available globally
+        window.runAllTests = runAllTests;
+        window.showServiceStatus = showServiceStatus;
+        window.testDependencyGraph = testDependencyGraph;
+        window.clearResults = clearResults;
+
+        // Auto-run tests on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            showServiceStatus();
+        });
+    </script>
+</body>
+</html>

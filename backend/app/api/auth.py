@@ -223,6 +223,26 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     )
 
 
+@router.get("/quota")
+async def get_user_quota(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Get current user's quota information."""
+    
+    # Refresh quota info (handles auto-reset if needed)
+    quota_info = current_user.get_quota_info()
+    
+    # Save any quota resets to database
+    if current_user.should_reset_quota():
+        current_user.reset_monthly_quota()
+        db.commit()
+    
+    return {
+        "quota": quota_info,
+        "message": "Quota information retrieved successfully"
+    }
+
+
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(
     request: ChangePasswordRequest,

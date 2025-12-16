@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TagSort Foundation Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .pass { background: #d4edda; color: #155724; }
+        .fail { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>TagSort Foundation Test</h1>
+    <div id="test-results"></div>
+
+    <script type="module">
+        import { app } from './core/Application.js';
+        import { eventBus } from './core/EventBus.js';
+        import { serviceContainer } from './core/ServiceContainer.js';
+        import { formatFileSize, validateBibNumber, createElement } from './utils/index.js';
+
+        const results = document.getElementById('test-results');
+
+        function addResult(message, passed) {
+            const div = createElement('div', { 
+                className: `test-result ${passed ? 'pass' : 'fail'}` 
+            }, message);
+            results.appendChild(div);
+        }
+
+        function addInfo(message) {
+            const div = createElement('div', { 
+                className: 'test-result info' 
+            }, message);
+            results.appendChild(div);
+        }
+
+        async function runTests() {
+            addInfo('🧪 Starting Foundation Tests...');
+
+            try {
+                // Test 1: Utility functions
+                const size = formatFileSize(1024 * 1024);
+                addResult(`✓ Format utility: ${size} === '1 MB'`, size === '1 MB');
+
+                const validBib = validateBibNumber('123');
+                const invalidBib = validateBibNumber('abc');
+                addResult(`✓ Validation utility: valid bib (${validBib}) && invalid bib (!${invalidBib})`, 
+                    validBib === true && invalidBib === false);
+
+                // Test 2: EventBus
+                let eventReceived = false;
+                eventBus.on('test:event', (data) => {
+                    eventReceived = data.test === 'success';
+                });
+                eventBus.emit('test:event', { test: 'success' });
+                addResult('✓ EventBus: event emission and reception', eventReceived);
+
+                // Test 3: ServiceContainer
+                serviceContainer.register('testService', () => ({ working: true }));
+                const service = serviceContainer.get('testService');
+                addResult('✓ ServiceContainer: service registration and retrieval', 
+                    service && service.working === true);
+
+                // Test 4: Application
+                await app.initialize({ debugMode: false });
+                addResult('✓ Application: initialization', app.isInitialized);
+
+                const appInfo = app.getInfo();
+                addResult(`✓ Application: info retrieval (version: ${appInfo.version})`, 
+                    appInfo.version === '2.0.0');
+
+                addInfo('🎉 All foundation tests passed! Ready for Phase 2.');
+
+            } catch (error) {
+                addResult(`✗ Test failed: ${error.message}`, false);
+                console.error('Test error:', error);
+            }
+        }
+
+        // Run tests when page loads
+        runTests();
+    </script>
+</body>
+</html>

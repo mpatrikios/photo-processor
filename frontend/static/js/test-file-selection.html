@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test File Selection UI Update</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container mt-4">
+        <h2>File Selection Test</h2>
+        <p>This tests the event flow from file selection to UI display</p>
+        
+        <div id="upload-section" class="mt-4">
+            <h4>Upload Manager Test Area</h4>
+            <!-- UploadManager will be rendered here -->
+        </div>
+        
+        <div id="debug-output" class="mt-4">
+            <h4>Debug Output</h4>
+            <pre id="debug-log" style="background: #f8f9fa; padding: 10px; border-radius: 4px; height: 300px; overflow-y: auto;"></pre>
+        </div>
+        
+        <div class="mt-3">
+            <button id="test-file-selection" class="btn btn-primary">Simulate File Selection</button>
+            <button id="clear-log" class="btn btn-secondary">Clear Log</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { PhotoProcessorModular } from './PhotoProcessorModular.js';
+
+        // Debug logging
+        const debugLog = document.getElementById('debug-log');
+        function log(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}${data ? ' ' + JSON.stringify(data, null, 2) : ''}\n`;
+            debugLog.textContent += logEntry;
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(message, data);
+        }
+
+        // Clear log button
+        document.getElementById('clear-log').addEventListener('click', () => {
+            debugLog.textContent = '';
+        });
+
+        let photoProcessor;
+        let uploadManager;
+        let fileList;
+        let stateManager;
+
+        async function initializeTest() {
+            try {
+                log('Initializing PhotoProcessorModular...');
+                photoProcessor = await PhotoProcessorModular.create();
+                
+                // Get services
+                stateManager = photoProcessor.serviceContainer.get('stateManagerService');
+                
+                // Get upload manager from components
+                uploadManager = photoProcessor.components.upload?.uploadManager;
+                fileList = uploadManager?.fileList;
+                
+                log('PhotoProcessor initialized', {
+                    hasStateManager: !!stateManager,
+                    hasUploadManager: !!uploadManager,
+                    hasFileList: !!fileList
+                });
+
+                // Listen for relevant events
+                const eventBus = photoProcessor.eventBus;
+                
+                // Listen for state changes
+                eventBus.on('state:files:selectedFiles:changed', (data) => {
+                    log('State change detected: files.selectedFiles', {
+                        fileCount: data.value?.length || 0,
+                        files: data.value?.map(f => f.name) || []
+                    });
+                });
+
+                // Listen for file selection events
+                eventBus.on('files:selected', (data) => {
+                    log('File selection event received', {
+                        fileCount: data.files?.length || 0,
+                        files: data.files?.map(f => f.name) || []
+                    });
+                });
+
+                // Listen for filelist updates
+                eventBus.on('filelist:updated', (data) => {
+                    log('FileList updated', {
+                        fileCount: data.count || 0
+                    });
+                });
+
+                // Listen for state manager state updates
+                eventBus.on('state:updated', (data) => {
+                    log('State manager update', {
+                        path: data.path,
+                        value: data.value?.length !== undefined ? `Array(${data.value.length})` : typeof data.value
+                    });
+                });
+
+                log('Event listeners set up');
+
+            } catch (error) {
+                log('Initialization error', error.message);
+                console.error('Test initialization failed:', error);
+            }
+        }
+
+        // Simulate file selection
+        document.getElementById('test-file-selection').addEventListener('click', () => {
+            if (!photoProcessor) {
+                log('PhotoProcessor not initialized yet');
+                return;
+            }
+
+            // Create mock files
+            const mockFiles = [
+                { name: 'photo1.jpg', size: 1024000, type: 'image/jpeg' },
+                { name: 'photo2.jpg', size: 2048000, type: 'image/jpeg' },
+                { name: 'photo3.png', size: 1536000, type: 'image/png' }
+            ];
+
+            log('Simulating file selection...', { fileCount: mockFiles.length });
+
+            // Emit the files:selected event that would normally come from FileSelector
+            photoProcessor.eventBus.emit('files:selected', {
+                files: mockFiles,
+                isFolder: false,
+                result: {
+                    valid: mockFiles,
+                    invalid: [],
+                    total: mockFiles.length
+                }
+            });
+
+            // Also check the current state and UI
+            setTimeout(() => {
+                if (stateManager) {
+                    const currentFiles = stateManager.get('files.selectedFiles');
+                    log('Current state after selection', {
+                        stateFiles: currentFiles?.length || 0,
+                        stateFileNames: currentFiles?.map(f => f.name) || []
+                    });
+                }
+                
+                if (fileList) {
+                    const fileListFiles = fileList.getFiles();
+                    log('FileList component files after selection', {
+                        componentFiles: fileListFiles?.length || 0,
+                        componentFileNames: fileListFiles?.map(f => f.name) || []
+                    });
+                }
+            }, 100);
+        });
+
+        // Initialize when page loads
+        initializeTest();
+    </script>
+</body>
+</html>

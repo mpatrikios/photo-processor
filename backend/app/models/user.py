@@ -33,6 +33,11 @@ class User(Base):
     total_photos_uploaded = Column(Integer, default=0, nullable=False)
     total_photos_processed = Column(Integer, default=0, nullable=False)
     total_exports = Column(Integer, default=0, nullable=False)
+    
+    # Monthly quota tracking
+    monthly_quota_limit = Column(Integer, default=5000, nullable=False)  # Default 5000 photos/month
+    current_month_usage = Column(Integer, default=0, nullable=False)
+    quota_reset_date = Column(DateTime(timezone=True), nullable=True)  # When quota resets next
 
     # User preferences
     timezone = Column(String(50), default="UTC", nullable=False)
@@ -103,6 +108,69 @@ class User(Base):
         """
         self.total_exports += count
 
+    def increment_monthly_usage(self, count: int = 1) -> None:
+        """
+        Increment the current month's photo processing usage.
+        Auto-resets quota if we've passed the reset date.
+        """
+        # Check if we need to reset the quota for a new month
+        if self.should_reset_quota():
+            self.reset_monthly_quota()
+        
+        self.current_month_usage += count
+        
+    def should_reset_quota(self) -> bool:
+        """
+        Check if the monthly quota should be reset.
+        """
+        if not self.quota_reset_date:
+            return True  # First time, needs initial setup
+        
+        return datetime.now(timezone.utc) >= self.quota_reset_date
+        
+    def reset_monthly_quota(self) -> None:
+        """
+        Reset monthly quota for a new billing period.
+        """
+        from dateutil.relativedelta import relativedelta
+        
+        self.current_month_usage = 0
+        # Set next reset date to the same day next month
+        if self.quota_reset_date:
+            self.quota_reset_date = self.quota_reset_date + relativedelta(months=1)
+        else:
+            # First time setup - reset on the same day next month
+            self.quota_reset_date = datetime.now(timezone.utc) + relativedelta(months=1)
+            
+    def get_quota_info(self) -> dict:
+        """
+        Get quota information for API responses.
+        """
+        # Auto-reset if needed
+        if self.should_reset_quota():
+            self.reset_monthly_quota()
+            
+        remaining = max(0, self.monthly_quota_limit - self.current_month_usage)
+        usage_percentage = (self.current_month_usage / self.monthly_quota_limit) * 100 if self.monthly_quota_limit > 0 else 0
+        
+        return {
+            "monthly_limit": self.monthly_quota_limit,
+            "current_usage": self.current_month_usage,
+            "remaining": remaining,
+            "usage_percentage": min(100, round(usage_percentage, 1)),
+            "reset_date": self.quota_reset_date.isoformat() if self.quota_reset_date else None,
+            "is_over_quota": self.current_month_usage >= self.monthly_quota_limit
+        }
+        
+    def has_quota_available(self, photos_count: int = 1) -> bool:
+        """
+        Check if user has enough quota for the specified number of photos.
+        """
+        if self.should_reset_quota():
+            return True  # Fresh month, quota available
+            
+        return (self.current_month_usage + photos_count) <= self.monthly_quota_limit
+
     def to_dict(self, include_sensitive: bool = False) -> dict:
         """
         Convert user to dictionary for API responses.
@@ -119,6 +187,7 @@ class User(Base):
             "total_photos_processed": self.total_photos_processed,
             "total_exports": self.total_exports,
             "timezone": self.timezone,
+            "quota": self.get_quota_info(),
         }
 
         if include_sensitive:

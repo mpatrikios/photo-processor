@@ -228,6 +228,14 @@ async def start_processing(
     if not photo_ids:
         raise HTTPException(status_code=400, detail="No photo IDs provided")
 
+    # Check quota before processing
+    if not current_user.has_quota_available(len(photo_ids)):
+        quota_info = current_user.get_quota_info()
+        raise HTTPException(
+            status_code=429, 
+            detail=f"Monthly quota exceeded. You have {quota_info['remaining']} photos remaining. Quota resets on {quota_info['reset_date']}"
+        )
+
     job_id = str(uuid.uuid4())
     job = ProcessingJob(
         job_id=job_id,
@@ -252,6 +260,10 @@ async def start_processing(
         action_type=ActionType.PROCESS,
         photo_count=len(photo_ids),
     )
+
+    # Increment monthly quota usage
+    current_user.increment_monthly_usage(len(photo_ids))
+    db.commit()
 
     asyncio.create_task(process_photos_async(job_id))
 
