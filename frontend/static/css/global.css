@@ -389,25 +389,48 @@ body {
     box-shadow: var(--shadow-xl);
 }
 
-/* Modern Results Section Styling */
+/* Modern Dashboard Results Section */
 
-/* Results header clean typography */
-#results-section h3 {
-    font-size: clamp(1.3rem, 2.5vw, 1.5rem) !important;
-    font-weight: 600;
-    color: var(--tagsort-black);
-    letter-spacing: -0.01em;
-    margin-bottom: 0.5rem !important;
+/* Light grey background with comfortable margins */
+#results-section {
+    background: #f8fafc;
+    min-height: 100vh;
+    padding: 2rem 0;
+    margin-left: calc(-50vw + 50% + 2rem);
+    margin-right: calc(-50vw + 50% + 2rem);
+    width: calc(100vw - 4rem);
+    position: relative;
+    border-radius: 12px 12px 0 0;
 }
 
-#results-section h3 i {
+/* Create our own container for results content */
+#results-section > .row > .col-12 {
+    max-width: 1400px;
+    width: 95%;
+    margin: 0 auto;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+/* Enhanced Processing Complete Header */
+#results-section .text-center.mb-4 h3 {
+    font-size: clamp(1.8rem, 4vw, 2.2rem) !important;
+    font-weight: 700;
+    color: var(--tagsort-black);
+    letter-spacing: -0.02em;
+    margin-bottom: 0.75rem !important;
+}
+
+#results-section .text-center.mb-4 h3 i {
     color: #10b981;
     font-size: 0.9em;
+    margin-right: 0.5rem;
 }
 
-#results-section p.text-muted {
-    font-size: 0.9rem;
+#results-section .text-center.mb-4 p.text-muted {
+    font-size: 1rem;
     color: #6b7280;
+    margin-bottom: 3rem !important;
 }
 
 /* Modern stats cards */
@@ -462,39 +485,217 @@ body {
     color: #6b7280;
 }
 
-/* Modern Photo Group Cards */
-.photo-group-card {
-    margin-bottom: 1.5rem;
+/* Horizontal Status Bar */
+.status-bar {
     background: #ffffff;
-    border: none;
+    border: 1px solid #e2e8f0;
     border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    gap: 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.photo-group-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: none;
+    border: none;
+    padding: 0;
+    transition: opacity 0.2s ease;
 }
 
-/* Photo group card headers */
-.photo-group-card .card-header {
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-    padding: 1rem 1.25rem;
+.status-clickable:hover {
+    cursor: pointer;
+    opacity: 0.8;
 }
 
-.photo-group-card .card-header h4 {
-    font-size: 1.1rem !important;
+/* Compact Status Icons */
+.status-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.status-icon i {
+    font-size: 0.875rem;
+    color: white;
+}
+
+.status-icon-blue {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.status-icon-green {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.status-icon-orange {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+/* Status Text */
+.status-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+}
+
+.status-number {
+    font-size: 1.25rem;
     font-weight: 600;
     color: var(--tagsort-black);
-    margin-bottom: 0.25rem;
+    line-height: 1;
 }
 
-.photo-group-card .card-header small {
-    font-size: 0.8rem;
+.status-label {
+    font-size: 0.75rem;
     color: #6b7280;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Status Dividers */
+.status-divider {
+    width: 1px;
+    height: 32px;
+    background: #e2e8f0;
+    flex-shrink: 0;
+}
+
+/* Clean Gallery Sections - Compact for high density */
+.gallery-section {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-bottom: 1rem;
+    max-height: 600px;
+    overflow-y: auto;
+    width: 100%;
+}
+
+.gallery-section::before {
+    display: none !important;  /* Kill any inherited pseudo-elements */
+}
+
+/* Clean Gallery Headers */
+.gallery-section .gallery-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0 1rem 0;
+    margin-bottom: 1rem;
+    background: transparent;
+    border: none;
+}
+
+.gallery-section .gallery-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #1a202c;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.gallery-section .photo-count-pill {
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.3rem 0.8rem;
+    border-radius: 99px;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+/* Dense Photo Grid for high-volume viewing */
+.gallery-section .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    width: 100%;
+}
+
+.gallery-section .photo-item {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    height: auto;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: transparent;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.gallery-section .photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    border-radius: 8px;
+}
+
+.gallery-section .photo-item:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    z-index: 10;
+}
+
+/* Glass-Effect Confidence Badges */
+.gallery-section .confidence-badge {
+    position: absolute !important;
+    bottom: 6px !important;
+    right: 6px !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    background: rgba(0, 0, 0, 0.65) !important;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    color: white !important;
+    padding: 3px 8px !important;
+    border-radius: 99px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    z-index: 10;
+    pointer-events: none;
+    border: none !important;
+}
+
+/* Legacy photo-group-card compatibility */
+.photo-group-card.gallery-section {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.photo-group-card.gallery-section::before {
+    display: none !important;
+}
+
+/* Dense Dashboard Grid Layout */
+#photo-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 2rem;
+    margin: 0 auto;
+    max-width: calc(100vw - 4rem);
+    padding: 0 2rem;
 }
 
 /* Mobile Responsive Design for Upload & Results */
@@ -584,25 +785,123 @@ body {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
         gap: 0.5rem;
     }
+    
+    /* Status bar mobile adjustments */
+    .status-bar {
+        padding: 1rem 1.25rem;
+        gap: 1.5rem;
+        max-width: none;
+        margin: 0 1rem;
+    }
+    
+    .status-icon {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .status-icon i {
+        font-size: 0.75rem;
+    }
+    
+    .status-number {
+        font-size: 1.1rem;
+    }
+    
+    .status-label {
+        font-size: 0.65rem;
+    }
+    
+    .status-divider {
+        height: 28px;
+    }
+    
+    .gallery-section .gallery-header {
+        padding: 0 0 0.75rem 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .gallery-section .gallery-title {
+        font-size: 1rem !important;
+    }
+    
+    .gallery-section .photo-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+    }
+    
+    /* Dense grid mobile adjustments */
+    #photo-groups {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        padding: 0 1rem;
+        max-width: calc(100vw - 2rem);
+    }
 }
 
+/* Extra small mobile - under 576px */
+@media (max-width: 576px) {
+    #results-section {
+        padding: 1rem 0;
+        margin-left: calc(-50vw + 50% + 1rem);
+        margin-right: calc(-50vw + 50% + 1rem);
+        width: calc(100vw - 2rem);
+    }
+    
+    #results-section > .row > .col-12 {
+        width: 98%;
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    .status-bar {
+        padding: 0.875rem 1rem;
+        gap: 1rem;
+        margin: 0 0.5rem;
+    }
+    
+    .status-item {
+        gap: 0.5rem;
+    }
+    
+    .photo-grid {
+        gap: 12px;
+    }
+    
+    .gallery-section .photo-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+}
+
+/* Cohesive Photo Grid */
 .photo-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 1rem;
-    margin-top: 1.5rem;
+    gap: 16px;
+    margin-top: 0;
+    padding: 0;
 }
 
+/* Perfect Square Photo Items */
 .photo-item {
     position: relative;
-    aspect-ratio: 1;
+    aspect-ratio: 1 / 1;
     background: linear-gradient(135deg, var(--gray-100) 0%, var(--gray-200) 100%);
-    border-radius: var(--border-radius);
+    border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: var(--shadow-sm);
-    border: 2px solid transparent;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: none;
+}
+
+.photo-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
 }
 
 .photo-item:hover {
@@ -622,30 +921,33 @@ body {
     font-size: 2rem;
 }
 
+/* Glass-effect confidence badges */
 .confidence-badge {
-    position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.25rem 0.5rem;
-    border-radius: 1rem;
-    backdrop-filter: blur(10px);
-    box-shadow: var(--shadow-sm);
+    position: absolute !important;
+    bottom: 6px !important;
+    right: 6px !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    padding: 3px 8px !important;
+    border-radius: 99px !important;
+    background: rgba(0, 0, 0, 0.65) !important;
+    color: white !important;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 10;
+    pointer-events: none;
 }
 
-.confidence-high {
-    background-color: rgba(16, 185, 129, 0.9);
-    color: white;
-}
-
-.confidence-medium {
-    background-color: rgba(245, 158, 11, 0.9);
-    color: white;
-}
-
+/* Remove individual confidence level colors - all use glass effect */
+.confidence-high,
+.confidence-medium,
 .confidence-low {
-    background-color: rgba(239, 68, 68, 0.9);
+    background: rgba(0, 0, 0, 0.6);
     color: white;
 }
 
@@ -3416,12 +3718,12 @@ body.metadata-panel-visible .photo-viewing-area {
     padding: 0.4rem 0.75rem;
     max-height: 80px;
     overflow-y: auto;
-    overflow-x: visible; /* Ensure horizontal content (like inputs) is fully accessible */
+    overflow-x: visible;
     background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
     border-radius: 6px;
     border: 1px solid rgba(75, 85, 99, 0.3);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    pointer-events: auto !important; /* Ensure container allows interactions */
+    pointer-events: auto !important;
 }
 
 .photo-info-section {
@@ -3439,6 +3741,27 @@ body.metadata-panel-visible .photo-viewing-area {
     gap: 0.4rem;
     min-width: 120px;
 }
+
+
+
+/* Ensure inline labeling container is visible and properly styled */
+#inlineLabelContainer {
+    display: flex !important;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    justify-content: center;
+}
+
+#inlineLabelContainer.d-none {
+    display: none !important;
+}
+
+/* Ensure static container can be hidden */
+#photoBibNumberContainer.d-none {
+    display: none !important;
+}
+
 
 .info-label {
     font-size: 0.65rem;
@@ -3760,7 +4083,7 @@ body.metadata-panel-visible .photo-viewing-area {
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 1060; /* Between modal (1055) and tooltips (1070) */
+    z-index: 1060;
     background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%);
     border-top: 3px solid var(--primary-color);
     padding: 0.5rem;
@@ -3768,7 +4091,7 @@ body.metadata-panel-visible .photo-viewing-area {
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
     display: block;
-    pointer-events: auto !important; /* Ensure panel is clickable when visible */
+    pointer-events: auto !important;
     max-height: 100px;
 }
 
@@ -3824,14 +4147,6 @@ body.metadata-panel-visible .photo-viewing-area {
     position: relative;
 }
 
-#photoMetadata input[type="text"]:hover {
-    border-color: var(--primary-color) !important;
-}
-
-#photoMetadata input[type="text"]:focus {
-    outline: 2px solid var(--primary-color) !important;
-    border-color: var(--primary-color) !important;
-}
 
 /* Ensure no photoMetadata elements appear inside the modal */
 #photoModal #photoMetadata,

@@ -657,33 +657,41 @@
                             <p class="text-muted mb-0">Your photos have been sorted by bib number</p>
                         </div>
 
-                        <!-- Simple Stats -->
-                        <div class="row mb-4">
-                            <div class="col-md-8 mx-auto">
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <div class="row">
-                                            <div class="col-4">
-                                                <i class="fas fa-images fa-2x text-primary mb-2"></i>
-                                                <h4 id="total-photos">0</h4>
-                                                <small class="text-muted">Total Photos</small>
-                                            </div>
-                                            <div class="col-4">
-                                                <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
-                                                <h4 id="detected-photos">0</h4>
-                                                <small class="text-muted">Detected</small>
-                                            </div>
-                                            <div class="col-4">
-                                                <button class="btn btn-link p-0 text-decoration-none" id="unknown-photos-btn" onclick="photoProcessor?.showUnknownPhotosPage()" style="background: none; border: none; cursor: pointer;">
-                                                    <i class="fas fa-question-circle fa-2x text-warning mb-2"></i>
-                                                    <h4 id="unknown-photos" class="text-dark">0</h4>
-                                                    <small class="text-muted">Undetected</small>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                        <!-- Horizontal Status Bar -->
+                        <div class="status-bar mb-5">
+                            <div class="status-item">
+                                <div class="status-icon status-icon-blue">
+                                    <i class="fas fa-images"></i>
+                                </div>
+                                <div class="status-text">
+                                    <span class="status-number" id="total-photos">0</span>
+                                    <span class="status-label">Total Photos</span>
                                 </div>
                             </div>
+                            
+                            <div class="status-divider"></div>
+                            
+                            <div class="status-item">
+                                <div class="status-icon status-icon-green">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                                <div class="status-text">
+                                    <span class="status-number" id="detected-photos">0</span>
+                                    <span class="status-label">Detected</span>
+                                </div>
+                            </div>
+                            
+                            <div class="status-divider"></div>
+                            
+                            <button class="status-item status-clickable" id="unknown-photos-btn" onclick="photoProcessor?.showUnknownPhotosPage()">
+                                <div class="status-icon status-icon-orange">
+                                    <i class="fas fa-question-circle"></i>
+                                </div>
+                                <div class="status-text">
+                                    <span class="status-number" id="unknown-photos">0</span>
+                                    <span class="status-label">Undetected</span>
+                                </div>
+                            </button>
                         </div>
 
                         <!-- Results Count -->

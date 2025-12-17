@@ -873,20 +873,14 @@ class PhotoProcessor {
         }
 
         photoGroupsDiv.innerHTML = groupsToShow.map(group => `
-            <div class="col-lg-4 col-md-6 mb-4 fade-in-up">
-                <div class="card photo-group-card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5 class="card-title mb-0">
-                                <i class="fas fa-user me-2"></i>
-                                ${group.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${group.bib_number}`}
-                            </h5>
-                            <span class="badge bg-secondary">${group.count} photo${group.count !== 1 ? 's' : ''}</span>
-                        </div>
-                        <p class="text-muted small mb-3">
-                            <i class="fas fa-mouse-pointer me-1"></i>
-                            Click photos to view full size
-                        </p>
+            <div class="fade-in-up">
+                <div class="gallery-section">
+                    <div class="gallery-header">
+                        <h5 class="gallery-title">
+                            ${group.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${group.bib_number}`}
+                        </h5>
+                        <span class="photo-count-pill">${group.count} photo${group.count !== 1 ? 's' : ''}</span>
+                    </div>
 
                         <div class="photo-grid">
                             ${group.photos.slice(0, 4).map((photo, index) => `
@@ -900,7 +894,7 @@ class PhotoProcessor {
                                     </div>
                                     <div class="hover-overlay">
                                         <i class="fas fa-expand-alt me-1"></i>
-                                        ${group.bib_number === 'unknown' ? 'View & Label' : 'View'}
+                                        ${group.bib_number === 'unknown' ? 'View & Label' : 'View & Edit'}
                                     </div>
                                     ${photo.detection_result && photo.detection_result.confidence > 0 ? `
                                         <div class="confidence-badge ${this.getConfidenceClass(photo.detection_result.confidence)}">
@@ -918,8 +912,6 @@ class PhotoProcessor {
                                 </div>
                             `).join('')}
                         </div>
-
-                    </div>
                 </div>
             </div>
         `).join('');
@@ -2444,7 +2436,7 @@ class PhotoProcessor {
         console.log('Inline labeling input found:', !!input, 'disabled:', input?.disabled);
 
         if (!input) {
-            console.error('Could not find inline labeling input');
+            console.log('Inline labeling input not found yet - will be initialized when input is created');
             return;
         }
 
