@@ -22,38 +22,40 @@
         <!-- Landing Page -->
         <div id="landing-page">
             <!-- Navigation -->
-            <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+            <nav class="navbar navbar-expand-lg seamless-navbar fixed-top" id="main-nav">
                 <div class="container">
-                    <a class="navbar-brand fw-bold fs-3" href="#">
-                        <span class="text-light">Tag</span><span class="text-danger">Sort</span>
+                    <a class="navbar-brand clean-brand fw-bold fs-3" href="#">
+                        <span class="brand-tag">Tag</span><span class="brand-sort">Sort</span>
                     </a>
                     
-                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                        <span class="navbar-toggler-icon"></span>
+                    <button class="navbar-toggler clean-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="clean-toggler-line"></span>
+                        <span class="clean-toggler-line"></span>
+                        <span class="clean-toggler-line"></span>
                     </button>
                     
                     <div class="collapse navbar-collapse" id="navbarNav">
-                        <ul class="navbar-nav ms-auto">
+                        <ul class="navbar-nav ms-auto align-items-center">
                             <li class="nav-item">
-                                <a class="nav-link" href="#home">Home</a>
+                                <a class="nav-link clean-nav-link" href="#home">Home</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="#pricing">Pricing</a>
+                                <a class="nav-link clean-nav-link" href="#pricing">Pricing</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="#about">About</a>
+                                <a class="nav-link clean-nav-link" href="#about">About</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="#feedback">Feedback</a>
+                                <a class="nav-link clean-nav-link" href="#feedback">Feedback</a>
                             </li>
                             <li class="nav-item ms-3">
-                                <button class="btn btn-outline-light btn-sm me-2" onclick="showSignInModal()">
+                                <button class="btn clean-btn-ghost me-3" onclick="showSignInModal()">
                                     Sign In
                                 </button>
                             </li>
                             <li class="nav-item">
-                                <button class="btn btn-danger btn-sm" onclick="showCreateAccountModal()">
-                                    Create Account
+                                <button class="btn clean-btn-primary" onclick="showCreateAccountModal()">
+                                    Start 3-Day Free Trial
                                 </button>
                             </li>
                         </ul>
@@ -139,7 +141,7 @@
             </section>
 
             <!-- Value Propositions Section -->
-            <section class="py-5 bg-light">
+            <section class="value-propositions-section py-5">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center mb-5">
@@ -149,8 +151,8 @@
                     </div>
                     <div class="row g-4">
                         <div class="col-lg-4">
-                            <div class="card h-100 border-0 shadow-sm">
-                                <div class="card-body text-center p-4">
+                            <div class="card h-100 border-0">
+                                <div class="card-body text-center">
                                     <div class="feature-icon mb-3">
                                         <i class="fas fa-bolt fa-3x text-danger"></i>
                                     </div>
@@ -161,8 +163,8 @@
                             </div>
                         </div>
                         <div class="col-lg-4">
-                            <div class="card h-100 border-0 shadow-sm">
-                                <div class="card-body text-center p-4">
+                            <div class="card h-100 border-0">
+                                <div class="card-body text-center">
                                     <div class="feature-icon mb-3">
                                         <i class="fas fa-bullseye fa-3x text-danger"></i>
                                     </div>
@@ -173,8 +175,8 @@
                             </div>
                         </div>
                         <div class="col-lg-4">
-                            <div class="card h-100 border-0 shadow-sm">
-                                <div class="card-body text-center p-4">
+                            <div class="card h-100 border-0">
+                                <div class="card-body text-center">
                                     <div class="feature-icon mb-3">
                                         <i class="fas fa-tools fa-3x text-danger"></i>
                                     </div>
@@ -189,7 +191,7 @@
             </section>
 
             <!-- How It Works Section -->
-            <section class="py-5">
+            <section class="how-it-works-section py-5">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center mb-5">
@@ -239,7 +241,7 @@
             </section>
 
             <!-- Pricing Section -->
-            <section id="pricing" class="py-5 bg-light">
+            <section id="pricing" class="pricing-section py-5">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center mb-5">
@@ -324,7 +326,7 @@
             </section>
 
             <!-- CTA Section -->
-            <section class="py-5 bg-dark text-white">
+            <section class="cta-section py-5 text-white">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center">
@@ -349,7 +351,7 @@
             </section>
 
             <!-- About Section -->
-            <section id="about" class="py-5 bg-white">
+            <section id="about" class="about-section py-5">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center mb-5">
@@ -459,21 +461,21 @@
                             
                             <div class="row g-4">
                                 <div class="col-md-4">
-                                    <div class="text-center">
+                                    <div class="mission-card text-center">
                                         <i class="fas fa-heart fa-3x text-danger mb-3"></i>
                                         <h5>Photographer-First</h5>
                                         <p class="text-muted">Built by photographers, for photographers. Every feature is designed with your workflow in mind.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <div class="text-center">
+                                    <div class="mission-card text-center">
                                         <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
                                         <h5>Privacy Focused</h5>
                                         <p class="text-muted">Your photos are yours. We process them securely and delete them automatically after 30 days.</p>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
-                                    <div class="text-center">
+                                    <div class="mission-card text-center">
                                         <i class="fas fa-rocket fa-3x text-primary mb-3"></i>
                                         <h5>Always Improving</h5>
                                         <p class="text-muted">We're constantly updating our AI models and adding new features based on your feedback.</p>
@@ -486,7 +488,7 @@
             </section>
 
             <!-- Privacy Notice -->
-            <section class="py-4 bg-light">
+            <section class="privacy-notice-section py-4">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center">
@@ -505,34 +507,34 @@
         <!-- App Section (Hidden initially) -->
         <div id="app-section" class="d-none">
             <!-- App Header -->
-            <header class="bg-dark text-white py-4 mb-4">
+            <header class="py-4 mb-4">
                 <div class="container">
                     <div class="row">
                         <div class="col text-center position-relative">
                             <a href="#" onclick="showLandingPage()" class="text-decoration-none">
                                 <h1 class="display-4 mb-2">
-                                    <span class="text-white">Tag</span><span class="text-danger">Sort</span>
+                                    <span>Tag</span><span class="text-danger">Sort</span>
                                 </h1>
                             </a>
                             <p class="lead">Upload event photos and automatically sort them by bib numbers</p>
                             
                             <!-- Top Right Buttons -->
                             <div class="position-absolute top-0 end-0">
-                                <button class="btn btn-outline-light btn-sm me-2" 
+                                <button class="btn btn-outline-secondary btn-sm me-2" 
                                         id="profileBtn" 
                                         onclick="showProfileModal()"
                                         title="View profile and quota">
                                     <i class="fas fa-user-circle me-1"></i>
                                     Profile
                                 </button>
-                                <button class="btn btn-outline-light btn-sm me-2" 
+                                <button class="btn btn-outline-secondary btn-sm me-2" 
                                         id="feedbackBtn" 
                                         onclick="photoProcessor.showFeedbackModal()"
                                         title="Report bugs or suggest improvements">
                                     <i class="fas fa-comment-alt me-1"></i>
                                     Feedback
                                 </button>
-                                <button class="btn btn-outline-light btn-sm" 
+                                <button class="btn btn-outline-danger btn-sm" 
                                         id="logoutBtn" 
                                         onclick="logout()"
                                         title="Sign out">
@@ -902,7 +904,7 @@
 
     <!-- Gallery Modal -->
     <div class="modal fade" id="galleryModal" tabindex="-1" aria-labelledby="galleryModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog" style="max-width: 650px;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="galleryModalLabel">All Photos</h5>
@@ -923,7 +925,7 @@
 
     <!-- Upload More Modal -->
     <div class="modal fade" id="uploadMoreModal" tabindex="-1" aria-labelledby="uploadMoreModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog" style="max-width: 450px;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="uploadMoreModalLabel">
@@ -1024,7 +1026,7 @@
 
     <!-- Feedback Modal -->
     <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog" style="max-width: 400px;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="feedbackModalLabel">
@@ -1096,7 +1098,7 @@
 
     <!-- Sign In Modal -->
     <div class="modal fade" id="signInModal" tabindex="-1" aria-labelledby="signInModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 380px;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="signInModalLabel">
@@ -1145,7 +1147,7 @@
 
     <!-- Create Account Modal -->
     <div class="modal fade" id="createAccountModal" tabindex="-1" aria-labelledby="createAccountModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="createAccountModalLabel">

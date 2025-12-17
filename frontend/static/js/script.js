@@ -581,9 +581,9 @@ async function showProfileModal() {
     
     const modalDialog = document.createElement('div');
     modalDialog.style.cssText = `
-        background-color: white; border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        width: 600px; max-width: 90vw; max-height: 90vh;
+        background-color: white; border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        width: 420px; max-width: 95vw; max-height: 85vh;
         overflow: auto; position: relative;
     `;
     
@@ -907,6 +907,52 @@ window.handleUpgrade = handleUpgrade;
 window.handlePaymentSuccess = handlePaymentSuccess;
 window.handlePaymentCancelled = handlePaymentCancelled;
 
+// ==========================================
+// SEAMLESS NAVBAR SCROLL BEHAVIOR
+// ==========================================
+
+/**
+ * Initialize seamless navbar scroll behavior
+ * Adds/removes 'scrolled' class based on scroll position
+ */
+function initializeSeamlessNavbar() {
+    const navbar = document.querySelector('.seamless-navbar');
+    if (!navbar) return;
+    
+    let isScrolled = false;
+    const scrollThreshold = 100; // Pixels from top to trigger background change
+    
+    function handleScroll() {
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        
+        if (scrollTop > scrollThreshold && !isScrolled) {
+            navbar.classList.add('scrolled');
+            isScrolled = true;
+        } else if (scrollTop <= scrollThreshold && isScrolled) {
+            navbar.classList.remove('scrolled');
+            isScrolled = false;
+        }
+    }
+    
+    // Throttle scroll events for better performance
+    let ticking = false;
+    function requestTick() {
+        if (!ticking) {
+            requestAnimationFrame(handleScroll);
+            ticking = true;
+            setTimeout(() => { ticking = false; }, 16); // ~60fps
+        }
+    }
+    
+    window.addEventListener('scroll', requestTick, { passive: true });
+    
+    // Check initial scroll position
+    handleScroll();
+}
+
+// Make function globally available
+window.initializeSeamlessNavbar = initializeSeamlessNavbar;
+
 
 // ==========================================
 // 4. APP INITIALIZATION (DOM LOADED)
@@ -953,7 +999,10 @@ document.addEventListener('DOMContentLoaded', () => {
         handlePaymentCancelled();
     }
 
-    // 5. Check Auth & Handle Initial Route
+    // 5. Initialize seamless navbar scroll behavior
+    initializeSeamlessNavbar();
+
+    // 6. Check Auth & Handle Initial Route
     // We call this LAST to ensure PhotoProcessor is ready for the router
     if (typeof checkAuthOnLoad === 'function') {
         checkAuthOnLoad();
