@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     google_application_credentials: Optional[str] = Field(default=None)
     google_cloud_project: Optional[str] = Field(default=None)
 
+    # Stripe Configuration
+    stripe_secret_key: Optional[str] = Field(default=None)
+    stripe_webhook_secret: Optional[str] = Field(default=None)
+
     # Database
     database_url: str = Field(default="sqlite:///./tag_photos.db")
 

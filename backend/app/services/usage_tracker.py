@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 from app.models.processing import ProcessingStatus
 from app.models.usage import ActionType, ProcessingJob, UsageLog, UserQuota
 from app.models.user import User
+from app.tier_config import get_upload_limit_by_tier, get_tier_info
 
 logger = logging.getLogger(__name__)
-
 
 class UsageTracker:
     """
@@ -115,21 +115,50 @@ class UsageTracker:
 
     def get_or_create_user_quota(self, db: Session, user_id: int) -> UserQuota:
         """
-        Get or create user quota record for the current month.
+        Get or create user quota record for the current month, 
+        ensuring limits are set based on the user's current tier.
         """
         current_month = datetime.utcnow().strftime("%Y-%m")
 
+        # 1. Fetch the User object to get the tier information
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.error(f"User ID {user_id} not found when fetching quota.")
+            # Fallback for safety, but this shouldn't happen if auth works
+            user_tier = "Trial"
+        else:
+            user_tier = user.current_tier 
+
+        # 2. Determine the limit based on the user's tier
+        tier_limit = get_upload_limit_by_tier(user_tier)
+        
+        # 3. Fetch the quota object
         quota = db.query(UserQuota).filter(UserQuota.user_id == user_id).first()
 
         if not quota:
             # Create new quota record
-            quota = UserQuota(user_id=user_id, current_month=current_month)
+            quota = UserQuota(
+                user_id=user_id, 
+                current_month=current_month,
+                # Set the limit based on the user's tier upon creation
+                monthly_photo_limit=tier_limit 
+            )
             db.add(quota)
             db.commit()
             db.refresh(quota)
         else:
-            # Reset monthly usage if it's a new month
-            quota.reset_monthly_usage(current_month)
+            # A. Reset monthly usage if it's a new month (Original Logic)
+            if quota.current_month != current_month:
+                quota.reset_monthly_usage(current_month)
+                # Ensure the limit is reset/updated if the tier changed *or* if a default was used before
+                quota.monthly_photo_limit = tier_limit
+                logger.info(f"Quota reset for {user_id}. Limit set to {tier_limit} ({user_tier} tier).")
+            
+            # B. CRITICAL: If the quota exists but the limit doesn't match the current tier (e.g., user just upgraded/downgraded), update it.
+            elif quota.monthly_photo_limit != tier_limit:
+                 quota.monthly_photo_limit = tier_limit
+                 logger.info(f"Quota limit updated for {user_id} due to tier change. New limit: {tier_limit}.")
+
             db.commit()
 
         return quota
@@ -480,3 +509,4 @@ class UsageTracker:
 
 # Global instance
 usage_tracker = UsageTracker()
+

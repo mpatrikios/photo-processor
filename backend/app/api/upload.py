@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import uuid
-from typing import List
+from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
@@ -214,3 +214,4 @@ async def serve_photo_with_token(
         raise HTTPException(status_code=404, detail="Photo not found")
 
     return FileResponse(file_path, media_type="image/jpeg")
+

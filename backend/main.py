@@ -16,10 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
-from app.api import analytics, auth, batch, download, feedback, process, upload, users
+from app.api import analytics, auth, batch, download, feedback, process, upload, users, payment
 from app.core.config import settings
 from app.core.errors import register_error_handlers
-from app.core.security import SecurityHeaders, custom_rate_limit_handler, limiter
+from app.core.security_middleware import SecurityHeaders, custom_rate_limit_handler, limiter
 from app.models import (  # Import models to register them with SQLAlchemy
     processing,
     usage,
@@ -332,6 +332,7 @@ app.include_router(download.router, prefix="/api/download", tags=["download"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 app.include_router(batch.router, prefix="/api/batch", tags=["batch"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(payment.router, prefix="/api/payment", tags=["payment"]) 
 
 # Secure file access with user isolation
 from app.api import secure_files
@@ -361,3 +362,4 @@ logger.info("  - /api/download")
 logger.info("  - /api/feedback")
 logger.info("  - /api/batch")
 logger.info("  - /api/analytics")
+logger.info("  - /api/payment")

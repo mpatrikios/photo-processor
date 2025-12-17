@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
-from app.core.security import InputValidator
+from app.core.security_middleware import InputValidator
 from app.models.processing import (
     BatchOperationDB,
     BatchOperationType,

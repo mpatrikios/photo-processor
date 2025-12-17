@@ -1,0 +1,42 @@
+/* Style the Button Atom using the defined color palette */
+
+.atom-button {
+    padding: 10px 20px;
+    border-radius: var(--border-radius-default);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    font-size: 14px;
+    line-height: 1;
+}
+
+/* Primary (Red) Button Style */
+.atom-button.primary {
+    background-color: var(--color-accent-primary);
+    color: var(--color-background-primary); /* White text */
+    border: 1px solid var(--color-accent-primary);
+}
+
+.atom-button.primary:hover:not(:disabled) {
+    background-color: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+}
+
+/* Secondary (Outline/Ghost) Button Style */
+.atom-button.secondary {
+    background-color: transparent;
+    color: var(--color-text-primary); /* Black text */
+    border: 1px solid var(--color-text-primary);
+}
+
+.atom-button.secondary:hover:not(:disabled) {
+    background-color: var(--color-neutral-light);
+}
+
+/* Disabled State */
+.atom-button:disabled {
+    cursor: not-allowed;
+    background-color: var(--color-neutral-light);
+    color: var(--color-neutral-medium);
+    border-color: var(--color-neutral-medium);
+}

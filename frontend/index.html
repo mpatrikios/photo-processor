@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="static/css/style.css">
+    <link rel="stylesheet" href="static/css/global.css">
     
     <!-- Browser Image Compression -->
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js"></script>
@@ -36,6 +36,9 @@
                         <ul class="navbar-nav ms-auto">
                             <li class="nav-item">
                                 <a class="nav-link" href="#home">Home</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#pricing">Pricing</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="#about">About</a>
@@ -72,13 +75,13 @@
                             </p>
                             <div class="mb-4">
                                 <p class="fs-5 fw-semibold text-dark">
-                                    Sort 10,000 race photos in minutes — for free in beta
+                                    Sort 10,000 race photos in minutes
                                 </p>
                             </div>
                             <div class="d-flex gap-3 mb-4">
                                 <button class="btn btn-danger btn-lg px-4 py-3" onclick="showCreateAccountModal()">
                                     <i class="fas fa-rocket me-2"></i>
-                                    Get Started Free in Beta
+                                    Start 3-Day Free Trial
                                 </button>
                                 <button class="btn btn-outline-dark btn-lg px-4 py-3" onclick="showSignInModal()">
                                     <i class="fas fa-sign-in-alt me-2"></i>
@@ -88,7 +91,7 @@
                             <p class="text-muted">
                                 <small>
                                     <i class="fas fa-check-circle text-success me-1"></i>
-                                    Beta is open — save your weekend
+                                    3-day free trial — save your weekend
                                     <span class="mx-2">•</span>
                                     <i class="fas fa-shield-alt text-success me-1"></i>
                                     No card required
@@ -235,6 +238,91 @@
                 </div>
             </section>
 
+            <!-- Pricing Section -->
+            <section id="pricing" class="py-5 bg-light">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-12 text-center mb-5">
+                            <h2 class="display-5 fw-bold">Simple, Fair Pricing</h2>
+                            <p class="lead text-muted">Choose the plan that works for your photo volume</p>
+                        </div>
+                    </div>
+                    <div class="row justify-content-center">
+                        <!-- Free Tier -->
+                        <div class="col-lg-4 col-md-6 mb-4">
+                            <div class="card h-100 border-0 shadow">
+                                <div class="card-body p-4 text-center">
+                                    <div class="mb-3">
+                                        <h3 class="fw-bold">Free Trial</h3>
+                                        <div class="display-6 fw-bold text-success">$0</div>
+                                        <small class="text-muted">First 3 days</small>
+                                    </div>
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>1,000 photos/month</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Basic sorting</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>10MB max file size</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Standard support</li>
+                                    </ul>
+                                    <button class="btn btn-outline-primary w-100 mt-3" onclick="showCreateAccountModal()">
+                                        Get Started Free
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Basic Tier -->
+                        <div class="col-lg-4 col-md-6 mb-4">
+                            <div class="card h-100 border-primary shadow">
+                                <div class="card-header text-center bg-primary text-white">
+                                    <small class="fw-bold">MOST POPULAR</small>
+                                </div>
+                                <div class="card-body p-4 text-center">
+                                    <div class="mb-3">
+                                        <h3 class="fw-bold">Basic</h3>
+                                        <div class="display-6 fw-bold text-primary">$9.99</div>
+                                        <small class="text-muted">per month</small>
+                                    </div>
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>10,000 photos/month</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Basic sorting</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>25MB max file size</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Priority support</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>CSV export</li>
+                                    </ul>
+                                    <button class="btn btn-primary w-100 mt-3" onclick="handleUpgrade('basic')">
+                                        Upgrade to Basic
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pro Tier -->
+                        <div class="col-lg-4 col-md-6 mb-4">
+                            <div class="card h-100 border-0 shadow">
+                                <div class="card-body p-4 text-center">
+                                    <div class="mb-3">
+                                        <h3 class="fw-bold">Pro</h3>
+                                        <div class="display-6 fw-bold text-danger">$19.99</div>
+                                        <small class="text-muted">per month</small>
+                                    </div>
+                                    <ul class="list-unstyled">
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>30,000 photos/month</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Advanced sorting</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>50MB max file size</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Priority support</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>CSV export</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>RAW file support</li>
+                                    </ul>
+                                    <button class="btn btn-danger w-100 mt-3" onclick="handleUpgrade('pro')">
+                                        Upgrade to Pro
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- CTA Section -->
             <section class="py-5 bg-dark text-white">
                 <div class="container">
@@ -245,7 +333,7 @@
                             <div class="d-flex gap-3 justify-content-center">
                                 <button class="btn btn-danger btn-lg px-4 py-3" onclick="showCreateAccountModal()">
                                     <i class="fas fa-rocket me-2"></i>
-                                    Try it free in beta. No card. No hassle.
+                                    Start 3-Day Free Trial
                                 </button>
                             </div>
                             <p class="mt-3 text-muted">
@@ -397,17 +485,11 @@
                 </div>
             </section>
 
-            <!-- Beta Disclaimer -->
+            <!-- Privacy Notice -->
             <section class="py-4 bg-light">
                 <div class="container">
                     <div class="row">
                         <div class="col-12 text-center">
-                            <p class="mb-2">
-                                <small class="text-muted">
-                                    <strong>Beta Notice:</strong> TagSort is currently in free beta. 
-                                    While we're confident in performance, we're actively improving accuracy, speed, and export features.
-                                </small>
-                            </p>
                             <p class="mb-0">
                                 <small class="text-muted">
                                     <i class="fas fa-shield-alt text-success me-1"></i>
@@ -1053,7 +1135,7 @@
                     <div class="border-top pt-3 mt-3">
                         <small class="text-muted">
                             <i class="fas fa-info-circle me-1"></i>
-                            <strong>Beta:</strong> All accounts are free during beta testing.
+                            <strong>Free Trial:</strong> Get full access for 3 days, then choose your plan.
                         </small>
                     </div>
                 </div>
@@ -1075,7 +1157,7 @@
                     <div class="text-center mb-4">
                         <p class="text-muted">
                             <i class="fas fa-gift text-success me-1"></i>
-                            <strong>Free Beta Access</strong> - No card required
+                            <strong>3-Day Free Trial</strong> - No card required
                         </p>
                     </div>
                     
@@ -1107,7 +1189,7 @@
                         <div class="d-grid">
                             <button type="submit" class="btn btn-danger">
                                 <i class="fas fa-rocket me-2"></i>
-                                Create Free Account in Beta
+                                Start 3-Day Free Trial
                             </button>
                         </div>
                     </form>
@@ -1133,6 +1215,7 @@
     <script src="static/js/analytics-dashboard.js"></script>
     
     <!-- Main JavaScript -->
+    <script src="/static/js/photo-processor.js"></script>
     <script src="static/js/script.js"></script>
 </body>
 </html>
