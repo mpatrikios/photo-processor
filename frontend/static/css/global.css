@@ -3711,35 +3711,34 @@ body.metadata-panel-visible .photo-viewing-area {
 
 /* Enhanced metadata layout - Optimized for compact display */
 .photo-metadata-enhanced {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.4rem;
+    display: flex;
     align-items: center;
-    padding: 0.4rem 0.75rem;
-    max-height: 80px;
-    overflow-y: auto;
-    overflow-x: visible;
-    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-    border-radius: 6px;
-    border: 1px solid rgba(75, 85, 99, 0.3);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    justify-content: space-between;
+    gap: 2rem;
+    padding: 0;
+    max-height: none;
+    overflow: visible;
+    background: transparent;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
     pointer-events: auto !important;
 }
 
 .photo-info-section {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.8rem;
     align-items: center;
+    gap: 2rem;
     color: white;
+    width: 100%;
+    justify-content: space-between;
 }
 
 .info-item {
     display: flex;
-    flex-direction: row;
     align-items: center;
-    gap: 0.4rem;
-    min-width: 120px;
+    gap: 0.75rem;
+    flex: 1;
 }
 
 
@@ -3764,37 +3763,75 @@ body.metadata-panel-visible .photo-viewing-area {
 
 
 .info-label {
-    font-size: 0.65rem;
-    color: rgba(255, 255, 255, 0.7);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-weight: 600;
-    min-width: 55px;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     white-space: nowrap;
 }
 
 .info-value {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+    font-weight: 600;
     color: white;
+}
+
+
+/* Modern Input Field Styling for Photo Metadata */
+#photoMetadata input[type="text"],
+#inlineLabelContainer input[type="text"],
+#inlineBibInput {
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #1a202c;
+    font-size: 0.9rem;
     font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex: 1;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    min-width: 120px;
+}
+
+#photoMetadata input[type="text"]:hover,
+#inlineLabelContainer input[type="text"]:hover,
+#inlineBibInput:hover {
+    border-color: #cbd5e0;
+    box-shadow: 0 0 0 0 transparent;
+}
+
+#photoMetadata input[type="text"]:focus,
+#inlineLabelContainer input[type="text"]:focus,
+#inlineBibInput:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    background: rgba(255, 255, 255, 1);
+}
+
+#photoMetadata input[type="text"]::placeholder,
+#inlineLabelContainer input[type="text"]::placeholder,
+#inlineBibInput::placeholder {
+    color: #9ca3af;
+    font-style: normal;
+    opacity: 1;
 }
 
 /* Enhanced inline labeling container */
 #inlineLabelContainer {
     animation: slideInFromBottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     display: block !important;
-    background: white;
-    border-radius: 8px;
-    border: 2px solid var(--primary-color);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     position: relative;
-    z-index: 1065; /* Higher than photoMetadata panel to ensure proper layering */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    z-index: 1065;
     margin-top: 0.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    overflow: visible; /* Allow content to be fully interactive */
+    overflow: visible;
     pointer-events: auto !important;
 }
 
@@ -3813,29 +3850,76 @@ body.metadata-panel-visible .photo-viewing-area {
     display: none !important;
 }
 
-/* Enhanced labeling form - Horizontal compact layout */
+/* Enhanced labeling form - Modern horizontal layout */
 .inline-labeling-form {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.6rem;
-    background: white;
+    gap: 1rem;
+    padding: 1rem;
+    background: transparent;
     justify-content: flex-start;
 }
 
-/* New compact horizontal elements */
+/* Modern compact horizontal elements */
 .labeling-icon {
-    color: var(--primary-color);
-    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1rem;
     flex-shrink: 0;
 }
 
 .labeling-text {
-    color: var(--primary-color);
-    font-weight: 600;
-    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    font-size: 0.9rem;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+/* Modern Button Styling for Photo Metadata */
+#photoMetadata .btn,
+#inlineLabelContainer .btn {
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.85rem;
+    padding: 0.6rem 1rem;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    cursor: pointer;
+    min-height: 44px; /* Touch-friendly minimum */
+}
+
+#photoMetadata .btn-outline-secondary,
+#inlineLabelContainer .btn-outline-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+#photoMetadata .btn-outline-secondary:hover,
+#inlineLabelContainer .btn-outline-secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#photoMetadata .btn-outline-secondary:active,
+#inlineLabelContainer .btn-outline-secondary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+#photoMetadata .btn:focus,
+#inlineLabelContainer .btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 .detection-inline {
@@ -4013,17 +4097,19 @@ body.metadata-panel-visible .photo-viewing-area {
 }
 
 .confidence-badge-enhanced {
-    background: linear-gradient(135deg, #3498db, #2980b9);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
     color: white;
-    padding: 0.15rem 0.5rem;
-    border-radius: 12px;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
     font-weight: 600;
-    font-size: 0.65rem;
-    display: flex;
+    font-size: 0.75rem;
+    display: inline-flex;
     align-items: center;
-    gap: 0.15rem;
-    box-shadow: 0 1px 4px rgba(52, 152, 219, 0.3);
-    min-height: 18px;
+    gap: 0.25rem;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .confidence-badge-enhanced::before {
@@ -4084,15 +4170,17 @@ body.metadata-panel-visible .photo-viewing-area {
     left: 0;
     right: 0;
     z-index: 1060;
-    background: linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.95) 100%);
-    border-top: 3px solid var(--primary-color);
-    padding: 0.5rem;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px 12px 0 0;
+    padding: 1rem;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.2);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
     display: block;
     pointer-events: auto !important;
-    max-height: 100px;
+    max-height: 120px;
 }
 
 /* Hidden state for the fixed panel */

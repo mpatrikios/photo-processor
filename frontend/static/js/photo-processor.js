@@ -2396,7 +2396,12 @@ class PhotoProcessor {
             categoryBadge.className = 'badge bg-info';
         }
         
-        document.getElementById('photoFilename').textContent = photo.filename;
+        // Update filename if element exists (may be hidden for clean UI)
+        const filenameElement = document.getElementById('photoFilename');
+        if (filenameElement) {
+            filenameElement.textContent = photo.filename;
+        }
+        
         document.getElementById('photoBibNumber').textContent = photo.groupBibNumber === 'unknown' ? 'Unknown' : photo.groupBibNumber;
 
         // Update confidence
@@ -2541,8 +2546,6 @@ class PhotoProcessor {
             return;
         }
 
-        const isUnknown = photo.groupBibNumber === 'unknown' || 
-                         (photo.detection_result && photo.detection_result.bib_number === 'unknown');
 
         // Always show the enhanced inline labeling interface for ALL photos
         // This ensures consistent UI between unknown and labeled photos
@@ -2556,25 +2559,14 @@ class PhotoProcessor {
         
         // Determine the current bib number for pre-filling
         let currentBibNumber = '';
-        let detectionNote = '';
         
         if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
             currentBibNumber = photo.detection_result.bib_number;
-            const confidence = Math.round((photo.detection_result.confidence / 1.5) * 100);
-            detectionNote = `<div class="detection-note mb-2">
-                <small class="text-info">
-                    <i class="fas fa-robot me-1"></i>
-                    AI detected: Bib #${currentBibNumber} (${confidence}% confidence)
-                </small>
-            </div>`;
         } else if (this.currentLightboxGroup && this.currentLightboxGroup.bib_number !== 'unknown') {
             currentBibNumber = this.currentLightboxGroup.bib_number;
         }
         
-        // Create compact horizontal labeling interface
-        const compactDetectionNote = detectionNote ? 
-            detectionNote.replace('<div class="detection-note mb-2">', '<span class="detection-inline">').replace('</div>', '</span>') : '';
-        
+        // Create compact horizontal labeling interface        
         inlineContainer.innerHTML = `
             <div class="inline-labeling-form">
                 <span class="labeling-icon"><i class="fas fa-tag"></i></span>
@@ -2596,7 +2588,6 @@ class PhotoProcessor {
                         <i class="fas fa-eye-slash"></i> No Bib
                     </button>
                 </div>
-                ${compactDetectionNote}
             </div>
         `;
         
