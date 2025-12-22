@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     api_port: int = Field(default=8000)
     cors_origins: List[str] = Field(default=["http://localhost:5173"])
 
-    # Google Cloud Vision
+    # AI Vision APIs
+    gemini_api_key: Optional[str] = Field(default=None, description="Gemini Flash API key")
     google_application_credentials: Optional[str] = Field(default=None)
     google_cloud_project: Optional[str] = Field(default=None)
 
@@ -68,6 +69,10 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = Field(default=None)
     aws_s3_bucket: Optional[str] = Field(default=None)
     aws_region: str = Field(default="us-east-1")
+
+    # Payment Processing
+    stripe_secret_key: Optional[str] = Field(default=None, description="Stripe secret key")
+    stripe_webhook_secret: Optional[str] = Field(default=None, description="Stripe webhook secret")
 
     # Monitoring
     sentry_dsn: Optional[str] = Field(default=None)

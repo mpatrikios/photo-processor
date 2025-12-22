@@ -19,7 +19,7 @@ class StateManager {
             // API Configuration
             api: {
                 baseUrl: this.getApiBaseUrl(),
-                requestTimeout: 30000,
+                requestTimeout: 120000, // Increased to 2 minutes for Gemini processing
                 retryAttempts: 3
             },
             

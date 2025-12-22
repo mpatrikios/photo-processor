@@ -1,13 +1,17 @@
+import io
 import logging
 import os
 import re
 import time
+import json
 from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 import pytesseract
-from google.cloud import vision
+from PIL import Image
+from google import genai
+from google.genai import types
 
 from app.models.schemas import (
     DetectionResult,
@@ -23,40 +27,31 @@ logger = logging.getLogger(__name__)
 class NumberDetector:
     def __init__(self):
         self.results: Dict[str, DetectionResult] = {}
-        self.vision_client = None
-        self.use_google_vision = None  # Will be determined on first use
+        self.gemini_client = None
+        self.use_gemini = None  # Will be determined on first use
 
-    def _initialize_vision_client(self):
-        """Initialize Google Vision client lazily when first needed"""
-        if self.use_google_vision is not None:
+    def _initialize_gemini_client(self):
+        """Initialize Gemini client lazily when first needed"""
+        if self.use_gemini is not None:
             return  # Already initialized
 
         try:
-            # Import the function to get credentials
-            from main import get_google_credentials
-
-            credentials = get_google_credentials()
-            if credentials:
-                # Use in-memory credentials
-                self.vision_client = vision.ImageAnnotatorClient(
-                    credentials=credentials
-                )
-                self.use_google_vision = True
-                logger.info(
-                    "✅ Google Cloud Vision API initialized successfully with secure in-memory credentials"
-                )
+            # Get Gemini API key from environment
+            api_key = os.getenv("GEMINI_API_KEY")
+            if api_key:
+                self.gemini_client = genai.Client(api_key=api_key)
+                self.use_gemini = True
+                logger.info("✅ Gemini 2.0 Flash API initialized successfully")
             else:
-                # No credentials available
-                self.vision_client = None
-                self.use_google_vision = False
-                logger.info(
-                    "🔄 No Google Cloud credentials available - using Tesseract OCR only"
-                )
+                # No API key available
+                self.gemini_client = None
+                self.use_gemini = False
+                logger.info("🔄 No Gemini API key available - using Tesseract OCR only")
         except Exception as e:
-            logger.warning(f"❌ Google Cloud Vision API initialization failed: {e}")
+            logger.warning(f"❌ Gemini API initialization failed: {e}")
             logger.info("🔄 Falling back to Tesseract OCR only")
-            self.vision_client = None
-            self.use_google_vision = False
+            self.gemini_client = None
+            self.use_gemini = False
 
     async def process_photo(
         self, photo_id: str, debug_mode: bool = False, user_id: Optional[int] = None
@@ -68,23 +63,23 @@ class NumberDetector:
         if not photo_path:
             raise FileNotFoundError(f"Photo {photo_id} not found")
 
-        self._initialize_vision_client()
+        self._initialize_gemini_client()
 
-        google_result = None
+        gemini_result = None
         tesseract_result = None
-        google_time = 0
+        gemini_time = 0
         tesseract_time = 0
 
-        if self.use_google_vision:
+        if self.use_gemini:
             try:
-                # ⏱️ Time Google Vision processing for analytics
-                google_start_time = time.time()
-                bib_number, confidence, bbox = await self._detect_with_google_vision(
+                # ⏱️ Time Gemini processing for analytics
+                gemini_start_time = time.time()
+                bib_number, confidence, bbox = await self._detect_with_gemini(
                     photo_path, debug_mode
                 )
-                google_time = time.time() - google_start_time
+                gemini_time = time.time() - gemini_start_time
 
-                google_result = (bib_number, confidence, bbox)
+                gemini_result = (bib_number, confidence, bbox)
 
                 if bib_number and confidence > 0.45:
                     result = DetectionResult(
@@ -92,19 +87,19 @@ class NumberDetector:
                     )
                     self.results[photo_id] = result
 
-                    # ⏱️ Log timing for successful Google Vision detection (analytics)
+                    # ⏱️ Log timing for successful Gemini detection (analytics)
                     total_time = time.time() - photo_start_time
                     logger.debug(
-                        f"⏱️ {photo_id}: Google Vision SUCCESS in {total_time:.2f}s (google: {google_time:.2f}s)"
+                        f"⏱️ {photo_id}: Gemini SUCCESS in {total_time:.2f}s (gemini: {gemini_time:.2f}s)"
                     )
                     return result
             except Exception as e:
-                google_time = (
-                    time.time() - google_start_time
-                    if "google_start_time" in locals()
+                gemini_time = (
+                    time.time() - gemini_start_time
+                    if "gemini_start_time" in locals()
                     else 0
                 )
-                logger.warning(f"❌ Google Vision failed for {photo_id}: {e}")
+                logger.warning(f"❌ Gemini failed for {photo_id}: {e}")
 
         image = cv2.imread(photo_path)
         if image is None:
@@ -132,118 +127,120 @@ class NumberDetector:
         # ⏱️ Log final timing breakdown for analytics
         total_time = time.time() - photo_start_time
         logger.debug(
-            f"⏱️ {photo_id}: TOTAL {total_time:.2f}s (google: {google_time:.2f}s, tesseract: {tesseract_time:.2f}s)"
+            f"⏱️ {photo_id}: TOTAL {total_time:.2f}s (gemini: {gemini_time:.2f}s, tesseract: {tesseract_time:.2f}s)"
         )
 
         return result
 
-    async def _detect_with_google_vision(
+    async def _detect_with_gemini(
         self, photo_path: str, debug_mode: bool = False
     ) -> Tuple[Optional[str], float, Optional[List[int]]]:
-        content = self._optimize_image_for_api(photo_path, debug_mode)
+        """Use Gemini 2.0 Flash to detect bib numbers in race photos"""
+        try:
+            # Optimize image for API call - resize to max 1024px for faster upload
+            optimized_image_data, img_shape = self._optimize_image_for_gemini(photo_path, debug_mode)
+            
+            # Create the prompt for bib number detection with JSON response format
+            prompt = """Analyze this race photo and find bib numbers on cyclists. Return a JSON response with this exact format:
 
-        image = vision.Image(content=content)
-        response = self.vision_client.text_detection(image=image)
+{
+  "bib_number": "123",
+  "confidence": "high",
+  "location": "bike-mounted"
+}
 
-        if response.error.message:
-            raise Exception(f"Google Vision API error: {response.error.message}")
+Rules:
+- Look for numbers on bike-mounted plates (lower portion) and cyclist jerseys (upper portion)
+- Focus on bike-mounted plates first as they are clearer
+- Only detect numbers that are 1-6 digits long (1-99999 range)
+- If multiple numbers exist, return the clearest and most prominent one
+- Set confidence to "high" for very clear numbers, "medium" for somewhat clear, "low" for unclear
+- Set location to "bike-mounted" or "jersey" based on where you found it
+- If no clear bib number is visible, set bib_number to "NONE"
 
-        texts = response.text_annotations
+Return only valid JSON, nothing else."""
 
-        if debug_mode:
-            logger.debug(f"🔍 DEBUG: Google Vision found {len(texts)} text annotations")
-
-        best_number = None
-        best_confidence = 0.0
-        best_bbox = None
-
-        # Get image dimensions for confidence calculation
-        import cv2
-
-        img = cv2.imread(photo_path)
-        img_shape = img.shape[:2] if img is not None else (1, 1)
-
-        for text in texts:
-            detected_text = text.description.strip()
-
-            # Skip the first annotation (full text) to focus on individual text elements
-            if text == texts[0] and len(texts) > 1:
-                continue
-
-            # Look for standalone numbers or numbers with minimal surrounding text
-            numbers_in_text = re.findall(r"\d+", detected_text)
-            for number in numbers_in_text:
-                if self._is_valid_bib_number(number):
-                    # Calculate bounding box
-                    vertices = text.bounding_poly.vertices
-                    if not vertices:
-                        continue
-
-                    x_coords = [v.x for v in vertices]
-                    y_coords = [v.y for v in vertices]
-                    bbox = [min(x_coords), min(y_coords), max(x_coords), max(y_coords)]
-
-                    # Enhanced confidence calculation for Google Vision (bike-focused)
-                    text_length = len(detected_text)
-                    number_ratio = len(number) / text_length if text_length > 0 else 0
-
-                    # Base confidence starts higher for cleaner text (higher number ratio)
-                    base_confidence = 0.75 + (number_ratio * 0.15)
-
-                    # Position-based filtering for bike bibs
-                    center_y = (bbox[1] + bbox[3]) / 2
-                    rel_y = center_y / img_shape[0] if img_shape[0] > 0 else 0
-
-                    # Store original confidence for comparison
-
-                    # Granular position-based boosting for bike-mounted bibs
-                    boost_factor = 1.0
-
-                    if rel_y > 0.85:  # Bottom 15% of image (definitely bike area)
-                        boost_factor = 1.6
-                        base_confidence *= boost_factor
-                    elif rel_y > 0.75:  # Bottom 25% of image (likely bike area)
-                        boost_factor = 1.4
-                        base_confidence *= boost_factor
-                    elif rel_y > 0.65:  # Bottom 35% of image (possible bike area)
-                        boost_factor = 1.2
-                        base_confidence *= boost_factor
-                    elif rel_y > 0.5:  # Middle-lower region
-                        boost_factor = 1.0
-                        # No change to base_confidence
-                    elif rel_y < 0.4:  # Upper region (cyclist body) - jersey area
-                        boost_factor = 0.8
-                        base_confidence *= boost_factor
-
-                    # Apply bike-specific confidence boost
-                    enhanced_confidence = self._calculate_bib_confidence(
-                        number, base_confidence, bbox, img_shape, debug_mode
+            # Call Gemini 2.0 Flash API with async client for parallel processing
+            response = await self.gemini_client.aio.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[
+                    types.Content(
+                        role="user",
+                        parts=[
+                            types.Part.from_text(text=prompt),
+                            types.Part.from_bytes(data=optimized_image_data, mime_type="image/jpeg")
+                        ]
                     )
-
-                    # Additional boost for standalone numbers (likely to be bib numbers)
-                    if number_ratio > 0.8:  # Number takes up most of the detected text
-                        enhanced_confidence *= 1.1
-
-                    # Boost for numbers in bike number plate dimensions
-                    width = bbox[2] - bbox[0]
-                    height = bbox[3] - bbox[1]
-                    aspect_ratio = width / height if height > 0 else 0
-                    if 1.5 <= aspect_ratio <= 4.0:  # Typical bike number plate ratios
-                        enhanced_confidence *= 1.1
-                    elif aspect_ratio < 1.0:  # Too tall - likely not a bike bib
-                        enhanced_confidence *= 0.9
-
-                    # Final confidence cap
-                    enhanced_confidence = min(
-                        enhanced_confidence, 1.5
-                    )  # Allow higher confidence for position-boosted results
-
-                    if enhanced_confidence > best_confidence:
-                        best_number = number
-                        best_confidence = enhanced_confidence
-                        best_bbox = bbox
-
-        return best_number, best_confidence, best_bbox
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+            
+            if not response or not response.text:
+                return None, 0.0, None
+                
+            # Parse JSON response
+            try:
+                result = json.loads(response.text.strip())
+                detected_bib = result.get("bib_number", "NONE")
+                confidence_level = result.get("confidence", "low")
+                location = result.get("location", "unknown")
+                
+                if debug_mode:
+                    logger.debug(f"🔍 DEBUG: Gemini 2.0 detected: {result}")
+                
+                # Convert confidence level to numeric score
+                confidence_map = {"high": 0.9, "medium": 0.7, "low": 0.5}
+                base_confidence = confidence_map.get(confidence_level, 0.5)
+                
+                # Apply location-based boost
+                if location == "bike-mounted":
+                    base_confidence *= 1.1  # Boost for bike-mounted detections
+                
+            except json.JSONDecodeError:
+                # Fallback to simple text parsing if JSON fails
+                detected_bib = response.text.strip()
+                base_confidence = 0.85
+                if debug_mode:
+                    logger.debug(f"🔍 DEBUG: Gemini 2.0 fallback text: '{detected_bib}'")
+            
+            # Parse the bib number
+            if detected_bib.upper() == "NONE":
+                return None, 0.0, None
+            
+            # Validate bib number
+            if not self._is_valid_bib_number(detected_bib):
+                return None, 0.0, None
+            
+            # Create estimated bbox based on location
+            if location == "bike-mounted":
+                # Estimate bbox for bike area (lower portion)
+                estimated_bbox = [
+                    int(img_shape[1] * 0.3),  # x1 - center-left
+                    int(img_shape[0] * 0.6),  # y1 - lower portion
+                    int(img_shape[1] * 0.7),  # x2 - center-right  
+                    int(img_shape[0] * 0.8),  # y2 - lower portion
+                ]
+            else:
+                # Estimate bbox for jersey area (upper portion)
+                estimated_bbox = [
+                    int(img_shape[1] * 0.35), # x1 - center-left
+                    int(img_shape[0] * 0.3),  # y1 - upper portion
+                    int(img_shape[1] * 0.65), # x2 - center-right
+                    int(img_shape[0] * 0.55), # y2 - upper portion
+                ]
+            
+            # Apply additional confidence boost based on bib characteristics
+            enhanced_confidence = self._calculate_bib_confidence(
+                detected_bib, base_confidence, estimated_bbox, img_shape, debug_mode
+            )
+                        
+            return detected_bib, enhanced_confidence, estimated_bbox
+            
+        except Exception as e:
+            logger.error(f"Gemini API error: {e}")
+            return None, 0.0, None
 
     def _detect_with_tesseract(
         self, image: np.ndarray, debug_mode: bool = False, photo_id: str = None
@@ -779,6 +776,82 @@ class NumberDetector:
             texture_score *= 0.9
 
         return max(texture_score, 0.7)  # Minimum texture score
+
+    def _resize_image(self, image_bytes: bytes, max_size: int = 1024) -> bytes:
+        """
+        Resizes image in memory to max_size x max_size using PIL.
+        Drastically reduces upload time - 10x smaller files.
+        """
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as img:
+                # Convert to RGB to handle PNGs/CMYK
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                original_size = img.size
+                
+                # Only resize if larger than max_size
+                if max(img.size) > max_size:
+                    img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+                    
+                    if logger.isEnabledFor(logging.DEBUG):
+                        new_size = img.size
+                        reduction = ((original_size[0] * original_size[1]) - (new_size[0] * new_size[1])) / (original_size[0] * original_size[1]) * 100
+                        logger.debug(f"🏎️ PIL Resize: {original_size} → {new_size} ({reduction:.0f}% smaller)")
+                
+                # Save back to bytes with optimized quality
+                buffer = io.BytesIO()
+                img.save(buffer, format="JPEG", quality=85, optimize=True)
+                return buffer.getvalue()
+                
+        except Exception as e:
+            logger.warning(f"⚠️ PIL resize failed: {e}, using original")
+            return image_bytes  # Fallback to original
+
+    def _optimize_image_for_gemini(
+        self, image_path: str, debug_mode: bool = False
+    ) -> Tuple[bytes, Tuple[int, int]]:
+        """Optimize image for Gemini API using PIL - 10x faster upload via 1024px resizing"""
+        try:
+            # Read original image data
+            with open(image_path, "rb") as f:
+                original_data = f.read()
+            
+            # Get original dimensions for bbox calculations
+            with Image.open(image_path) as img:
+                original_width, original_height = img.size
+            
+            # Resize using PIL for optimal performance
+            optimized_data = self._resize_image(original_data, max_size=1024)
+            
+            # Calculate new dimensions after resizing
+            with Image.open(io.BytesIO(optimized_data)) as resized_img:
+                new_width, new_height = resized_img.size
+            
+            if debug_mode:
+                original_kb = len(original_data) / 1024
+                optimized_kb = len(optimized_data) / 1024
+                reduction_pct = ((len(original_data) - len(optimized_data)) / len(original_data)) * 100
+                logger.debug(
+                    f"🏎️ PIL optimization: {original_width}x{original_height} ({original_kb:.0f}KB) → "
+                    f"{new_width}x{new_height} ({optimized_kb:.0f}KB) - {reduction_pct:.0f}% smaller"
+                )
+            
+            return optimized_data, (new_height, new_width)
+            
+        except Exception as e:
+            logger.error(f"PIL optimization failed: {e}, using original")
+            # Fallback to original image
+            with open(image_path, "rb") as f:
+                original_data = f.read()
+            
+            # Get original dimensions as fallback
+            try:
+                with Image.open(image_path) as img:
+                    width, height = img.size
+                return original_data, (height, width)
+            except:
+                return original_data, (1, 1)
 
     def _optimize_image_for_api(
         self, image_path: str, debug_mode: bool = False
