@@ -311,8 +311,8 @@ async def process_photos_async(job_id: str):
     try:
         job.progress = 1  # Show 1% for initialization
 
-        # Parallel processing configuration
-        BATCH_SIZE = 5  # Process 5 photos simultaneously
+        # Parallel processing configuration - aggressive scaling for Tier 1 billing  
+        BATCH_SIZE = 50  # Process 50 photos simultaneously (was 10) - leverages 1000+ RPM limit
         semaphore = asyncio.Semaphore(BATCH_SIZE)
         total_photo_processing_time = 0
         completed_count = 0
