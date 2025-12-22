@@ -118,8 +118,8 @@ app = FastAPI(
     title="TagSort API",
     version="2.0.0",
     description="Secure photo processing API with bib number detection",
-    docs_url="/docs" if settings.debug else None,  # Disable docs in production
-    redoc_url="/redoc" if settings.debug else None,  # Disable redoc in production
+    docs_url="/docs",  # ALWAYS enable docs
+    redoc_url="/redoc",
 )
 
 # Add rate limiter to app state
@@ -263,9 +263,9 @@ if os.getenv("REPL_OWNER"):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,  # Enable credentials for authentication
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_origins=["*"],  # Allow all origins (easiest for now)
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -363,3 +363,10 @@ logger.info("  - /api/feedback")
 logger.info("  - /api/batch")
 logger.info("  - /api/analytics")
 logger.info("  - /api/payment")
+
+if __name__ == "__main__":
+    import uvicorn
+    # It is crucial to listen on 0.0.0.0 and use the PORT environment variable
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+

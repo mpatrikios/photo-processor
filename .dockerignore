@@ -1,0 +1,11 @@
+# .dockerignore
+venv/
+backend/venv/
+__pycache__/
+*/__pycache__/
+.git/
+.gitignore
+*.db
+backend/service-account-key.json
+backend/env.py
+*.md

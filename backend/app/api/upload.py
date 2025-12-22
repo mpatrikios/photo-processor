@@ -1,12 +1,12 @@
 import logging
 import os
-import shutil
 import uuid
-from typing import List, Dict, Any
+from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
+from google.cloud import storage  # NEW: Import Google Cloud Storage
 
 from app.api.auth import get_current_user
 from app.core.config import settings
@@ -19,9 +19,19 @@ from database import get_db
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = settings.upload_dir
+# CONFIGURATION
+# We default to the prod bucket, but this can be overridden by env vars
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "tagsort-uploads-prod")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".tiff", ".bmp"}
 MAX_FILE_SIZE = settings.get_max_file_size_bytes()
+
+# Initialize GCS Client once (reuse connection)
+try:
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+except Exception as e:
+    logger.warning(f"⚠️ Could not connect to Google Cloud Storage: {e}")
+    bucket = None
 
 
 def get_file_extension(filename: str) -> str:
@@ -32,6 +42,11 @@ def is_allowed_file(filename: str) -> bool:
     return get_file_extension(filename) in ALLOWED_EXTENSIONS
 
 
+def get_gcs_url(user_id: int, filename: str) -> str:
+    """Helper to generate the public URL for a file"""
+    return f"https://storage.googleapis.com/{BUCKET_NAME}/{user_id}/{filename}"
+
+
 @router.post("/photos", response_model=UploadResponse)
 async def upload_photos(
     request: Request,
@@ -39,11 +54,13 @@ async def upload_photos(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if not bucket:
+        raise HTTPException(status_code=500, detail="Storage service unavailable")
 
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
-    # Check quota before processing any files
+    # Check quota before processing
     photo_count = len(files)
     can_upload, quota_message = usage_tracker.check_user_quota(
         db, current_user.id, ActionType.UPLOAD, photo_count
@@ -65,45 +82,51 @@ async def upload_photos(
                 detail=f"File {file.filename} has invalid extension. Allowed: {', '.join(ALLOWED_EXTENSIONS)}",
             )
 
+        # Generate ID and Name
         photo_id = str(uuid.uuid4())
         file_extension = get_file_extension(file.filename)
         new_filename = f"{photo_id}{file_extension}"
-
-        # Create user-specific upload directory
-        user_upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
-        os.makedirs(user_upload_dir, exist_ok=True)
-
-        file_path = os.path.join(user_upload_dir, new_filename)
+        
+        # Define Path: user_id/filename (keeps bucket organized)
+        blob_path = f"{current_user.id}/{new_filename}"
+        blob = bucket.blob(blob_path)
 
         try:
-            with open(file_path, "wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
+            # Check file size (Read into memory to check size, then upload)
+            # Note: For massive files, we might want to stream, but for photos, this is fine.
+            file.file.seek(0, 2)  # Go to end
+            file_size_bytes = file.file.tell()
+            file.file.seek(0)  # Reset to beginning
 
-            # Calculate file size and validate
-            file_size_bytes = os.path.getsize(file_path)
             if file_size_bytes > MAX_FILE_SIZE:
-                os.remove(file_path)  # Clean up the file
                 raise HTTPException(
                     status_code=400,
                     detail=f"File {file.filename} exceeds maximum size of {settings.max_file_size_mb}MB",
                 )
 
+            # Upload to Google Cloud
+            blob.upload_from_file(
+                file.file, 
+                content_type=file.content_type
+            )
+
+            # Calculate stats
             file_size_mb = file_size_bytes / (1024 * 1024)
             total_file_size_mb += file_size_mb
-
             photo_ids.append(photo_id)
 
+        except HTTPException as he:
+            raise he
         except Exception as e:
-            logger.error(f"Failed to save {file.filename}: {str(e)}")
+            logger.error(f"Failed to upload {file.filename} to GCS: {str(e)}")
             raise HTTPException(
-                status_code=500, detail=f"Failed to save file {file.filename}: {str(e)}"
+                status_code=500, detail=f"Failed to upload file {file.filename}"
             )
 
     # Use quota after successful upload
     try:
         usage_tracker.use_quota(db, current_user.id, ActionType.UPLOAD, photo_count)
 
-        # Log the upload action
         usage_tracker.log_action(
             db=db,
             user_id=current_user.id,
@@ -113,15 +136,12 @@ async def upload_photos(
             success=True,
         )
 
-        # Update user's total photos uploaded counter
         current_user.increment_photos_uploaded(photo_count)
         db.commit()
 
     except Exception as e:
-        print(f"⚠️ Failed to update quota/usage: {str(e)}")
-        # Continue with upload success, as photos are already saved
+        logger.error(f"⚠️ Failed to update quota/usage: {str(e)}")
 
-    # Get updated quota for response
     updated_quota = usage_tracker.get_or_create_user_quota(db, current_user.id)
 
     return UploadResponse(
@@ -142,55 +162,62 @@ async def upload_photos(
 
 @router.get("/photos/{photo_id}")
 async def get_photo_info(photo_id: str, current_user: User = Depends(get_current_user)):
-    # Check user's upload directory first
-    user_upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
-    file_path = None
+    """Returns the Public URL of the photo stored in GCS"""
+    
+    # We have to guess the extension since we don't store it in the DB in this endpoint context
+    # In a perfect world, you'd look up the extension in the DB.
+    # For now, we check if the blob exists.
+    
+    found_blob = None
+    found_filename = None
 
     for ext in ALLOWED_EXTENSIONS:
-        test_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
-        if os.path.exists(test_path):
-            file_path = test_path
+        test_filename = f"{photo_id}{ext}"
+        blob_path = f"{current_user.id}/{test_filename}"
+        blob = bucket.blob(blob_path)
+        if blob.exists():
+            found_blob = blob
+            found_filename = test_filename
             break
-
-    # SECURITY: No fallback to shared directories - user isolation required
-
-    if not file_path:
+    
+    if not found_blob:
         raise HTTPException(status_code=404, detail="Photo not found")
 
     return PhotoInfo(
         id=photo_id,
-        filename=os.path.basename(file_path),
-        original_path=file_path,
+        filename=found_filename,
+        original_path=get_gcs_url(current_user.id, found_filename), # Return GCS URL
         status=ProcessingStatus.PENDING,
     )
 
 
 @router.get("/serve/{photo_id}")
 async def serve_photo(photo_id: str, current_user: User = Depends(get_current_user)):
-    """Serve photo file by ID"""
-    # Check user's upload directory first
-    user_upload_dir = os.path.join(UPLOAD_DIR, str(current_user.id))
-    file_path = None
-
+    """Redirects to the GCS public URL"""
+    
+    # Locate the file in GCS
+    found_filename = None
     for ext in ALLOWED_EXTENSIONS:
-        test_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
-        if os.path.exists(test_path):
-            file_path = test_path
+        test_filename = f"{photo_id}{ext}"
+        blob_path = f"{current_user.id}/{test_filename}"
+        blob = bucket.blob(blob_path)
+        if blob.exists():
+            found_filename = test_filename
             break
 
-    # SECURITY: No fallback to shared directories - user isolation required
-
-    if not file_path:
+    if not found_filename:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    return FileResponse(file_path, media_type="image/jpeg")
+    # REDIRECT to the Cloud Storage URL
+    # This relieves your server from streaming data and is much faster
+    return RedirectResponse(url=get_gcs_url(current_user.id, found_filename))
 
 
 @router.get("/serve/{photo_id}/view")
 async def serve_photo_with_token(
     photo_id: str, token: str, db: Session = Depends(get_db)
 ):
-    """Serve photo file by ID with token authentication for <img> tags"""
+    """Serve photo file by ID with token authentication (Redirects to GCS)"""
     from app.services.auth_service import auth_service
 
     # Verify token
@@ -198,20 +225,17 @@ async def serve_photo_with_token(
     if not user:
         raise HTTPException(status_code=403, detail="Invalid token")
 
-    # Check user's upload directory first
-    user_upload_dir = os.path.join(UPLOAD_DIR, str(user.id))
-    file_path = None
-
+    # Locate in GCS
+    found_filename = None
     for ext in ALLOWED_EXTENSIONS:
-        test_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
-        if os.path.exists(test_path):
-            file_path = test_path
+        test_filename = f"{photo_id}{ext}"
+        blob_path = f"{user.id}/{test_filename}"
+        blob = bucket.blob(blob_path)
+        if blob.exists():
+            found_filename = test_filename
             break
 
-    # SECURITY: No fallback to shared directories - user isolation required
-
-    if not file_path:
+    if not found_filename:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    return FileResponse(file_path, media_type="image/jpeg")
-
+    return RedirectResponse(url=get_gcs_url(user.id, found_filename))

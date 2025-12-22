@@ -1,61 +1,56 @@
-from pathlib import Path
-
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Database file path
-DATABASE_DIR = Path(__file__).parent
-DATABASE_URL = f"sqlite:///{DATABASE_DIR}/tag_photos.db"
-
-# Create database directory if it doesn't exist
-DATABASE_DIR.mkdir(exist_ok=True)
-
-# Create engine with SQLite-specific settings
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},  # Required for SQLite with FastAPI
-    echo=False,  # Set to True for SQL query logging during development
-)
-
-# Session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base class for all models
 Base = declarative_base()
 
+# Get variables
+db_user = os.getenv("DB_USER")
+db_pass = os.getenv("DB_PASS")
+db_name = os.getenv("DB_NAME")
+db_host = os.getenv("DB_HOST")
 
-# Dependency to get database session
+# Logic: If Cloud Run provides a Host, use Postgres. Otherwise, use Local SQLite.
+if db_host:
+    # --- CLOUD RUN (PostgreSQL) ---
+    # We don't need urllib anymore because your new password is simple!
+    DATABASE_URL = f"postgresql+psycopg2://{db_user}:{db_pass}@/{db_name}?host={db_host}"
+    
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=2,
+        pool_timeout=30,
+        pool_recycle=1800,
+    )
+else:
+    # --- LOCAL DEVELOPMENT (SQLite) ---
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'tag_photos.db')}"
+    
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=True
+    )
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 def get_db():
-    """
-    Database dependency for FastAPI endpoints.
-    Provides a database session and ensures proper cleanup.
-    """
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-
 def create_tables():
-    """
-    Create all database tables.
-    This will be called on startup to ensure tables exist.
-    """
     Base.metadata.create_all(bind=engine)
-
-
+    
 def get_db_info():
-    """
-    Get database information for debugging.
-    """
-    db_path = DATABASE_DIR / "tag_photos.db"
+    """Returns database connection info for logging."""
     return {
-        "database_url": DATABASE_URL,
-        "database_path": str(db_path),
-        "database_exists": db_path.exists(),
-        "database_size_mb": (
-            round(db_path.stat().st_size / 1024 / 1024, 2) if db_path.exists() else 0
-        ),
+        "database_url": "HIDDEN",
+        "database_path": DATABASE_URL if "sqlite" in DATABASE_URL else "Cloud SQL",
+        "database_size_mb": 0.0  # Placeholder to prevent startup crash
     }
