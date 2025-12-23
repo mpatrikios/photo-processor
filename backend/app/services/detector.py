@@ -6,7 +6,6 @@ import time
 import json
 from typing import Dict, List, Optional, Tuple
 
-import cv2
 import numpy as np
 import pytesseract
 from PIL import Image
@@ -54,93 +53,63 @@ class NumberDetector:
             self.use_gemini = False
 
     async def process_photo(
-        self, photo_id: str, debug_mode: bool = False, user_id: Optional[int] = None
-    ) -> DetectionResult:
-        # ⏱️ Start timing the entire photo processing for analytics
-        photo_start_time = time.time()
+            self, photo_id: str, debug_mode: bool = False, user_id: Optional[int] = None
+        ) -> DetectionResult:
+            """
+            Process a photo to find bib numbers using ONLY Gemini 2.0 Flash.
+            """
+            # ⏱️ Start timing
+            photo_start_time = time.time()
 
-        photo_path = self._find_photo_path(photo_id, user_id)
-        if not photo_path:
-            raise FileNotFoundError(f"Photo {photo_id} not found")
+            # Locate the file
+            photo_path = self._find_photo_path(photo_id, user_id)
+            if not photo_path:
+                logger.error(f"Photo file not found: {photo_id}")
+                return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
-        self._initialize_gemini_client()
+            self._initialize_gemini_client()
 
-        gemini_result = None
-        tesseract_result = None
-        gemini_time = 0
-        tesseract_time = 0
+            # Fail fast if Gemini is not working
+            if not self.use_gemini:
+                logger.error(f"Cannot process {photo_id}: Gemini is not configured.")
+                return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
-        if self.use_gemini:
             try:
-                # ⏱️ Time Gemini processing for analytics
-                gemini_start_time = time.time()
+                # Call Gemini
                 bib_number, confidence, bbox = await self._detect_with_gemini(
                     photo_path, debug_mode
                 )
-                gemini_time = time.time() - gemini_start_time
 
-                gemini_result = (bib_number, confidence, bbox)
-
-                if bib_number and confidence > 0.45:
+                # ⏱️ Log timing
+                total_time = time.time() - photo_start_time
+                
+                if bib_number:
                     result = DetectionResult(
                         bib_number=bib_number, confidence=confidence, bbox=bbox
                     )
                     self.results[photo_id] = result
-
-                    # ⏱️ Log timing for successful Gemini detection (analytics)
-                    total_time = time.time() - photo_start_time
-                    logger.debug(
-                        f"⏱️ {photo_id}: Gemini SUCCESS in {total_time:.2f}s (gemini: {gemini_time:.2f}s)"
-                    )
+                    logger.info(f"✅ Detected #{bib_number} ({confidence:.2f}) in {total_time:.2f}s")
                     return result
+                else:
+                    logger.info(f"🤷‍♂️ No bib found in {total_time:.2f}s")
+                    return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
+
             except Exception as e:
-                gemini_time = (
-                    time.time() - gemini_start_time
-                    if "gemini_start_time" in locals()
-                    else 0
-                )
-                logger.warning(f"❌ Gemini failed for {photo_id}: {e}")
-
-        image = cv2.imread(photo_path)
-        if image is None:
-            raise ValueError(f"Could not load image {photo_path}")
-
-        # ⏱️ Time Tesseract processing for analytics
-        tesseract_start_time = time.time()
-        bib_number, confidence, bbox = self._detect_with_tesseract(
-            image, debug_mode, photo_id
-        )
-        tesseract_time = time.time() - tesseract_start_time
-
-        tesseract_result = (bib_number, confidence, bbox)
-
-        # If no reliable detection from either method, mark as unknown
-        if not bib_number or confidence < 0.4:
-            result = DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
-        else:
-            result = DetectionResult(
-                bib_number=bib_number, confidence=confidence, bbox=bbox
-            )
-
-        self.results[photo_id] = result
-
-        # ⏱️ Log final timing breakdown for analytics
-        total_time = time.time() - photo_start_time
-        logger.debug(
-            f"⏱️ {photo_id}: TOTAL {total_time:.2f}s (gemini: {gemini_time:.2f}s, tesseract: {tesseract_time:.2f}s)"
-        )
-
-        return result
+                logger.error(f"❌ Error processing {photo_id}: {e}")
+                return DetectionResult(bib_number="error", confidence=0.0, bbox=None)
 
     async def _detect_with_gemini(
         self, photo_path: str, debug_mode: bool = False
     ) -> Tuple[Optional[str], float, Optional[List[int]]]:
-        """Use Gemini 2.0 Flash to detect bib numbers in race photos"""
+        """Use Gemini 2.0 Flash to detect bib numbers"""
         try:
-            # Optimize image for API call - resize to max 1024px for faster upload
+            # Optimize image for API call using PIL (No cv2)
             optimized_image_data, img_shape = self._optimize_image_for_gemini(photo_path, debug_mode)
             
-            # Create the prompt for bib number detection with JSON response format
+            if not optimized_image_data:
+                return None, 0.0, None
+
+            # Prompt for Gemini
             prompt = """Analyze this race photo and find bib numbers on cyclists. Return a JSON response with this exact format:
 
 {
@@ -151,16 +120,15 @@ class NumberDetector:
 
 Rules:
 - Look for numbers on bike-mounted plates (lower portion) and cyclist jerseys (upper portion)
-- Focus on bike-mounted plates first as they are clearer
-- Only detect numbers that are 1-6 digits long (1-99999 range)
+- Only detect numbers that are 1-6 digits long
 - If multiple numbers exist, return the clearest and most prominent one
-- Set confidence to "high" for very clear numbers, "medium" for somewhat clear, "low" for unclear
-- Set location to "bike-mounted" or "jersey" based on where you found it
-- If no clear bib number is visible, set bib_number to "NONE"
+- Set confidence to "high", "medium", or "low"
+- Set location to "bike-mounted" or "jersey"
+- If no bib number is visible, set bib_number to "NONE"
 
-Return only valid JSON, nothing else."""
+Return only valid JSON."""
 
-            # Call Gemini 2.0 Flash API with async client for parallel processing
+            # Call API
             response = await self.gemini_client.aio.models.generate_content(
                 model="gemini-2.0-flash",
                 contents=[
@@ -180,203 +148,184 @@ Return only valid JSON, nothing else."""
             if not response or not response.text:
                 return None, 0.0, None
                 
-            # Parse JSON response
+            # Parse JSON
             try:
                 result = json.loads(response.text.strip())
                 detected_bib = result.get("bib_number", "NONE")
                 confidence_level = result.get("confidence", "low")
                 location = result.get("location", "unknown")
                 
-                if debug_mode:
-                    logger.debug(f"🔍 DEBUG: Gemini 2.0 detected: {result}")
-                
-                # Convert confidence level to numeric score
-                confidence_map = {"high": 0.9, "medium": 0.7, "low": 0.5}
-                base_confidence = confidence_map.get(confidence_level, 0.5)
-                
-                # Apply location-based boost
-                if location == "bike-mounted":
-                    base_confidence *= 1.1  # Boost for bike-mounted detections
+                # Convert confidence text to number
+                confidence_map = {"high": 0.95, "medium": 0.75, "low": 0.5}
+                confidence = confidence_map.get(confidence_level, 0.5)
                 
             except json.JSONDecodeError:
-                # Fallback to simple text parsing if JSON fails
-                detected_bib = response.text.strip()
-                base_confidence = 0.85
-                if debug_mode:
-                    logger.debug(f"🔍 DEBUG: Gemini 2.0 fallback text: '{detected_bib}'")
+                detected_bib = "NONE"
+                confidence = 0.0
             
-            # Parse the bib number
-            if detected_bib.upper() == "NONE":
+            # Check for "NONE" or invalid
+            if str(detected_bib).upper() == "NONE":
                 return None, 0.0, None
             
-            # Validate bib number
-            if not self._is_valid_bib_number(detected_bib):
+            if not self._is_valid_bib_number(str(detected_bib)):
                 return None, 0.0, None
             
-            # Create estimated bbox based on location
+            # Estimate Bounding Box (Dummy box since Gemini Flash doesn't return coords yet)
+            # This prevents UI crashes
             if location == "bike-mounted":
-                # Estimate bbox for bike area (lower portion)
-                estimated_bbox = [
-                    int(img_shape[1] * 0.3),  # x1 - center-left
-                    int(img_shape[0] * 0.6),  # y1 - lower portion
-                    int(img_shape[1] * 0.7),  # x2 - center-right  
-                    int(img_shape[0] * 0.8),  # y2 - lower portion
+                # Lower center
+                bbox = [
+                    int(img_shape[1] * 0.3), int(img_shape[0] * 0.5), 
+                    int(img_shape[1] * 0.7), int(img_shape[0] * 0.8)
                 ]
             else:
-                # Estimate bbox for jersey area (upper portion)
-                estimated_bbox = [
-                    int(img_shape[1] * 0.35), # x1 - center-left
-                    int(img_shape[0] * 0.3),  # y1 - upper portion
-                    int(img_shape[1] * 0.65), # x2 - center-right
-                    int(img_shape[0] * 0.55), # y2 - upper portion
+                # Upper center
+                bbox = [
+                    int(img_shape[1] * 0.3), int(img_shape[0] * 0.2), 
+                    int(img_shape[1] * 0.7), int(img_shape[0] * 0.5)
                 ]
-            
-            # Apply additional confidence boost based on bib characteristics
-            enhanced_confidence = self._calculate_bib_confidence(
-                detected_bib, base_confidence, estimated_bbox, img_shape, debug_mode
-            )
                         
-            return detected_bib, enhanced_confidence, estimated_bbox
+            return str(detected_bib), confidence, bbox
             
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
             return None, 0.0, None
 
-    def _detect_with_tesseract(
-        self, image: np.ndarray, debug_mode: bool = False, photo_id: str = None
-    ) -> Tuple[Optional[str], float, Optional[List[int]]]:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # def _detect_with_tesseract(
+    #     self, image: np.ndarray, debug_mode: bool = False, photo_id: str = None
+    # ) -> Tuple[Optional[str], float, Optional[List[int]]]:
+    #     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # Enhanced preprocessing for better bib number detection
-        enhanced_image = self._preprocess_for_bib_detection(gray)
-        bib_regions = self._find_bib_regions(enhanced_image)
+    #     # Enhanced preprocessing for better bib number detection
+    #     enhanced_image = self._preprocess_for_bib_detection(gray)
+    #     bib_regions = self._find_bib_regions(enhanced_image)
 
-        best_number = None
-        best_confidence = 0.0
-        best_bbox = None
+    #     best_number = None
+    #     best_confidence = 0.0
+    #     best_bbox = None
 
-        # First try OCR on detected bib regions
-        for region_bbox in bib_regions:
-            x1, y1, x2, y2 = region_bbox
-            roi = enhanced_image[y1:y2, x1:x2]
+    #     # First try OCR on detected bib regions
+    #     for region_bbox in bib_regions:
+    #         x1, y1, x2, y2 = region_bbox
+    #         roi = enhanced_image[y1:y2, x1:x2]
 
-            if roi.size == 0:
-                continue
+    #         if roi.size == 0:
+    #             continue
 
-            # Try multi-scale detection for better accuracy
-            number, confidence, rel_bbox = self._multi_scale_ocr(roi)
+    #         # Try multi-scale detection for better accuracy
+    #         number, confidence, rel_bbox = self._multi_scale_ocr(roi)
 
-            if number and confidence > best_confidence:
-                # Apply bib-specific confidence boost
-                boosted_confidence = self._calculate_bib_confidence(
-                    number, confidence, region_bbox, enhanced_image.shape, debug_mode
-                )
+    #         if number and confidence > best_confidence:
+    #             # Apply bib-specific confidence boost
+    #             boosted_confidence = self._calculate_bib_confidence(
+    #                 number, confidence, region_bbox, enhanced_image.shape, debug_mode
+    #             )
 
-                if boosted_confidence > best_confidence:
-                    best_number = number
-                    best_confidence = boosted_confidence
-                    # Convert relative bbox to absolute coordinates
-                    if rel_bbox:
-                        best_bbox = [
-                            x1 + rel_bbox[0],
-                            y1 + rel_bbox[1],
-                            x1 + rel_bbox[2],
-                            y1 + rel_bbox[3],
-                        ]
-                    else:
-                        best_bbox = region_bbox
+    #             if boosted_confidence > best_confidence:
+    #                 best_number = number
+    #                 best_confidence = boosted_confidence
+    #                 # Convert relative bbox to absolute coordinates
+    #                 if rel_bbox:
+    #                     best_bbox = [
+    #                         x1 + rel_bbox[0],
+    #                         y1 + rel_bbox[1],
+    #                         x1 + rel_bbox[2],
+    #                         y1 + rel_bbox[3],
+    #                     ]
+    #                 else:
+    #                     best_bbox = region_bbox
 
-        # If no good detection in bib regions, try full image OCR as fallback
-        if not best_number or best_confidence < 0.4:
-            fallback_number, fallback_conf, fallback_bbox = self._run_tesseract_on_roi(
-                enhanced_image
-            )
-            if fallback_number and fallback_conf > best_confidence:
-                best_number = fallback_number
-                best_confidence = fallback_conf
-                best_bbox = fallback_bbox
+    #     # If no good detection in bib regions, try full image OCR as fallback
+    #     if not best_number or best_confidence < 0.4:
+    #         fallback_number, fallback_conf, fallback_bbox = self._run_tesseract_on_roi(
+    #             enhanced_image
+    #         )
+    #         if fallback_number and fallback_conf > best_confidence:
+    #             best_number = fallback_number
+    #             best_confidence = fallback_conf
+    #             best_bbox = fallback_bbox
 
-        if (
-            best_number and best_confidence > 0.4
-        ):  # Lowered threshold due to better targeting
-            return best_number, best_confidence, best_bbox
+    #     if (
+    #         best_number and best_confidence > 0.4
+    #     ):  # Lowered threshold due to better targeting
+    #         return best_number, best_confidence, best_bbox
 
-        return None, 0.0, None
+    #     return None, 0.0, None
 
-    def _preprocess_for_bib_detection(self, gray_image: np.ndarray) -> np.ndarray:
-        """Enhanced preprocessing specifically for bib number detection"""
-        # Apply Gaussian blur to reduce noise
-        denoised = cv2.GaussianBlur(gray_image, (3, 3), 0)
+    # def _preprocess_for_bib_detection(self, gray_image: np.ndarray) -> np.ndarray:
+    #     """Enhanced preprocessing specifically for bib number detection"""
+    #     # Apply Gaussian blur to reduce noise
+    #     denoised = cv2.GaussianBlur(gray_image, (3, 3), 0)
 
-        # Apply CLAHE for better local contrast
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(denoised)
+    #     # Apply CLAHE for better local contrast
+    #     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    #     enhanced = clahe.apply(denoised)
 
-        return enhanced
+    #     return enhanced
 
-    def _find_bib_regions(self, image: np.ndarray) -> List[List[int]]:
-        """Find rectangular regions that could contain bike-mounted bib numbers"""
-        bib_regions = []
+    # def _find_bib_regions(self, image: np.ndarray) -> List[List[int]]:
+    #     """Find rectangular regions that could contain bike-mounted bib numbers"""
+    #     bib_regions = []
 
-        # Enhanced edge detection for bike number plates
-        # Use adaptive threshold to handle varying lighting conditions
-        adaptive_thresh = cv2.adaptiveThreshold(
-            image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-        )
+    #     # Enhanced edge detection for bike number plates
+    #     # Use adaptive threshold to handle varying lighting conditions
+    #     adaptive_thresh = cv2.adaptiveThreshold(
+    #         image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+    #     )
 
-        # Combine with Canny edge detection for better rectangular detection
-        edges = cv2.Canny(image, 40, 120, apertureSize=3)
+    #     # Combine with Canny edge detection for better rectangular detection
+    #     edges = cv2.Canny(image, 40, 120, apertureSize=3)
 
-        # Combine both methods
-        combined = cv2.bitwise_or(edges, adaptive_thresh)
+    #     # Combine both methods
+    #     combined = cv2.bitwise_or(edges, adaptive_thresh)
 
-        # Enhanced morphological operations to connect rectangular shapes
-        # Use rectangular kernel to favor rectangular shapes
-        rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
-        combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, rect_kernel)
+    #     # Enhanced morphological operations to connect rectangular shapes
+    #     # Use rectangular kernel to favor rectangular shapes
+    #     rect_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 3))
+    #     combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, rect_kernel)
 
-        # Additional dilation to connect number plate boundaries
-        dilate_kernel = np.ones((3, 3), np.uint8)
-        edges = cv2.dilate(combined, dilate_kernel, iterations=1)
+    #     # Additional dilation to connect number plate boundaries
+    #     dilate_kernel = np.ones((3, 3), np.uint8)
+    #     edges = cv2.dilate(combined, dilate_kernel, iterations=1)
 
-        # Find contours
-        contours, _ = cv2.findContours(
-            edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
+    #     # Find contours
+    #     contours, _ = cv2.findContours(
+    #         edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    #     )
 
-        h, w = image.shape
-        min_area = (w * h) * 0.0005  # At least 0.05% of image area
-        max_area = (w * h) * 0.1  # At most 10% of image area
+    #     h, w = image.shape
+    #     min_area = (w * h) * 0.0005  # At least 0.05% of image area
+    #     max_area = (w * h) * 0.1  # At most 10% of image area
 
-        for contour in contours:
-            area = cv2.contourArea(contour)
+    #     for contour in contours:
+    #         area = cv2.contourArea(contour)
 
-            if min_area < area < max_area:
-                # Get bounding rectangle
-                x, y, width, height = cv2.boundingRect(contour)
+    #         if min_area < area < max_area:
+    #             # Get bounding rectangle
+    #             x, y, width, height = cv2.boundingRect(contour)
 
-                # Check if aspect ratio is reasonable for a bike bib (typically rectangular number plates)
-                aspect_ratio = width / height if height > 0 else 0
+    #             # Check if aspect ratio is reasonable for a bike bib (typically rectangular number plates)
+    #             aspect_ratio = width / height if height > 0 else 0
 
-                # Bike number plates tend to be more rectangular (wider aspect ratios)
-                if 1.2 <= aspect_ratio <= 5.0 and width > 25 and height > 15:
-                    # Focus on lower portion of image (bike area)
-                    center_y = y + height / 2
-                    if (
-                        center_y > h * 0.3
-                    ):  # Only consider regions in bottom 70% of image
-                        # Add some padding around the detected region
-                        padding = 12
-                        x1 = max(0, x - padding)
-                        y1 = max(0, y - padding)
-                        x2 = min(w, x + width + padding)
-                        y2 = min(h, y + height + padding)
+    #             # Bike number plates tend to be more rectangular (wider aspect ratios)
+    #             if 1.2 <= aspect_ratio <= 5.0 and width > 25 and height > 15:
+    #                 # Focus on lower portion of image (bike area)
+    #                 center_y = y + height / 2
+    #                 if (
+    #                     center_y > h * 0.3
+    #                 ):  # Only consider regions in bottom 70% of image
+    #                     # Add some padding around the detected region
+    #                     padding = 12
+    #                     x1 = max(0, x - padding)
+    #                     y1 = max(0, y - padding)
+    #                     x2 = min(w, x + width + padding)
+    #                     y2 = min(h, y + height + padding)
 
-                        # Calculate a priority score based on bike-bib characteristics
-                        priority_score = self._calculate_bike_bib_priority(
-                            x, y, width, height, w, h
-                        )
-                        bib_regions.append([x1, y1, x2, y2, priority_score])
+    #                     # Calculate a priority score based on bike-bib characteristics
+    #                     priority_score = self._calculate_bike_bib_priority(
+    #                         x, y, width, height, w, h
+    #                     )
+    #                     bib_regions.append([x1, y1, x2, y2, priority_score])
 
         # Sort by priority score (highest first), then by area
         bib_regions.sort(
@@ -426,48 +375,48 @@ Return only valid JSON, nothing else."""
 
         return max(priority, 0.1)  # Minimum priority
 
-    def _enhance_roi_for_ocr(self, roi: np.ndarray) -> np.ndarray:
-        """Further enhance a region of interest for OCR with motion blur handling"""
-        if roi.size == 0:
-            return roi
+    # def _enhance_roi_for_ocr(self, roi: np.ndarray) -> np.ndarray:
+    #     """Further enhance a region of interest for OCR with motion blur handling"""
+    #     if roi.size == 0:
+    #         return roi
 
-        # Resize if too small (helps OCR accuracy)
-        h, w = roi.shape
-        if h < 30 or w < 30:
-            scale_factor = max(30 / h, 30 / w)
-            new_h, new_w = int(h * scale_factor), int(w * scale_factor)
-            roi = cv2.resize(roi, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+    #     # Resize if too small (helps OCR accuracy)
+    #     h, w = roi.shape
+    #     if h < 30 or w < 30:
+    #         scale_factor = max(30 / h, 30 / w)
+    #         new_h, new_w = int(h * scale_factor), int(w * scale_factor)
+    #         roi = cv2.resize(roi, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
 
-        # Perspective correction for angled plates
-        roi = self._correct_perspective(roi)
+    #     # Perspective correction for angled plates
+    #     roi = self._correct_perspective(roi)
 
-        # Motion blur detection and correction
-        roi = self._handle_motion_blur(roi)
+    #     # Motion blur detection and correction
+    #     roi = self._handle_motion_blur(roi)
 
-        # Apply enhanced sharpening filter for better text clarity
-        # Use unsharp masking for better edge enhancement
-        roi = self._apply_unsharp_masking(roi)
+    #     # Apply enhanced sharpening filter for better text clarity
+    #     # Use unsharp masking for better edge enhancement
+    #     roi = self._apply_unsharp_masking(roi)
 
-        # Ensure good contrast with adaptive enhancement
-        roi = cv2.equalizeHist(roi)
+    #     # Ensure good contrast with adaptive enhancement
+    #     roi = cv2.equalizeHist(roi)
 
-        return roi
+    #     return roi
 
-    def _handle_motion_blur(self, roi: np.ndarray) -> np.ndarray:
-        """Detect and reduce motion blur in ROI"""
-        if roi.size == 0:
-            return roi
+    # def _handle_motion_blur(self, roi: np.ndarray) -> np.ndarray:
+    #     """Detect and reduce motion blur in ROI"""
+    #     if roi.size == 0:
+    #         return roi
 
-        # Detect if image is blurred by analyzing edge sharpness
-        laplacian_var = cv2.Laplacian(roi, cv2.CV_64F).var()
+    #     # Detect if image is blurred by analyzing edge sharpness
+    #     laplacian_var = cv2.Laplacian(roi, cv2.CV_64F).var()
 
-        # If variance is low, image is likely blurred
-        if laplacian_var < 500:  # Threshold for blur detection
-            # Apply deblurring filter
-            # Richardson-Lucy deconvolution approximation using Wiener filter
-            roi = self._apply_deblur_filter(roi)
+    #     # If variance is low, image is likely blurred
+    #     if laplacian_var < 500:  # Threshold for blur detection
+    #         # Apply deblurring filter
+    #         # Richardson-Lucy deconvolution approximation using Wiener filter
+    #         roi = self._apply_deblur_filter(roi)
 
-        return roi
+    #     return roi
 
     def _apply_deblur_filter(self, roi: np.ndarray) -> np.ndarray:
         """Apply deblurring filter to reduce motion blur"""
@@ -493,81 +442,81 @@ Return only valid JSON, nothing else."""
 
         return np.uint8(np.clip(result, 0, 255))
 
-    def _apply_unsharp_masking(self, roi: np.ndarray) -> np.ndarray:
-        """Apply unsharp masking for better edge enhancement"""
-        # Create blurred version
-        blurred = cv2.GaussianBlur(roi, (3, 3), 1.0)
+    # def _apply_unsharp_masking(self, roi: np.ndarray) -> np.ndarray:
+    #     """Apply unsharp masking for better edge enhancement"""
+    #     # Create blurred version
+    #     blurred = cv2.GaussianBlur(roi, (3, 3), 1.0)
 
-        # Create unsharp mask
-        unsharp = cv2.addWeighted(roi, 1.8, blurred, -0.8, 0)
+    #     # Create unsharp mask
+    #     unsharp = cv2.addWeighted(roi, 1.8, blurred, -0.8, 0)
 
-        # Ensure values are within valid range
-        return np.clip(unsharp, 0, 255).astype(np.uint8)
+    #     # Ensure values are within valid range
+    #     return np.clip(unsharp, 0, 255).astype(np.uint8)
 
-    def _correct_perspective(self, roi: np.ndarray) -> np.ndarray:
-        """Detect and correct perspective distortion in number plate ROI"""
-        if roi.size == 0 or roi.shape[0] < 20 or roi.shape[1] < 20:
-            return roi
+    # def _correct_perspective(self, roi: np.ndarray) -> np.ndarray:
+    #     """Detect and correct perspective distortion in number plate ROI"""
+    #     if roi.size == 0 or roi.shape[0] < 20 or roi.shape[1] < 20:
+    #         return roi
 
-        try:
-            # Find contours to detect the number plate rectangle
-            edges = cv2.Canny(roi, 50, 150)
-            contours, _ = cv2.findContours(
-                edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-            )
+    #     try:
+    #         # Find contours to detect the number plate rectangle
+    #         edges = cv2.Canny(roi, 50, 150)
+    #         contours, _ = cv2.findContours(
+    #             edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    #         )
 
-            if not contours:
-                return roi
+    #         if not contours:
+    #             return roi
 
-            # Find the largest contour (likely the number plate)
-            largest_contour = max(contours, key=cv2.contourArea)
+    #         # Find the largest contour (likely the number plate)
+    #         largest_contour = max(contours, key=cv2.contourArea)
 
-            # Approximate contour to a polygon
-            epsilon = 0.02 * cv2.arcLength(largest_contour, True)
-            approx = cv2.approxPolyDP(largest_contour, epsilon, True)
+    #         # Approximate contour to a polygon
+    #         epsilon = 0.02 * cv2.arcLength(largest_contour, True)
+    #         approx = cv2.approxPolyDP(largest_contour, epsilon, True)
 
-            # If we found a quadrilateral, apply perspective correction
-            if len(approx) == 4:
-                # Order the points: top-left, top-right, bottom-right, bottom-left
-                pts = self._order_points(approx.reshape(4, 2))
+    #         # If we found a quadrilateral, apply perspective correction
+    #         if len(approx) == 4:
+    #             # Order the points: top-left, top-right, bottom-right, bottom-left
+    #             pts = self._order_points(approx.reshape(4, 2))
 
-                # Compute the width and height of the corrected rectangle
-                width_a = np.sqrt(
-                    ((pts[2][0] - pts[3][0]) ** 2) + ((pts[2][1] - pts[3][1]) ** 2)
-                )
-                width_b = np.sqrt(
-                    ((pts[1][0] - pts[0][0]) ** 2) + ((pts[1][1] - pts[0][1]) ** 2)
-                )
-                max_width = max(int(width_a), int(width_b))
+    #             # Compute the width and height of the corrected rectangle
+    #             width_a = np.sqrt(
+    #                 ((pts[2][0] - pts[3][0]) ** 2) + ((pts[2][1] - pts[3][1]) ** 2)
+    #             )
+    #             width_b = np.sqrt(
+    #                 ((pts[1][0] - pts[0][0]) ** 2) + ((pts[1][1] - pts[0][1]) ** 2)
+    #             )
+    #             max_width = max(int(width_a), int(width_b))
 
-                height_a = np.sqrt(
-                    ((pts[1][0] - pts[2][0]) ** 2) + ((pts[1][1] - pts[2][1]) ** 2)
-                )
-                height_b = np.sqrt(
-                    ((pts[0][0] - pts[3][0]) ** 2) + ((pts[0][1] - pts[3][1]) ** 2)
-                )
-                max_height = max(int(height_a), int(height_b))
+    #             height_a = np.sqrt(
+    #                 ((pts[1][0] - pts[2][0]) ** 2) + ((pts[1][1] - pts[2][1]) ** 2)
+    #             )
+    #             height_b = np.sqrt(
+    #                 ((pts[0][0] - pts[3][0]) ** 2) + ((pts[0][1] - pts[3][1]) ** 2)
+    #             )
+    #             max_height = max(int(height_a), int(height_b))
 
-                # Define destination points for the rectangle
-                dst = np.array(
-                    [
-                        [0, 0],
-                        [max_width - 1, 0],
-                        [max_width - 1, max_height - 1],
-                        [0, max_height - 1],
-                    ],
-                    dtype="float32",
-                )
+    #             # Define destination points for the rectangle
+    #             dst = np.array(
+    #                 [
+    #                     [0, 0],
+    #                     [max_width - 1, 0],
+    #                     [max_width - 1, max_height - 1],
+    #                     [0, max_height - 1],
+    #                 ],
+    #                 dtype="float32",
+    #             )
 
-                # Compute perspective transform matrix and apply it
-                matrix = cv2.getPerspectiveTransform(pts.astype("float32"), dst)
-                corrected = cv2.warpPerspective(roi, matrix, (max_width, max_height))
+    #             # Compute perspective transform matrix and apply it
+    #             matrix = cv2.getPerspectiveTransform(pts.astype("float32"), dst)
+    #             corrected = cv2.warpPerspective(roi, matrix, (max_width, max_height))
 
-                return corrected
+    #             return corrected
 
-        except Exception:
-            # If perspective correction fails, return original ROI
-            pass
+    #     except Exception:
+    #         # If perspective correction fails, return original ROI
+    #         pass
 
         return roi
 
@@ -591,45 +540,45 @@ Return only valid JSON, nothing else."""
             [top_pts[0], top_pts[1], bottom_pts[0], bottom_pts[1]], dtype="float32"
         )
 
-    def _multi_scale_ocr(
-        self, roi: np.ndarray
-    ) -> Tuple[Optional[str], float, Optional[List[int]]]:
-        """Try OCR at multiple scales to handle varying number plate sizes"""
-        if roi.size == 0:
-            return None, 0.0, None
+    # def _multi_scale_ocr(
+    #     self, roi: np.ndarray
+    # ) -> Tuple[Optional[str], float, Optional[List[int]]]:
+    #     """Try OCR at multiple scales to handle varying number plate sizes"""
+    #     if roi.size == 0:
+    #         return None, 0.0, None
 
-        scales = [0.8, 1.0, 1.3, 1.6]  # Try different scales
-        best_result = (None, 0.0, None)
+    #     scales = [0.8, 1.0, 1.3, 1.6]  # Try different scales
+    #     best_result = (None, 0.0, None)
 
-        for scale in scales:
-            if scale != 1.0:
-                # Resize ROI
-                h, w = roi.shape
-                new_h, new_w = int(h * scale), int(w * scale)
-                if new_h > 15 and new_w > 15:  # Ensure minimum size
-                    scaled_roi = cv2.resize(
-                        roi, (new_w, new_h), interpolation=cv2.INTER_CUBIC
-                    )
-                else:
-                    continue
-            else:
-                scaled_roi = roi
+    #     for scale in scales:
+    #         if scale != 1.0:
+    #             # Resize ROI
+    #             h, w = roi.shape
+    #             new_h, new_w = int(h * scale), int(w * scale)
+    #             if new_h > 15 and new_w > 15:  # Ensure minimum size
+    #                 scaled_roi = cv2.resize(
+    #                     roi, (new_w, new_h), interpolation=cv2.INTER_CUBIC
+    #                 )
+    #             else:
+    #                 continue
+    #         else:
+    #             scaled_roi = roi
 
-            # Apply enhancements
-            enhanced_roi = self._enhance_roi_for_ocr(scaled_roi)
+    #         # Apply enhancements
+    #         enhanced_roi = self._enhance_roi_for_ocr(scaled_roi)
 
-            # Try OCR
-            number, confidence, bbox = self._run_tesseract_on_roi(enhanced_roi)
+    #         # Try OCR
+    #         number, confidence, bbox = self._run_tesseract_on_roi(enhanced_roi)
 
-            # Scale back bbox coordinates if needed
-            if bbox and scale != 1.0:
-                bbox = [int(coord / scale) for coord in bbox]
+    #         # Scale back bbox coordinates if needed
+    #         if bbox and scale != 1.0:
+    #             bbox = [int(coord / scale) for coord in bbox]
 
-            # Keep the best result
-            if number and confidence > best_result[1]:
-                best_result = (number, confidence, bbox)
+    #         # Keep the best result
+    #         if number and confidence > best_result[1]:
+    #             best_result = (number, confidence, bbox)
 
-        return best_result
+    #     return best_result
 
     def _run_tesseract_on_roi(
         self, roi: np.ndarray
@@ -853,57 +802,57 @@ Return only valid JSON, nothing else."""
             except:
                 return original_data, (1, 1)
 
-    def _optimize_image_for_api(
-        self, image_path: str, debug_mode: bool = False
-    ) -> bytes:
-        """Optimize image size for Google Vision API while preserving text quality"""
-        # Read image
-        image = cv2.imread(image_path)
-        if image is None:
-            raise ValueError(f"Could not load image {image_path}")
+    # def _optimize_image_for_api(
+    #     self, image_path: str, debug_mode: bool = False
+    # ) -> bytes:
+    #     """Optimize image size for Google Vision API while preserving text quality"""
+    #     # Read image
+    #     image = cv2.imread(image_path)
+    #     if image is None:
+    #         raise ValueError(f"Could not load image {image_path}")
 
-        height, width = image.shape[:2]
-        original_size = len(
-            cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
-        )
+    #     height, width = image.shape[:2]
+    #     original_size = len(
+    #         cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 95])[1].tobytes()
+    #     )
 
-        # Resize to max 2400px (preserves text readability while reducing file size)
-        max_dimension = 2400
-        if max(height, width) > max_dimension:
-            if width > height:
-                new_width = max_dimension
-                new_height = int(height * (max_dimension / width))
-            else:
-                new_height = max_dimension
-                new_width = int(width * (max_dimension / height))
+    #     # Resize to max 2400px (preserves text readability while reducing file size)
+    #     max_dimension = 2400
+    #     if max(height, width) > max_dimension:
+    #         if width > height:
+    #             new_width = max_dimension
+    #             new_height = int(height * (max_dimension / width))
+    #         else:
+    #             new_height = max_dimension
+    #             new_width = int(width * (max_dimension / height))
 
-            image = cv2.resize(
-                image, (new_width, new_height), interpolation=cv2.INTER_AREA
-            )
+    #         image = cv2.resize(
+    #             image, (new_width, new_height), interpolation=cv2.INTER_AREA
+    #         )
 
-            if debug_mode:
-                optimized_size = len(
-                    cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])[
-                        1
-                    ].tobytes()
-                )
-                logger.debug(
-                    f"📏 Image optimized: {width}x{height} ({original_size/1024/1024:.1f}MB) → {new_width}x{new_height} ({optimized_size/1024/1024:.1f}MB)"
-                )
+    #         if debug_mode:
+    #             optimized_size = len(
+    #                 cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])[
+    #                     1
+    #                 ].tobytes()
+    #             )
+    #             logger.debug(
+    #                 f"📏 Image optimized: {width}x{height} ({original_size/1024/1024:.1f}MB) → {new_width}x{new_height} ({optimized_size/1024/1024:.1f}MB)"
+    #             )
 
-        # Compress to JPEG with 90% quality (good balance of size vs quality)
-        _, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])
-        return buffer.tobytes()
+    #     # Compress to JPEG with 90% quality (good balance of size vs quality)
+    #     _, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    #     return buffer.tobytes()
 
-    def _is_valid_bib_number(self, text: str) -> bool:
-        if len(text) < 1 or len(text) > 6:
-            return False
+    # def _is_valid_bib_number(self, text: str) -> bool:
+    #     if len(text) < 1 or len(text) > 6:
+    #         return False
 
-        if not re.match(r"^\d+$", text):
-            return False
+    #     if not re.match(r"^\d+$", text):
+    #         return False
 
-        number = int(text)
-        return 1 <= number <= 99999
+    #     number = int(text)
+    #     return 1 <= number <= 99999
 
     def _find_photo_path(
         self, photo_id: str, user_id: Optional[int] = None

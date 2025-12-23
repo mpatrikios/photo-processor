@@ -33,7 +33,13 @@ class Settings(BaseSettings):
     # API Configuration
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000)
-    cors_origins: List[str] = Field(default=["http://localhost:5173"])
+    cors_origins: List[str] = Field(default=[
+        "http://localhost:5173",                      # Local Development
+        "http://localhost:8000",                      # Local Backend docs
+        "https://tagsort-api-486078451066.web.app",   # 👈 ADD YOUR FIREBASE FRONTEND URL HERE
+        "https://tagsort-api-486078451066.firebaseapp.com", 
+        "https://tagsort.web.app",# 👈 AND THIS ONE
+    ])
 
     # AI Vision APIs
     gemini_api_key: Optional[str] = Field(default=None, description="Gemini Flash API key")

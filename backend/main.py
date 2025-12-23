@@ -243,27 +243,9 @@ async def startup_event():
 # Configure CORS from settings
 allowed_origins = settings.cors_origins.copy()
 
-# Add additional origins for specific environments
-if settings.environment in ["production", "staging"]:
-    allowed_origins.extend(
-        [
-            "https://tagsort-production-*.a.run.app",
-            "https://tagsort-staging-*.a.run.app",
-        ]
-    )
-
-# Add Replit URLs if needed
-if os.getenv("REPL_OWNER"):
-    allowed_origins.extend(
-        [
-            "https://*.replit.app",
-            "https://*.replit.dev",
-        ]
-    )
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins (easiest for now)
+    allow_origins=allowed_origins,  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -324,15 +306,15 @@ async def database_status():
 
 
 # Include API routers AFTER individual routes but before static file mounts
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
-app.include_router(process.router, prefix="/api/process", tags=["process"])
-app.include_router(download.router, prefix="/api/download", tags=["download"])
-app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
-app.include_router(batch.router, prefix="/api/batch", tags=["batch"])
-app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
-app.include_router(payment.router, prefix="/api/payment", tags=["payment"]) 
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(users.router, prefix="/users", tags=["users"])
+app.include_router(upload.router, prefix="/upload", tags=["upload"])
+app.include_router(process.router, prefix="/process", tags=["process"])
+app.include_router(download.router, prefix="/download", tags=["download"])
+app.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
+app.include_router(batch.router, prefix="/batch", tags=["batch"])
+app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
+app.include_router(payment.router, prefix="/payment", tags=["payment"])
 
 # Secure file access with user isolation
 from app.api import secure_files
@@ -366,7 +348,9 @@ logger.info("  - /api/payment")
 
 if __name__ == "__main__":
     import uvicorn
-    # It is crucial to listen on 0.0.0.0 and use the PORT environment variable
+    import os
+    # Get the PORT from Cloud Run (defaults to 8080)
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
+    
+    # ✅ CORRECT FastAPI startup
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

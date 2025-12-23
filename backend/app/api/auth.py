@@ -21,13 +21,6 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    confirm_password: str
-
-    @validator("confirm_password")
-    def passwords_match(cls, v, values, **kwargs):
-        if "password" in values and v != values["password"]:
-            raise ValueError("Passwords do not match")
-        return v
 
     @validator("full_name")
     def validate_full_name(cls, v):
@@ -59,13 +52,6 @@ class MessageResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
-    confirm_new_password: str
-
-    @validator("confirm_new_password")
-    def passwords_match(cls, v, values, **kwargs):
-        if "new_password" in values and v != values["new_password"]:
-            raise ValueError("New passwords do not match")
-        return v
 
 
 # Utility Functions

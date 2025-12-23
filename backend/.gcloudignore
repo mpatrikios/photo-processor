@@ -1,0 +1,67 @@
+# .gcloudignore
+# Ignore heavy files to ensure fast Cloud Run deploys
+
+# Version Control
+.git
+.gitignore
+
+# Python Virtual Environment (HUGE - never upload this!)
+venv/
+env/
+.venv/
+.env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Test Data & Photos (can be massive)
+uploads/
+exports/
+temp/
+processed/
+static/images/*
+test_images/
+sample_photos/
+
+# Database Files
+*.db
+*.sqlite
+*.sqlite3
+
+# Development Files
+.pytest_cache/
+.coverage
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Documentation
+docs/
+README.md

@@ -99,9 +99,9 @@ class StateManager {
     getApiBaseUrl() {
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         if (isDevelopment) {
-            return `${window.location.protocol}//${window.location.hostname}:8000/api`;
+            return `${window.location.protocol}//${window.location.hostname}:8000`;
         } else {
-            return `${window.location.protocol}//${window.location.host}/api`;
+            return `${window.location.protocol}//${window.location.host}`;
         }
     }
     

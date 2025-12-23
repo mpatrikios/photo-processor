@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ class EmailService:
             logger.error(f"Async email error: {str(e)}")
             return False
 
-    def format_feedback_email(self, feedback_data: dict) -> tuple[str, str]:
+    def format_feedback_email(self, feedback_data: dict) -> Tuple[str, str]:
         """Format feedback data into email subject and HTML body"""
 
         # Format timestamp
@@ -113,6 +113,10 @@ class EmailService:
         subject = (
             f"New Feedback: {info['label']} - {feedback_data.get('title', 'No Title')}"
         )
+
+        # FIX: Process description outside f-string to avoid SyntaxError in Python 3.11
+        description_text = feedback_data.get('description', 'No description provided')
+        description_html = description_text.replace('\n', '<br>')
 
         # Create HTML body
         body = f"""
@@ -153,7 +157,7 @@ class EmailService:
                 
                 <div class="field">
                     <span class="label">Description:</span>
-                    <div class="value">{feedback_data.get('description', 'No description provided').replace('\n', '<br>')}</div>
+                    <div class="value">{description_html}</div>
                 </div>
         """
 
