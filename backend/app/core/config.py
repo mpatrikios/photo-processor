@@ -119,6 +119,25 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",")]
         return v
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def validate_database_url(cls, v: str, info):
+        """Ensure production uses PostgreSQL and format is correct."""
+        import os
+        
+        # Access environment safely from info.data if available, else os.environ
+        env = info.data.get("environment") if info.data else os.getenv("ENVIRONMENT", "development")
+        
+        if env == "production":
+            if "sqlite" in v:
+                raise ValueError("SQLite is not allowed in production. Set DATABASE_URL to PostgreSQL.")
+            
+            # Cloud Run/SQLAlchemy fix: sqlalchemy requires 'postgresql://' not 'postgres://'
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql://", 1)
+                
+        return v
+
     @field_validator("smtp_password")
     @classmethod
     def validate_smtp_password(cls, v, info):
@@ -227,10 +246,10 @@ class Settings(BaseSettings):
         logger.info(f"Max File Size: {self.max_file_size_mb}MB")
         logger.info(f"Rate Limit: {self.rate_limit_per_minute} requests/minute")
 
-        if self.validate_google_vision_setup():
-            logger.info("Google Cloud Vision: Configured")
+        if self.gemini_api_key:
+            logger.info("Gemini Flash API: Configured ✅")
         else:
-            logger.warning("Google Cloud Vision: Not configured (using Tesseract only)")
+            logger.error("Gemini Flash API: Not configured ❌")
 
         if self.get_smtp_config():
             logger.info("Email: Configured")

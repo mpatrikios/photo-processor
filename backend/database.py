@@ -1,38 +1,35 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import settings
+
 Base = declarative_base()
 
-# Get variables
-db_user = os.getenv("DB_USER")
-db_pass = os.getenv("DB_PASS")
-db_name = os.getenv("DB_NAME")
-db_host = os.getenv("DB_HOST")
+# Use DATABASE_URL from settings (supports both SQLite and PostgreSQL)
+DATABASE_URL = settings.database_url
 
-# Logic: If Cloud Run provides a Host, use Postgres. Otherwise, use Local SQLite.
-if db_host:
-    # --- CLOUD RUN (PostgreSQL) ---
-    # We don't need urllib anymore because your new password is simple!
-    DATABASE_URL = f"postgresql+psycopg2://{db_user}:{db_pass}@/{db_name}?host={db_host}"
-    
+# Configure engine based on database type
+if DATABASE_URL.startswith("postgresql://"):
+    # PostgreSQL configuration (production)
     engine = create_engine(
         DATABASE_URL,
-        pool_size=20,        # Increased from 5 to handle concurrent image requests
-        max_overflow=30,     # Increased from 2 to handle burst loads  
-        pool_timeout=30,
-        pool_recycle=1800,
+        pool_size=20,        # Handle concurrent image processing requests
+        max_overflow=30,     # Handle burst loads during batch uploads
+        pool_timeout=30,     # Connection timeout
+        pool_recycle=1800,   # Recycle connections every 30 minutes
     )
-else:
-    # --- LOCAL DEVELOPMENT (SQLite) ---
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'tag_photos.db')}"
-    
+elif DATABASE_URL.startswith("sqlite://"):
+    # SQLite configuration (development only)
     engine = create_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},
-        echo=True
+        echo=settings.debug  # Show SQL queries in debug mode
+    )
+else:
+    raise ValueError(
+        f"Unsupported database URL: {DATABASE_URL}. "
+        "Supported formats: sqlite:/// or postgresql://"
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -49,8 +46,38 @@ def create_tables():
     
 def get_db_info():
     """Returns database connection info for logging."""
+    if DATABASE_URL.startswith("postgresql://"):
+        db_type = "PostgreSQL (Cloud SQL)"
+        # Extract host info without exposing credentials
+        try:
+            host_part = DATABASE_URL.split("@")[1].split("/")[0]
+            db_name = DATABASE_URL.split("/")[-1]
+            db_path = f"Host: {host_part}, Database: {db_name}"
+        except:
+            db_path = "PostgreSQL Cloud Database"
+        database_size_mb = 0  # Cannot easily get size for remote PostgreSQL
+    elif DATABASE_URL.startswith("sqlite://"):
+        db_type = "SQLite (Development)"
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        # Get SQLite file size
+        import os
+        try:
+            if os.path.exists(db_path):
+                size_bytes = os.path.getsize(db_path)
+                database_size_mb = round(size_bytes / (1024 * 1024), 2)
+            else:
+                database_size_mb = 0
+        except Exception:
+            database_size_mb = 0
+    else:
+        db_type = "Unknown"
+        db_path = "Unknown database type"
+        database_size_mb = 0
+    
     return {
-        "database_url": "HIDDEN",
-        "database_path": DATABASE_URL if "sqlite" in DATABASE_URL else "Cloud SQL",
-        "database_size_mb": 0.0  # Placeholder to prevent startup crash
+        "database_type": db_type,
+        "database_path": db_path,
+        "database_url_hidden": "***HIDDEN***",  # Never expose credentials
+        "database_size_mb": database_size_mb,
+        "environment": settings.environment
     }

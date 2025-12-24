@@ -33,80 +33,7 @@ from datetime import datetime
 # Configure logger for this module
 logger = logging.getLogger(__name__)
 
-# Global variable to store credentials for Vision API
-_google_credentials = None
-
-
-# Set up Google Cloud credentials securely (in-memory only)
-def setup_google_credentials():
-    """
-    Set up Google Cloud credentials from environment variable
-    Uses in-memory credentials - NEVER writes to disk
-    """
-    global _google_credentials
-    import json
-
-    # First try loading from environment variable (for deployment)
-    credentials_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-    if credentials_json:
-        try:
-            from google.oauth2 import service_account
-
-            # Parse the JSON and create credentials directly in memory
-            credentials_data = json.loads(credentials_json)
-
-            # Create credentials object in memory - NO temp file!
-            _google_credentials = service_account.Credentials.from_service_account_info(
-                credentials_data,
-                scopes=["https://www.googleapis.com/auth/cloud-vision"],
-            )
-
-            logger.info(
-                "✅ Google Cloud credentials loaded securely from environment (in-memory)"
-            )
-        except json.JSONDecodeError:
-            logger.error("❌ Invalid JSON in GOOGLE_APPLICATION_CREDENTIALS_JSON")
-            _google_credentials = None
-        except Exception as e:
-            logger.error(f"❌ Error setting up credentials from environment: {e}")
-            _google_credentials = None
-    else:
-        # Fallback to local file (for development only)
-        service_account_path = os.path.join(
-            os.path.dirname(__file__), "service-account-key.json"
-        )
-
-        if os.path.exists(service_account_path):
-            try:
-                from google.oauth2 import service_account
-
-                _google_credentials = (
-                    service_account.Credentials.from_service_account_file(
-                        service_account_path,
-                        scopes=["https://www.googleapis.com/auth/cloud-vision"],
-                    )
-                )
-                logger.info(
-                    f"✅ Google Cloud credentials loaded from file (development): {service_account_path}"
-                )
-            except Exception as e:
-                logger.error(f"❌ Error loading credentials from file: {e}")
-                _google_credentials = None
-        else:
-            logger.warning(
-                "❌ No Google Cloud credentials found - Vision API will not be available"
-            )
-            _google_credentials = None
-
-
-def get_google_credentials():
-    """Get the in-memory Google credentials"""
-    return _google_credentials
-
-
-setup_google_credentials()
-
-# Credentials are now stored in-memory, no need to check file paths
+# Simplified startup for Gemini Flash - no complex credential management needed
 
 # Security check for JWT
 if settings.is_production():
@@ -241,7 +168,7 @@ async def startup_event():
 
 
 # Configure CORS from settings
-allowed_origins = settings.cors_origins.copy()
+allowed_origins = settings.cors_origins
 
 app.add_middleware(
     CORSMiddleware,

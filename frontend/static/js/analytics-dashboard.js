@@ -88,12 +88,6 @@ class AnalyticsDashboard {
                                     <a class="nav-link" id="performance-tab" data-bs-toggle="tab" href="#performance-panel">
                                         <i class="fas fa-chart-bar me-1"></i> Performance
                                     </a>
-                                    <a class="nav-link" id="engagement-tab" data-bs-toggle="tab" href="#engagement-panel">
-                                        <i class="fas fa-mouse-pointer me-1"></i> Engagement
-                                    </a>
-                                    <a class="nav-link" id="alerts-tab" data-bs-toggle="tab" href="#alerts-panel">
-                                        <i class="fas fa-bell me-1"></i> Alerts
-                                    </a>
                                 </nav>
                                 
                                 <!-- Tab Content -->
@@ -113,8 +107,6 @@ class AnalyticsDashboard {
                                                     <li><hr class="dropdown-divider"></li>
                                                     <li><h6 class="dropdown-header">Detailed Analytics</h6></li>
                                                     <li><a class="dropdown-item" href="#" onclick="window.analyticsDashboard?.exportReport('user_analytics', 'csv')">👥 User Analytics (CSV)</a></li>
-                                                    <li><a class="dropdown-item" href="#" onclick="window.analyticsDashboard?.exportReport('system_metrics', 'csv')">⚡ System Metrics (CSV)</a></li>
-                                                    <li><a class="dropdown-item" href="#" onclick="window.analyticsDashboard?.exportReport('conversion_funnel', 'csv')">🔄 Conversion Funnel (CSV)</a></li>
                                                     <li><a class="dropdown-item" href="#" onclick="window.analyticsDashboard?.exportReport('detection_accuracy', 'csv')">🎯 Detection Accuracy (CSV)</a></li>
                                                 </ul>
                                             </div>
@@ -157,12 +149,12 @@ class AnalyticsDashboard {
                                                     <div class="card-body text-center">
                                                         <div class="d-flex align-items-center justify-content-between">
                                                             <div>
-                                                                <h6 class="card-subtitle text-muted mb-1">Detection Accuracy</h6>
+                                                                <h6 class="card-subtitle text-muted mb-1">Gemini Flash Accuracy</h6>
                                                                 <h3 class="card-title mb-0" id="accuracy-metric">-</h3>
                                                             </div>
                                                             <i class="fas fa-bullseye fa-2x text-warning opacity-75"></i>
                                                         </div>
-                                                        <small class="text-muted" id="accuracy-trend">Based on recent jobs</small>
+                                                        <small class="text-muted" id="accuracy-trend">Classification performance</small>
                                                     </div>
                                                 </div>
                                             </div>
@@ -172,12 +164,12 @@ class AnalyticsDashboard {
                                                     <div class="card-body text-center">
                                                         <div class="d-flex align-items-center justify-content-between">
                                                             <div>
-                                                                <h6 class="card-subtitle text-muted mb-1">Avg Processing Time</h6>
+                                                                <h6 class="card-subtitle text-muted mb-1">Avg Classification Speed</h6>
                                                                 <h3 class="card-title mb-0" id="avg-processing-time-metric">-</h3>
                                                             </div>
                                                             <i class="fas fa-clock fa-2x text-info opacity-75"></i>
                                                         </div>
-                                                        <small class="text-muted" id="processing-time-trend">Per photo average</small>
+                                                        <small class="text-muted" id="processing-time-trend">Gemini Flash processing</small>
                                                     </div>
                                                 </div>
                                             </div>
@@ -188,7 +180,7 @@ class AnalyticsDashboard {
                                             <div class="col-lg-8">
                                                 <div class="card border-0 shadow-sm">
                                                     <div class="card-header bg-white border-bottom">
-                                                        <h6 class="mb-0">User Activity Trends</h6>
+                                                        <h6 class="mb-0">Classification Activity Trends</h6>
                                                     </div>
                                                     <div class="card-body">
                                                         <canvas id="activity-trends-chart" width="400" height="200"></canvas>
@@ -199,7 +191,7 @@ class AnalyticsDashboard {
                                             <div class="col-lg-4">
                                                 <div class="card border-0 shadow-sm">
                                                     <div class="card-header bg-white border-bottom">
-                                                        <h6 class="mb-0">Processing Methods</h6>
+                                                        <h6 class="mb-0">Gemini Flash Performance</h6>
                                                     </div>
                                                     <div class="card-body">
                                                         <canvas id="processing-methods-chart" width="200" height="200"></canvas>
@@ -310,65 +302,6 @@ class AnalyticsDashboard {
                                         </div>
                                     </div>
                                     
-                                    <!-- Engagement Panel -->
-                                    <div class="tab-pane fade" id="engagement-panel">
-                                        <div class="row g-4">
-                                            <div class="col-lg-8">
-                                                <div class="card border-0 shadow-sm">
-                                                    <div class="card-header bg-white border-bottom">
-                                                        <h6 class="mb-0">User Engagement Heatmap</h6>
-                                                    </div>
-                                                    <div class="card-body">
-                                                        <div id="engagement-heatmap" style="height: 300px;">
-                                                            <div class="d-flex align-items-center justify-content-center h-100">
-                                                                <div class="text-center text-muted">
-                                                                    <i class="fas fa-mouse-pointer fa-3x mb-2"></i>
-                                                                    <p>Engagement tracking will appear here</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="col-lg-4">
-                                                <div class="card border-0 shadow-sm">
-                                                    <div class="card-header bg-white border-bottom">
-                                                        <h6 class="mb-0">Conversion Funnel</h6>
-                                                    </div>
-                                                    <div class="card-body">
-                                                        <div id="conversion-funnel">
-                                                            <!-- Funnel visualization -->
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Alerts Panel -->
-                                    <div class="tab-pane fade" id="alerts-panel">
-                                        <div class="row g-4">
-                                            <div class="col-12">
-                                                <div class="card border-0 shadow-sm">
-                                                    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
-                                                        <h6 class="mb-0">System Alerts & Monitoring</h6>
-                                                        <button class="btn btn-primary btn-sm" id="create-alert-rule-btn">
-                                                            <i class="fas fa-plus me-1"></i> New Alert Rule
-                                                        </button>
-                                                    </div>
-                                                    <div class="card-body">
-                                                        <div id="alerts-content">
-                                                            <div class="text-center text-muted">
-                                                                <i class="fas fa-bell fa-3x mb-2"></i>
-                                                                <p>No recent alerts</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -497,12 +430,6 @@ class AnalyticsDashboard {
             case 'performance-panel':
                 await this.loadPerformanceData();
                 break;
-            case 'engagement-panel':
-                await this.loadEngagementData();
-                break;
-            case 'alerts-panel':
-                await this.loadAlertsData();
-                break;
         }
     }
     
@@ -511,56 +438,17 @@ class AnalyticsDashboard {
      */
     async loadOverviewData() {
         try {
-            console.log('Loading analytics overview data...');
+            const data = await this.state.request('GET', '/analytics/daily-metrics');
             
-            // Check if state is properly initialized
-            if (!this.state) {
-                console.error('StateManager not initialized');
-                this.showNoDataMessage('StateManager not initialized');
-                return;
-            }
-            
-            // Check if request method exists
-            if (!this.state.request) {
-                console.error('StateManager request method not found');
-                this.showNoDataMessage('StateManager request method not found');
-                return;
-            }
-            
-            // Check if API is configured
-            if (!this.state.state || !this.state.state.api || !this.state.state.api.baseUrl) {
-                console.error('API not configured in StateManager');
-                this.showNoDataMessage('API not configured');
-                return;
-            }
-            
-            console.log('API Base URL:', this.state.state.api.baseUrl);
-            console.log('Auth token exists:', !!this.state.state.auth.token);
-            console.log('Is authenticated:', this.state.state.auth.isAuthenticated);
-            
-            // Check authentication before making request
-            if (!this.state.state.auth.isAuthenticated || !this.state.state.auth.token) {
-                console.error('User not authenticated for analytics');
-                this.showNoDataMessage('Please log in to view analytics');
-                return;
-            }
-            
-            const response = await this.state.request('GET', '/analytics/user/dashboard');
-            
-            console.log('Analytics API response status:', response.status);
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('Analytics data received:', data);
-                this.updateOverviewMetrics(data);
-            } else {
-                const errorData = await response.json().catch(() => ({}));
-                console.error('Analytics API error:', response.status, errorData);
-                this.showNoDataMessage(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
-            }
+            // Update Stats
+            document.getElementById('revenue-metric').textContent = `$${data.revenue_usd.toLocaleString()}`;
+            document.getElementById('total-users-metric').textContent = data.total_users;
+            document.getElementById('accuracy-metric').textContent = `${data.avg_detection_accuracy.toFixed(1)}%`;
+            document.getElementById('latency-metric').textContent = `${Math.round(data.average_processing_time_per_photo * 1000)}ms`;
+    
+            this.renderActivityChart(data.trends);
         } catch (error) {
-            console.error('Failed to load overview data:', error);
-            this.showNoDataMessage(`Connection Error: ${error.message}`);
+            console.error("Failed to load dashboard data:", error);
         }
     }
     
@@ -642,35 +530,6 @@ class AnalyticsDashboard {
         }
     }
     
-    /**
-     * Load engagement data
-     */
-    async loadEngagementData() {
-        try {
-            const response = await this.state.request('GET', '/analytics/user/engagement');
-            
-            if (response.ok) {
-                const data = await response.json();
-                this.updateEngagementVisualizations(data);
-            }
-        } catch (error) {
-            console.error('Failed to load engagement data:', error);
-        }
-    }
-    
-    /**
-     * Load alerts data
-     */
-    async loadAlertsData() {
-        const alertsContent = document.getElementById('alerts-content');
-        alertsContent.innerHTML = `
-            <div class="text-center text-muted">
-                <i class="fas fa-bell fa-3x mb-2"></i>
-                <p>Alert system ready</p>
-                <small>No alerts configured yet</small>
-            </div>
-        `;
-    }
     
     /**
      * Update activity trends chart
@@ -729,11 +588,10 @@ class AnalyticsDashboard {
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Get real detection data from API response
-        const googleDetections = data.detection_stats?.google_vision_detections || 0;
-        const tesseractDetections = data.detection_stats?.tesseract_detections || 0;
+        // Get Gemini Flash detection data from API response
+        const geminiDetections = data.detection_stats?.gemini_detections || 0;
         const manualLabels = data.detection_stats?.manual_labels || 0;
-        const totalDetections = googleDetections + tesseractDetections + manualLabels;
+        const totalDetections = geminiDetections + manualLabels;
         
         if (totalDetections === 0) {
             // Show no data message
@@ -751,37 +609,25 @@ class AnalyticsDashboard {
         const radius = Math.min(centerX, centerY) - 30;
         
         // Calculate angles
-        const googleAngle = (googleDetections / totalDetections) * 2 * Math.PI;
-        const tesseractAngle = (tesseractDetections / totalDetections) * 2 * Math.PI;
+        const geminiAngle = (geminiDetections / totalDetections) * 2 * Math.PI;
         const manualAngle = (manualLabels / totalDetections) * 2 * Math.PI;
         
         let currentAngle = 0;
         
-        // Google Vision segment
-        if (googleDetections > 0) {
-            ctx.fillStyle = '#dc3545';
+        // Gemini Flash segment
+        if (geminiDetections > 0) {
+            ctx.fillStyle = '#4285f4'; // Google Blue for Gemini
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
-            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + googleAngle);
+            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + geminiAngle);
             ctx.closePath();
             ctx.fill();
-            currentAngle += googleAngle;
-        }
-        
-        // Tesseract segment
-        if (tesseractDetections > 0) {
-            ctx.fillStyle = '#28a745';
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY);
-            ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + tesseractAngle);
-            ctx.closePath();
-            ctx.fill();
-            currentAngle += tesseractAngle;
+            currentAngle += geminiAngle;
         }
         
         // Manual labels segment
         if (manualLabels > 0) {
-            ctx.fillStyle = '#ffc107';
+            ctx.fillStyle = '#ffc107'; // Yellow for manual
             ctx.beginPath();
             ctx.moveTo(centerX, centerY);
             ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + manualAngle);
@@ -793,17 +639,13 @@ class AnalyticsDashboard {
         ctx.fillStyle = '#000';
         ctx.font = '11px Arial';
         ctx.textAlign = 'left';
-        if (googleDetections > 0) {
-            const googlePercent = ((googleDetections / totalDetections) * 100).toFixed(1);
-            ctx.fillText(`Google Vision: ${googlePercent}%`, 10, canvas.height - 45);
-        }
-        if (tesseractDetections > 0) {
-            const tesseractPercent = ((tesseractDetections / totalDetections) * 100).toFixed(1);
-            ctx.fillText(`Tesseract: ${tesseractPercent}%`, 10, canvas.height - 30);
+        if (geminiDetections > 0) {
+            const geminiPercent = ((geminiDetections / totalDetections) * 100).toFixed(1);
+            ctx.fillText(`Gemini Flash: ${geminiPercent}%`, 10, canvas.height - 30);
         }
         if (manualLabels > 0) {
             const manualPercent = ((manualLabels / totalDetections) * 100).toFixed(1);
-            ctx.fillText(`Manual: ${manualPercent}%`, 10, canvas.height - 15);
+            ctx.fillText(`Manual Labels: ${manualPercent}%`, 10, canvas.height - 15);
         }
     }
     
@@ -960,44 +802,6 @@ class AnalyticsDashboard {
         `).join('');
     }
     
-    /**
-     * Update engagement visualizations
-     */
-    updateEngagementVisualizations(engagementData) {
-        const funnelContainer = document.getElementById('conversion-funnel');
-        
-        if (!engagementData || !engagementData.funnel_steps) {
-            funnelContainer.innerHTML = `
-                <div class="text-center text-muted">
-                    <i class="fas fa-chart-line fa-3x mb-2"></i>
-                    <p>No conversion data available</p>
-                    <small>Funnel metrics will appear after user activity</small>
-                </div>
-            `;
-            return;
-        }
-        
-        const funnelSteps = engagementData.funnel_steps;
-        
-        funnelContainer.innerHTML = funnelSteps.map((step, index) => `
-            <div class="d-flex align-items-center mb-3">
-                <div class="flex-grow-1">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="fw-semibold">${step.name}</span>
-                        <span class="text-muted">${step.count.toLocaleString()}</span>
-                    </div>
-                    <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-danger" 
-                             style="width: ${step.percentage}%"
-                             title="${step.percentage}% conversion"></div>
-                    </div>
-                </div>
-                <div class="ms-2 text-muted" style="width: 45px;">
-                    ${step.percentage.toFixed(1)}%
-                </div>
-            </div>
-        `).join('');
-    }
     
     /**
      * Get status color for metrics
@@ -1039,14 +843,6 @@ class AnalyticsDashboard {
                 case 'user_analytics':
                     endpoint = `/analytics/admin/export/user-analytics?format=${format}`;
                     filename = `user_analytics_${new Date().toISOString().split('T')[0]}.${format}`;
-                    break;
-                case 'system_metrics':
-                    endpoint = `/analytics/admin/export/system-metrics?format=${format}`;
-                    filename = `system_metrics_${new Date().toISOString().split('T')[0]}.${format}`;
-                    break;
-                case 'conversion_funnel':
-                    endpoint = `/analytics/admin/export/conversion-funnel?format=${format}`;
-                    filename = `conversion_funnel_${new Date().toISOString().split('T')[0]}.${format}`;
                     break;
                 case 'detection_accuracy':
                     endpoint = `/analytics/admin/export/detection-accuracy?format=${format}`;
@@ -1157,17 +953,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 100); // Small delay to ensure StateManager is ready
 });
-
-// Track common user interactions (disabled until engagement endpoints are implemented)
-// document.addEventListener('click', (e) => {
-//     if (window.analyticsDashboard && e.target.id) {
-//         window.analyticsDashboard.trackEngagement('click', e.target.id);
-//     }
-// });
-
-// Track modal opens (disabled until engagement endpoints are implemented)
-// document.addEventListener('show.bs.modal', (e) => {
-//     if (window.analyticsDashboard) {
-//         window.analyticsDashboard.trackEngagement('modal_open', e.target.id);
-//     }
-// });
