@@ -99,9 +99,10 @@ class StateManager {
     getApiBaseUrl() {
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         if (isDevelopment) {
-            return `${window.location.protocol}//${window.location.hostname}:8000`;
+            return `${window.location.protocol}//${window.location.hostname}:8000/api`;
         } else {
-            return `${window.location.protocol}//${window.location.host}`;
+            // Production: Connect to Cloud Run backend
+            return 'https://tagsort-api-486078451066.us-central1.run.app/api';
         }
     }
     

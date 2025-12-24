@@ -844,21 +844,22 @@ Return only valid JSON."""
     #     _, buffer = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 90])
     #     return buffer.tobytes()
 
-    # def _is_valid_bib_number(self, text: str) -> bool:
-    #     if len(text) < 1 or len(text) > 6:
-    #         return False
+    def _is_valid_bib_number(self, text: str) -> bool:
+        if len(text) < 1 or len(text) > 6:
+            return False
 
-    #     if not re.match(r"^\d+$", text):
-    #         return False
+        if not re.match(r"^\d+$", text):
+            return False
 
-    #     number = int(text)
-    #     return 1 <= number <= 99999
+        number = int(text)
+        return 1 <= number <= 99999
 
     def _find_photo_path(
         self, photo_id: str, user_id: Optional[int] = None
     ) -> Optional[str]:
         """
         Find photo path with strict user isolation.
+        Supports both local storage and Google Cloud Storage.
         SECURITY: Never falls back to shared directories - only user-specific paths.
         """
         extensions = [".jpg", ".jpeg", ".png", ".tiff", ".bmp"]
@@ -870,15 +871,39 @@ Return only valid JSON."""
             )
             return None
 
-        # Only check user-specific directory - NO SHARED FALLBACK
+        # First try local storage
         user_upload_dir = os.path.join("uploads", str(user_id))
         for ext in extensions:
-            path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
-            if os.path.exists(path):
-                return path
+            local_path = os.path.join(user_upload_dir, f"{photo_id}{ext}")
+            if os.path.exists(local_path):
+                return local_path
+
+        # If not found locally, try to download from GCS
+        try:
+            from google.cloud import storage
+            from app.core.config import settings
+            
+            if settings.bucket_name:
+                storage_client = storage.Client()
+                bucket = storage_client.bucket(settings.bucket_name)
+                
+                for ext in extensions:
+                    filename = f"{photo_id}{ext}"
+                    blob_path = f"{user_id}/{filename}"
+                    blob = bucket.blob(blob_path)
+                    
+                    if blob.exists():
+                        # Download to local temp file
+                        os.makedirs(user_upload_dir, exist_ok=True)
+                        local_path = os.path.join(user_upload_dir, filename)
+                        blob.download_to_filename(local_path)
+                        logger.info(f"Downloaded {photo_id} from GCS to local storage")
+                        return local_path
+        except Exception as e:
+            logger.debug(f"Could not download from GCS: {e}")
 
         logger.warning(
-            f"Photo not found in user directory: {photo_id} for user {user_id}"
+            f"Photo not found in local or GCS storage: {photo_id} for user {user_id}"
         )
         return None
 

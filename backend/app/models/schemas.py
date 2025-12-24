@@ -29,6 +29,58 @@ class PhotoInfo(BaseModel):
 class UploadResponse(BaseModel):
     photo_ids: List[str]
     message: str
+    quota_info: Optional[dict] = None
+
+
+# Direct Upload Schemas
+class FileInfo(BaseModel):
+    filename: str
+    content_type: str
+    size: int
+
+
+class SignedUploadRequest(BaseModel):
+    files: List[FileInfo]
+
+
+class SignedUrlInfo(BaseModel):
+    photo_id: str
+    filename: str
+    gcs_filename: str
+    signed_url: str
+    expires_at: str
+    file_extension: str
+    content_type: str
+    size: int
+
+
+class SignedUploadResponse(BaseModel):
+    signed_urls: List[SignedUrlInfo]
+    expires_in_minutes: int
+    bucket_name: str
+    message: str
+
+
+class CompletedUpload(BaseModel):
+    photo_id: str
+    original_filename: str
+    gcs_filename: str
+    file_extension: str
+    size: int
+
+
+class UploadCompletionRequest(BaseModel):
+    completed_uploads: List[CompletedUpload]
+
+
+class UploadCompletionResponse(BaseModel):
+    successful_uploads: int
+    failed_uploads: int
+    photo_ids: List[str]
+    failed_photos: List[dict]
+    total_size_mb: float
+    quota_info: dict
+    message: str
 
 
 class ProcessingJob(BaseModel):

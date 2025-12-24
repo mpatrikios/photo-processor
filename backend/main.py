@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
-from app.api import analytics, auth, batch, download, feedback, process, upload, users, payment
+from app.api import analytics, auth, batch, download, feedback, process, upload, users, payment, direct_upload
 from app.core.config import settings
 from app.core.errors import register_error_handlers
 from app.core.security_middleware import SecurityHeaders, custom_rate_limit_handler, limiter
@@ -306,15 +306,16 @@ async def database_status():
 
 
 # Include API routers AFTER individual routes but before static file mounts
-app.include_router(auth.router, prefix="/auth", tags=["auth"])
-app.include_router(users.router, prefix="/users", tags=["users"])
-app.include_router(upload.router, prefix="/upload", tags=["upload"])
-app.include_router(process.router, prefix="/process", tags=["process"])
-app.include_router(download.router, prefix="/download", tags=["download"])
-app.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
-app.include_router(batch.router, prefix="/batch", tags=["batch"])
-app.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
-app.include_router(payment.router, prefix="/payment", tags=["payment"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
+app.include_router(process.router, prefix="/api/process", tags=["process"])
+app.include_router(download.router, prefix="/api/download", tags=["download"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
+app.include_router(batch.router, prefix="/api/batch", tags=["batch"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
+app.include_router(direct_upload.router, prefix="/api/direct-upload", tags=["direct-upload"])
 
 # Secure file access with user isolation
 from app.api import secure_files

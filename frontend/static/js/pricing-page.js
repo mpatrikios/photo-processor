@@ -71,7 +71,11 @@ class PricingPage {
         }
 
         // 1. Call your backend to create a Payment Intent
-        const response = await fetch('/api/payment/create-payment-intent', {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const response = await fetch(`${apiBase}/payment/create-payment-intent`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' /* + Auth Token */ },
             body: JSON.stringify({ 

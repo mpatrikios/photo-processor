@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     export_dir: str = Field(default="exports")
     temp_dir: str = Field(default="temp")
 
+    # Google Cloud Storage (optional)
+    bucket_name: Optional[str] = Field(default=None, description="Google Cloud Storage bucket name")
+
     # AWS S3 (optional)
     aws_access_key_id: Optional[str] = Field(default=None)
     aws_secret_access_key: Optional[str] = Field(default=None)

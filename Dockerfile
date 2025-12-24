@@ -25,5 +25,5 @@ COPY . .
 # Add 'backend' to the search path so "import app" works
 ENV PYTHONPATH=/app/backend:/app
 
-# Start the app
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Start the app - use $PORT environment variable from Cloud Run
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"]

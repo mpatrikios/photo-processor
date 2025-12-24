@@ -19,8 +19,8 @@ if db_host:
     
     engine = create_engine(
         DATABASE_URL,
-        pool_size=5,
-        max_overflow=2,
+        pool_size=20,        # Increased from 5 to handle concurrent image requests
+        max_overflow=30,     # Increased from 2 to handle burst loads  
         pool_timeout=30,
         pool_recycle=1800,
     )

@@ -1,13 +1,13 @@
 class PhotoProcessor {
     constructor() {
         // In development, frontend runs on 5173 and backend on 8000
-        // In production, both will be served from the same domain
+        // In production, frontend (Firebase) connects to Cloud Run backend
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         if (isDevelopment) {
             this.apiBase = window.location.protocol + '//' + window.location.hostname + ':8000/api';
         } else {
-            // Production deployment will serve everything from the same port
-            this.apiBase = window.location.protocol + '//' + window.location.host + '/api';
+            // Production: Connect to Cloud Run backend
+            this.apiBase = 'https://tagsort-api-486078451066.us-central1.run.app/api';
         }
         this.selectedFiles = [];
         this.currentJobId = null;
@@ -1170,8 +1170,10 @@ class PhotoProcessor {
     getImageUrl(photoId) {
         const token = this.authToken || localStorage.getItem('auth_token');
         if (token) {
+            // Use /view endpoint with token in URL - this generates signed URLs for <img> tags
             return `${this.apiBase}/upload/serve/${photoId}/view?token=${encodeURIComponent(token)}`;
         }
+        // Fallback to direct serve endpoint (though this won't work for <img> tags without auth)
         return `${this.apiBase}/upload/serve/${photoId}`;
     }
 
@@ -1259,7 +1261,7 @@ class PhotoProcessor {
         return { canUpload: true, message: '' };
     }
 
-    // File Upload
+    // File Upload with Batch Support for Large Photo Sets
     async uploadFiles() {
         if (this.selectedFiles.length === 0) return;
 
@@ -1270,51 +1272,16 @@ class PhotoProcessor {
             return;
         }
 
-        const formData = new FormData();
-        this.selectedFiles.forEach(file => {
-            formData.append('files', file);
-        });
-
         try {
-            // Debug authentication state
-            console.log('🔐 Upload: Debugging authentication state...');
-            console.log('🔐 Upload: this.authToken:', this.authToken ? `${this.authToken.substring(0, 20)}...` : 'NULL');
-            console.log('🔐 Upload: localStorage token:', localStorage.getItem('auth_token') ? `${localStorage.getItem('auth_token').substring(0, 20)}...` : 'NULL');
-            console.log('🔐 Upload: this.isAuthenticated:', this.isAuthenticated);
-            
-            const headers = this.getAuthHeaders(false);
-            console.log('🔐 Upload: Request headers:', headers);
+            console.log(`📦 Starting batch upload of ${this.selectedFiles.length} photos...`);
             
             document.getElementById('upload-btn').disabled = true;
             document.getElementById('upload-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
 
-            const response = await fetch(`${this.apiBase}/upload/photos`, {
-                method: 'POST',
-                headers: headers, // Don't include Content-Type for FormData
-                credentials: 'include',
-                body: formData
-            });
-
-            if (response.status === 402) {
-                // Payment Required - quota exceeded
-                const error = await response.json();
-                throw new Error(error.detail || 'Monthly photo limit exceeded');
-            }
-
-            if (!response.ok) {
-                // Debug the actual error response
-                console.log('❌ Upload failed with status:', response.status, response.statusText);
-                try {
-                    const errorData = await response.json();
-                    console.log('❌ Upload error details:', errorData);
-                    throw new Error(`Upload failed: ${errorData.detail || response.statusText}`);
-                } catch (parseError) {
-                    console.log('❌ Could not parse error response:', parseError);
-                    throw new Error(`Upload failed: ${response.statusText}`);
-                }
-            }
-
-            const result = await response.json();
+            // Upload in batches to avoid Cloud Run 32MB limit
+            const allPhotoIds = await this.uploadInBatches(this.selectedFiles);
+            
+            console.log(`✅ All batches uploaded successfully. Total photos: ${allPhotoIds.length}`);
             
             // Track successful upload
             if (window.analyticsDashboard) {
@@ -1324,24 +1291,161 @@ class PhotoProcessor {
                 });
             }
             
-            // Update quota display with new information
-            if (result.quota_info) {
-                this.updateQuotaDisplay(result.quota_info);
-            }
-            
             this.showProcessingSection();
-            this.showProcessingWarning(); // Show warning during active processing
-            this.startProcessing(result.photo_ids);
+            this.showProcessingWarning();
+            this.startProcessing(allPhotoIds);
 
         } catch (error) {
             console.error('🔐 Upload error:', error);
             if (error.message.includes('quota') || error.message.includes('limit')) {
                 this.showError(`Quota exceeded: ${error.message}`);
             } else {
-                this.showError('Upload failed. Please try again.');
+                this.showError(`Upload failed: ${error.message}`);
             }
             document.getElementById('upload-btn').disabled = false;
             document.getElementById('upload-btn').innerHTML = '<i class="fas fa-upload me-2"></i>Upload Photos';
+        }
+    }
+
+    // Upload files in small batches to handle thousands of photos
+    async uploadInBatches(files) {
+        const BATCH_SIZE = 5; // Photos per batch (keeps under 30MB limit)
+        const batches = [];
+        const allPhotoIds = [];
+        
+        // Split files into batches
+        for (let i = 0; i < files.length; i += BATCH_SIZE) {
+            batches.push(files.slice(i, i + BATCH_SIZE));
+        }
+        
+        console.log(`📦 Split ${files.length} photos into ${batches.length} batches of ${BATCH_SIZE} photos each`);
+        
+        // Upload each batch
+        for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            const batchNum = i + 1;
+            
+            try {
+                console.log(`📦 Uploading batch ${batchNum}/${batches.length} (${batch.length} photos)...`);
+                
+                // Update progress in UI
+                const uploadBtn = document.getElementById('upload-btn');
+                uploadBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Uploading batch ${batchNum}/${batches.length}...`;
+                
+                const batchPhotoIds = await this.uploadBatch(batch, batchNum, batches.length);
+                allPhotoIds.push(...batchPhotoIds);
+                
+                console.log(`✅ Batch ${batchNum}/${batches.length} uploaded successfully (${batchPhotoIds.length} photos)`);
+                
+                // Small delay between batches to avoid overwhelming the server
+                if (i < batches.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+            } catch (error) {
+                console.error(`❌ Batch ${batchNum}/${batches.length} failed:`, error);
+                throw new Error(`Batch upload ${batchNum}/${batches.length} failed: ${error.message}`);
+            }
+        }
+        
+        return allPhotoIds;
+    }
+
+    // NEW: Direct upload to GCS (bypasses server bottleneck)
+    async uploadBatch(batchFiles, batchNum, totalBatches) {
+        console.log(`🚀 Starting direct upload batch ${batchNum}/${totalBatches} with ${batchFiles.length} files`);
+        
+        try {
+            // Step 1: Get signed URLs from our API
+            const fileInfos = batchFiles.map(file => ({
+                filename: file.name,
+                content_type: file.type,
+                size: file.size
+            }));
+
+            const signedResponse = await fetch(`${this.apiBase}/direct-upload/signed-urls`, {
+                method: 'POST',
+                headers: this.getAuthHeaders(true),
+                credentials: 'include',
+                body: JSON.stringify({ files: fileInfos })
+            });
+
+            if (signedResponse.status === 402) {
+                const error = await signedResponse.json();
+                throw new Error(error.detail || 'Monthly photo limit exceeded');
+            }
+
+            if (!signedResponse.ok) {
+                const errorData = await signedResponse.json();
+                throw new Error(`Failed to get signed URLs: ${errorData.detail || signedResponse.statusText}`);
+            }
+
+            const signedData = await signedResponse.json();
+            const { signed_urls } = signedData;
+            
+            console.log(`📝 Got ${signed_urls.length} signed URLs for direct upload`);
+
+            // Step 2: Upload each file directly to Google Cloud Storage
+            const completedUploads = [];
+            
+            for (let i = 0; i < batchFiles.length; i++) {
+                const file = batchFiles[i];
+                const urlInfo = signed_urls[i];
+                
+                console.log(`⬆️ Uploading ${file.name} directly to GCS...`);
+                
+                const uploadResponse = await fetch(urlInfo.signed_url, {
+                    method: 'PUT',
+                    body: file,
+                    headers: {
+                        'Content-Type': file.type
+                    }
+                });
+
+                if (!uploadResponse.ok) {
+                    console.error(`❌ Direct upload failed for ${file.name}:`, uploadResponse.status);
+                    throw new Error(`Direct upload failed for ${file.name}: ${uploadResponse.statusText}`);
+                }
+
+                // Track successful upload
+                completedUploads.push({
+                    photo_id: urlInfo.photo_id,
+                    original_filename: urlInfo.filename,
+                    gcs_filename: urlInfo.gcs_filename,
+                    file_extension: urlInfo.file_extension,
+                    size: urlInfo.size
+                });
+                
+                console.log(`✅ ${file.name} uploaded directly to GCS`);
+            }
+
+            // Step 3: Tell our API the uploads are complete
+            const completionResponse = await fetch(`${this.apiBase}/direct-upload/complete`, {
+                method: 'POST',
+                headers: this.getAuthHeaders(true),
+                credentials: 'include',
+                body: JSON.stringify({ completed_uploads: completedUploads })
+            });
+
+            if (!completionResponse.ok) {
+                const errorData = await completionResponse.json();
+                throw new Error(`Failed to record uploads: ${errorData.detail || completionResponse.statusText}`);
+            }
+
+            const result = await completionResponse.json();
+            
+            // Update quota display
+            if (result.quota_info) {
+                this.updateQuotaDisplay(result.quota_info);
+            }
+            
+            console.log(`🎉 Batch ${batchNum}/${totalBatches} completed: ${result.successful_uploads} uploads recorded`);
+            
+            return result.photo_ids || [];
+
+        } catch (error) {
+            console.error(`❌ Batch ${batchNum} failed:`, error);
+            throw error;
         }
     }
 

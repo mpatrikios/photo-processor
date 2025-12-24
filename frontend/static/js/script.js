@@ -372,7 +372,7 @@ async function handleSignIn(event) {
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         const apiBase = isDevelopment ? 
             `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            `${window.location.protocol}//${window.location.host}/api`;
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
         
         const response = await fetch(`${apiBase}/auth/login`, {
             method: 'POST',
@@ -391,8 +391,26 @@ async function handleSignIn(event) {
                 });
             }
             
-            localStorage.setItem('auth_token', result.token);
-            localStorage.setItem('user_info', JSON.stringify(result.user));
+            // Store tokens properly using StateManager
+            if (window.stateManager) {
+                window.stateManager.set('auth.token', result.token);
+                window.stateManager.set('auth.user', result.user);
+                window.stateManager.set('auth.isAuthenticated', true);
+                
+                // Store refresh token if provided
+                if (result.refresh_token) {
+                    window.stateManager.set('auth.refreshToken', result.refresh_token);
+                }
+                
+                window.stateManager.saveToStorage();
+            } else {
+                // Fallback to direct localStorage
+                localStorage.setItem('auth_token', result.token);
+                localStorage.setItem('user_info', JSON.stringify(result.user));
+                if (result.refresh_token) {
+                    localStorage.setItem('refresh_token', result.refresh_token);
+                }
+            }
 
             const modal = bootstrap.Modal.getInstance(document.getElementById('signInModal'));
             if (modal) modal.hide();
@@ -467,7 +485,7 @@ async function handleCreateAccount(event) {
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         const apiBase = isDevelopment ? 
             `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            `${window.location.protocol}//${window.location.host}/api`;
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
             
         const response = await fetch(`${apiBase}/auth/register`, {
             method: 'POST',
@@ -484,8 +502,26 @@ async function handleCreateAccount(event) {
                 });
             }
             
-            localStorage.setItem('auth_token', result.token);
-            localStorage.setItem('user_info', JSON.stringify(result.user));
+            // Store tokens properly using StateManager
+            if (window.stateManager) {
+                window.stateManager.set('auth.token', result.token);
+                window.stateManager.set('auth.user', result.user);
+                window.stateManager.set('auth.isAuthenticated', true);
+                
+                // Store refresh token if provided
+                if (result.refresh_token) {
+                    window.stateManager.set('auth.refreshToken', result.refresh_token);
+                }
+                
+                window.stateManager.saveToStorage();
+            } else {
+                // Fallback to direct localStorage
+                localStorage.setItem('auth_token', result.token);
+                localStorage.setItem('user_info', JSON.stringify(result.user));
+                if (result.refresh_token) {
+                    localStorage.setItem('refresh_token', result.refresh_token);
+                }
+            }
 
             const modal = bootstrap.Modal.getInstance(document.getElementById('createAccountModal'));
             if (modal) modal.hide();
@@ -635,7 +671,7 @@ async function loadCustomProfileData() {
     const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
     const apiBase = isDevelopment ? 
         `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-        `${window.location.protocol}//${window.location.host}/api`;
+        'https://tagsort-api-486078451066.us-central1.run.app/api';
         
     const headers = { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` };
 
@@ -742,7 +778,7 @@ async function updateCustomProfile() {
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         const apiBase = isDevelopment ? 
             `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            `${window.location.protocol}//${window.location.host}/api`;
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
             
         const response = await fetch(`${apiBase}/users/me/profile`, {
             method: 'PUT',
@@ -812,7 +848,7 @@ async function handleUpgrade(tierName) {
         const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
         const apiBase = isDevelopment ? 
             `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            `${window.location.protocol}//${window.location.host}/api`;
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
 
         const response = await fetch(`${apiBase}/payment/create-checkout-session`, {
             method: 'POST',
