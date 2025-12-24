@@ -1352,6 +1352,7 @@ class PhotoProcessor {
     }
 
     // NEW: Direct upload to GCS (bypasses server bottleneck)
+    // NEW: Direct upload to GCS (bypasses server bottleneck)
     async uploadBatch(batchFiles, batchNum, totalBatches) {
         console.log(`🚀 Starting direct upload batch ${batchNum}/${totalBatches} with ${batchFiles.length} files`);
         
@@ -1385,15 +1386,12 @@ class PhotoProcessor {
             
             console.log(`📝 Got ${signed_urls.length} signed URLs for direct upload`);
 
-            // Step 2: Upload each file directly to Google Cloud Storage
-            const completedUploads = [];
-            
-            for (let i = 0; i < batchFiles.length; i++) {
-                const file = batchFiles[i];
+            // Step 2: Upload all files in parallel to Google Cloud Storage
+            // We create an array of promises, one for each file upload
+            const uploadPromises = batchFiles.map(async (file, i) => {
                 const urlInfo = signed_urls[i];
-                
                 console.log(`⬆️ Uploading ${file.name} directly to GCS...`);
-                
+
                 const uploadResponse = await fetch(urlInfo.signed_url, {
                     method: 'PUT',
                     body: file,
@@ -1407,17 +1405,20 @@ class PhotoProcessor {
                     throw new Error(`Direct upload failed for ${file.name}: ${uploadResponse.statusText}`);
                 }
 
-                // Track successful upload
-                completedUploads.push({
+                console.log(`✅ ${file.name} uploaded directly to GCS`);
+
+                // Return the success data for this file
+                return {
                     photo_id: urlInfo.photo_id,
                     original_filename: urlInfo.filename,
                     gcs_filename: urlInfo.gcs_filename,
                     file_extension: urlInfo.file_extension,
                     size: urlInfo.size
-                });
-                
-                console.log(`✅ ${file.name} uploaded directly to GCS`);
-            }
+                };
+            });
+
+            // Wait for ALL uploads in this batch to complete
+            const completedUploads = await Promise.all(uploadPromises);
 
             // Step 3: Tell our API the uploads are complete
             const completionResponse = await fetch(`${this.apiBase}/direct-upload/complete`, {

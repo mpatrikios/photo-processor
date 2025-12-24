@@ -383,11 +383,38 @@ class StateManager {
      */
     setupRequestInterceptor() {
         const originalFetch = window.fetch;
-        this.originalFetch = originalFetch; // Store for use in refreshToken
-        this.refreshInProgress = false; // Prevent multiple simultaneous refreshes
+        this.originalFetch = originalFetch; 
+        this.refreshInProgress = false; 
         
         window.fetch = async (url, options = {}) => {
-            // Add auth header if authenticated
+            // --------------------------------------------------------
+            // 1. PROACTIVE CHECK: Is the token about to expire?
+            // --------------------------------------------------------
+            if (this.state.auth.isAuthenticated && 
+                this.state.auth.tokenExpiresAt &&
+                !url.includes('/auth/')) {
+                
+                const expiresIn = new Date(this.state.auth.tokenExpiresAt) - new Date();
+                const fiveMinutes = 5 * 60 * 1000;
+    
+                // If token expires in less than 5 mins, refresh NOW before sending request
+                if (expiresIn < fiveMinutes && !this.refreshInProgress) {
+                    console.log('Token expiring soon, refreshing proactively...');
+                    this.refreshInProgress = true;
+                    try {
+                        await this.refreshToken();
+                    } catch (e) {
+                        console.warn('Proactive refresh failed, proceeding with current token');
+                    } finally {
+                        this.refreshInProgress = false;
+                    }
+                }
+            }
+
+            // --------------------------------------------------------
+            // 2. ATTACH TOKEN (Crucial Step: Don't forget this!)
+            // --------------------------------------------------------
+            // This runs AFTER the proactive refresh, so it uses the newest token
             if (this.state.auth.isAuthenticated && this.state.auth.token) {
                 options.headers = {
                     ...options.headers,
@@ -395,7 +422,9 @@ class StateManager {
                 };
             }
             
-            // Add request timeout
+            // --------------------------------------------------------
+            // 3. TIMEOUT & EXECUTION
+            // --------------------------------------------------------
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), this.state.api.requestTimeout);
             
@@ -405,20 +434,22 @@ class StateManager {
                 const response = await originalFetch(url, options);
                 clearTimeout(timeoutId);
                 
-                // Handle auth errors (401 or 403) - but prevent refresh loops
+                // --------------------------------------------------------
+                // 4. REACTIVE RETRY (Safety Net for 401s)
+                // --------------------------------------------------------
                 if ((response.status === 401 || response.status === 403) && 
                     this.state.auth.isAuthenticated && 
                     !this.refreshInProgress &&
-                    !url.includes('/auth/refresh') && // Don't refresh the refresh endpoint
-                    !url.includes('/auth/validate')) { // Don't refresh validate calls
+                    !url.includes('/auth/refresh') && 
+                    !url.includes('/auth/validate')) {
                     
                     this.refreshInProgress = true;
                     
                     try {
-                        // Try to refresh token
+                        console.log('401 detected, attempting reactive refresh...');
                         const refreshed = await this.refreshToken();
                         if (refreshed) {
-                            // Retry the original request with new token
+                            // Retry the original request with the NEW token
                             options.headers['Authorization'] = `Bearer ${this.state.auth.token}`;
                             return await originalFetch(url, options);
                         }
