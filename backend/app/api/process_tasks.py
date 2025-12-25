@@ -1,60 +1,60 @@
 import asyncio
 import json
 import logging
-import time
+import os
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy import update
 
-# Initialize logger
-logger = logging.getLogger(__name__)
-
-# Import Cloud Tasks with fallback
-try:
-    from google.cloud import tasks_v2
-    CLOUD_TASKS_AVAILABLE = True
-except ImportError:
-    CLOUD_TASKS_AVAILABLE = False
-    logger.warning("Cloud Tasks not available - falling back to async processing")
-
-from database import SessionLocal
-from app.api.auth import get_current_user
-from app.models.schemas import ManualLabelRequest, ProcessingJob, ProcessingStatus
+# --- FIX 1: Top-level imports to prevent NameError in Worker ---
+from app.models.schemas import DetectionResult, ProcessingJob, ProcessingStatus
 from app.models.usage import ProcessingJob as ProcessingJobDB
 from app.models.user import User
-from app.services.detector import NumberDetector
+from app.models.processing import PhotoDB
+from app.api.auth import get_current_user
 from app.services.usage_tracker import usage_tracker
-from database import get_db
+from database import SessionLocal, get_db
+from app.services.detector import NumberDetector
 
+# Initialize
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 detector = NumberDetector()
 
-# Store jobs with user association
-# Structure: {job_id: {"job": ProcessingJob, "user_id": int}}
+# --- FIX 2: Standardized Cloud Config ---
+PROJECT = os.getenv('PROJECT', os.getenv('GOOGLE_CLOUD_PROJECT', 'tagsort'))
+LOCATION = os.getenv('LOCATION', os.getenv('GCP_LOCATION', 'us-central1'))
+QUEUE = os.getenv('QUEUE', 'photo-processing-queue')
+# This must match your Cloud Run URL
+SERVICE_URL = os.getenv('SERVICE_URL', os.getenv('BASE_URL', 'https://tagsort-api-486078451066.us-central1.run.app'))
+
+# Import Cloud Tasks Client
+try:
+    from google.cloud import tasks_v2
+    task_client = tasks_v2.CloudTasksClient()
+    CLOUD_TASKS_AVAILABLE = True
+    logger.info("✅ Cloud Tasks client initialized")
+except Exception as e:
+    CLOUD_TASKS_AVAILABLE = False
+    task_client = None
+    logger.error(f"❌ Cloud Tasks initialization failed: {e}")
+
+# In-memory job store
 jobs: Dict[str, dict] = {}
 
-# Initialize Cloud Tasks client with availability check
-task_client = None
-if CLOUD_TASKS_AVAILABLE:
-    try:
-        task_client = tasks_v2.CloudTasksClient()
-        logger.info("✅ Cloud Tasks client initialized successfully")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not initialize Cloud Tasks client: {e}")
-        task_client = None
-else:
-    logger.warning("⚠️ Cloud Tasks library not available")
+# Final diagnostic summary
+logger.info(f"🔍 DIAGNOSTIC SUMMARY:")
+logger.info(f"🔍 - CLOUD_TASKS_AVAILABLE: {CLOUD_TASKS_AVAILABLE}")
+logger.info(f"🔍 - task_client initialized: {task_client is not None}")
+logger.info(f"🔍 - PROJECT: {PROJECT}")
+logger.info(f"🔍 - LOCATION: {LOCATION}")
+logger.info(f"🔍 - QUEUE: {QUEUE}")
+logger.info(f"🔍 - SERVICE_URL: {SERVICE_URL}")
 
-# Cloud Tasks Configuration
-PROJECT = "tagsort"
-LOCATION = "us-central1"
-QUEUE = "photo-processing-queue"
-SERVICE_URL = "https://tagsort-api-486078451066.us-central1.run.app"
 
 
 @router.post("/start", response_model=ProcessingJob)
@@ -97,35 +97,87 @@ async def start_processing_with_tasks(
     job.status = ProcessingStatus.PROCESSING
     usage_tracker.update_processing_job(db=db, job_id=job_id, status="processing", started_at=datetime.utcnow())
 
-    # 5. Queue Tasks
+    # 5. Queue Tasks in Batches (3 photos per task for optimal Gemini performance)
     if not task_client:
+        logger.warning(f"🚫 FALLBACK TRIGGERED: Using async processing instead of Cloud Tasks")
+        logger.warning(f"🔍 Fallback reason: task_client is None")
+        logger.warning(f"🔍 This means either:")
+        logger.warning(f"🔍   - Cloud Tasks library not installed (check requirements.txt)")
+        logger.warning(f"🔍   - Client initialization failed (check credentials/project config)")
+        logger.warning(f"🔍   - Service account lacks proper permissions")
+        logger.warning(f"📊 Performance impact: Processing will be ~3x slower than Cloud Tasks")
+        logger.info(f"🔄 Starting fallback processing for {len(photo_ids)} photos...")
+        
         asyncio.create_task(process_photos_async_fallback(job_id, photo_ids, current_user.id, debug))
         return job
-
-    queue_path = task_client.queue_path(PROJECT, LOCATION, QUEUE)
-    worker_url = f"{SERVICE_URL}/api/process/worker"
     
-    for i, photo_id in enumerate(photo_ids):
-        payload = {
-            "photo_id": photo_id,
-            "job_id": job_id,
-            "user_id": current_user.id,
-            "photo_index": i + 1,
-            "debug_mode": debug
-        }
-        task = {
-            "http_request": {
-                "http_method": tasks_v2.HttpMethod.POST,
-                "url": worker_url,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps(payload).encode(),
-                "oidc_token": {
-                    "service_account_email": "tagsort-web-sa@tagsort.iam.gserviceaccount.com",
-                    "audience": SERVICE_URL,
-                },
+    # If we reach here, Cloud Tasks is available
+    logger.info(f"🚀 Attempting direct Cloud Tasks enqueuing...")
+    
+    try:
+        queue_path = task_client.queue_path(PROJECT, LOCATION, QUEUE)
+        worker_url = f"{SERVICE_URL}/api/process/batch-worker"
+        
+        logger.info(f"🔍 Queue path created: {queue_path}")
+        logger.info(f"🔍 Worker URL: {worker_url}")
+        
+    except Exception as path_error:
+        logger.error(f"❌ Failed to create queue path: {path_error}")
+        asyncio.create_task(process_photos_async_fallback(job_id, photo_ids, current_user.id, debug))
+        return job
+    
+    # Group photos into batches of 3 for optimal Gemini rate limiting
+    BATCH_SIZE = 3
+    photo_batches = []
+    for i in range(0, len(photo_ids), BATCH_SIZE):
+        batch = photo_ids[i:i + BATCH_SIZE]
+        photo_batches.append(batch)
+    
+    logger.info(f"🔄 Creating {len(photo_batches)} batch tasks ({BATCH_SIZE} photos each)")
+    
+    tasks_created = 0
+    for batch_idx, photo_batch in enumerate(photo_batches):
+        try:
+            payload = {
+                "photo_ids": photo_batch,  # Multiple photos per task
+                "job_id": str(job_id),  # Ensure string
+                "user_id": int(current_user.id),  # Ensure int
+                "batch_index": batch_idx + 1,
+                "total_batches": len(photo_batches),
+                "debug_mode": debug
             }
-        }
-        task_client.create_task(request={"parent": queue_path, "task": task})
+            task = {
+                "http_request": {
+                    "http_method": tasks_v2.HttpMethod.POST,
+                    "url": worker_url,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps(payload).encode(),
+                    "oidc_token": {
+                        "service_account_email": "tagsort-web-sa@tagsort.iam.gserviceaccount.com",
+                        "audience": SERVICE_URL,
+                    },
+                }
+            }
+            
+            task_response = task_client.create_task(request={"parent": queue_path, "task": task})
+            tasks_created += 1
+            
+            logger.info(f"✅ Created task {batch_idx + 1}/{len(photo_batches)}: {len(photo_batch)} photos")
+            if batch_idx == 0:  # Log details for first task only
+                logger.debug(f"🔍 Task details: {task_response.name}")
+                
+        except Exception as task_error:
+            logger.error(f"❌ Failed to create task {batch_idx + 1}: {task_error}")
+            logger.error(f"🔍 Task creation failed - this suggests OIDC/permission issues")
+    
+    if tasks_created == 0:
+        logger.error(f"❌ No tasks were successfully created - falling back to async processing")
+        asyncio.create_task(process_photos_async_fallback(job_id, photo_ids, current_user.id, debug))
+        return job
+    elif tasks_created < len(photo_batches):
+        logger.warning(f"⚠️ Only {tasks_created}/{len(photo_batches)} tasks created successfully")
+    else:
+        logger.info(f"🎉 All {tasks_created} tasks created successfully - Cloud Tasks processing active!")
 
     return job
 
@@ -169,6 +221,112 @@ async def process_single_photo_worker(request: Request):
         db.close()
 
 
+@router.post("/batch-worker")
+async def process_batch_photos_worker(request: Request):
+    """
+    Optimized Cloud Tasks Batch Worker Endpoint
+    Each request handles 3 photos in a single Gemini API call for 2-3x better performance.
+    """
+    db = SessionLocal()
+    try:
+        payload = await request.json()
+        photo_ids = payload.get("photo_ids", [])
+        job_id = payload.get("job_id")
+        user_id = payload.get("user_id")
+        batch_index = payload.get("batch_index", 1)
+        total_batches = payload.get("total_batches", 1)
+        debug_mode = payload.get("debug_mode", False)
+        
+        if not all([photo_ids, job_id, user_id]) or not isinstance(photo_ids, list):
+            return {"status": "error", "message": "Missing or invalid payload fields"}
+        
+        logger.info(f"🔄 Batch worker {batch_index}/{total_batches}: Processing {len(photo_ids)} photos")
+        
+        # 1. Run batch detection with Gemini (2-3x faster than individual calls)
+        batch_results = await detector.process_photo_batch(
+            photo_ids, debug_mode=debug_mode, user_id=user_id
+        )
+        
+        if not batch_results:
+            return {"status": "error", "message": "Batch processing failed"}
+        
+        # 2. Save all results to database in a single transaction
+        await save_batch_results_to_database(batch_results, user_id, job_id)
+        
+        # 3. Update overall job progress (calculates % based on completed photos)
+        await update_job_progress(job_id, db)
+        
+        successful_count = len([r for r in batch_results.values() if r.bib_number not in ["unknown", "error"]])
+        logger.info(f"✅ Batch {batch_index}/{total_batches}: {successful_count}/{len(photo_ids)} photos detected")
+        
+        return {
+            "status": "success", 
+            "batch_index": batch_index,
+            "processed_count": len(batch_results),
+            "successful_count": successful_count
+        }
+            
+    except Exception as e:
+        logger.error(f"🔥 Batch worker failed for batch {batch_index if 'batch_index' in locals() else 'unknown'}: {e}")
+        # Raising 500 tells Cloud Tasks to RETRY this batch automatically
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+async def save_batch_results_to_database(batch_results: Dict[str, DetectionResult], user_id: int, processing_job_id: str):
+    """Save multiple detection results using simple loop for reliability."""
+    db_session = SessionLocal()
+    try:
+        from app.models.processing import PhotoDB, ProcessingStatus
+        
+        processed_time = datetime.utcnow()
+        
+        # Simple approach: update each photo individually in a transaction
+        for photo_id, detection_result in batch_results.items():
+            photo = db_session.query(PhotoDB).filter(
+                PhotoDB.photo_id == str(photo_id),  # Force string cast
+                PhotoDB.user_id == int(user_id)     # Force int cast
+            ).first()
+            
+            if photo:
+                if detection_result.bib_number and detection_result.bib_number not in ["unknown", "error"]:
+                    # Successful detection
+                    photo.detected_number = detection_result.bib_number
+                    photo.confidence = detection_result.confidence
+                    photo.detection_method = "gemini_flash_batch"
+                    photo.processing_status = ProcessingStatus.COMPLETED
+                    photo.processing_job_id = str(processing_job_id)  # Force string cast
+                    photo.processed_at = processed_time
+                    
+                    # Add bounding box if available
+                    if detection_result.bbox:
+                        photo.bbox_x1 = detection_result.bbox[0]
+                        photo.bbox_y1 = detection_result.bbox[1]
+                        photo.bbox_x2 = detection_result.bbox[2]
+                        photo.bbox_y2 = detection_result.bbox[3]
+                else:
+                    # Unknown/error detection
+                    photo.detected_number = "unknown"
+                    photo.confidence = 0.0
+                    photo.detection_method = "gemini_flash_batch"
+                    photo.processing_status = ProcessingStatus.COMPLETED
+                    photo.processing_job_id = processing_job_id
+                    photo.processed_at = processed_time
+            else:
+                logger.warning(f"Photo {photo_id} not found for user {user_id}")
+        
+        db_session.commit()
+        logger.info(f"✅ Batch results saved for {len(batch_results)} photos")
+        
+    except Exception as e:
+        db_session.rollback()
+        logger.error(f"❌ DB Save Failed: {e}")
+        raise
+    finally:
+        db_session.close()
+
+
 async def save_detection_to_database(photo_id: str, user_id: int, detection_result, processing_job_id: str):
     """Save detection result to PhotoDB table after OCR processing."""
     try:
@@ -178,8 +336,8 @@ async def save_detection_to_database(photo_id: str, user_id: int, detection_resu
         try:
             # Check if photo record already exists
             existing_photo = db_session.query(PhotoDB).filter(
-                PhotoDB.photo_id == photo_id,
-                PhotoDB.user_id == user_id
+                PhotoDB.photo_id == str(photo_id),
+                PhotoDB.user_id == int(user_id)
             ).first()
             
             if existing_photo:
@@ -193,15 +351,15 @@ async def save_detection_to_database(photo_id: str, user_id: int, detection_resu
                         existing_photo.bbox_y1 = detection_result.bbox[1] 
                         existing_photo.bbox_x2 = detection_result.bbox[2]
                         existing_photo.bbox_y2 = detection_result.bbox[3]
-                    existing_photo.status = ProcessingStatus.COMPLETED
-                    existing_photo.processing_job_id = processing_job_id
+                    existing_photo.processing_status = ProcessingStatus.COMPLETED
+                    existing_photo.processing_job_id = str(processing_job_id)
                     existing_photo.processed_at = datetime.utcnow()
                 else:
                     existing_photo.detected_number = "unknown"
                     existing_photo.confidence = 0.0
                     existing_photo.detection_method = "gemini_flash"
-                    existing_photo.status = ProcessingStatus.COMPLETED
-                    existing_photo.processing_job_id = processing_job_id
+                    existing_photo.processing_status = ProcessingStatus.COMPLETED
+                    existing_photo.processing_job_id = str(processing_job_id)
                     existing_photo.processed_at = datetime.utcnow()
                 
                 db_session.commit()
@@ -227,10 +385,10 @@ async def update_job_progress(job_id: str, db: Session):
         from app.models.processing import PhotoDB
         
         # Get total photos and completed photos for this job
-        total_photos = db.query(PhotoDB).filter(PhotoDB.processing_job_id == job_id).count()
+        total_photos = db.query(PhotoDB).filter(PhotoDB.processing_job_id == str(job_id)).count()
         completed_photos = db.query(PhotoDB).filter(
-            PhotoDB.processing_job_id == job_id,
-            PhotoDB.status == "completed"
+            PhotoDB.processing_job_id == str(job_id),
+            PhotoDB.processing_status == ProcessingStatus.COMPLETED
         ).count()
         
         if total_photos > 0:

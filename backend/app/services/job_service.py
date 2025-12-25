@@ -377,9 +377,11 @@ class JobService:
                 job.progress = 0
 
                 # Reset photo statuses
+                # Reset photo statuses
                 db.query(PhotoDB).filter(
                     and_(
-                        PhotoDB.processing_job_id == job.id,
+                        # Force job.id to string to match the VARCHAR column in PostgreSQL
+                        PhotoDB.processing_job_id == str(job.id), 
                         PhotoDB.processing_status == ProcessingStatus.PROCESSING,
                     )
                 ).update({"processing_status": ProcessingStatus.PENDING})

@@ -952,7 +952,7 @@ class PhotoProcessor {
         
         const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
         const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        const COMPRESS_THRESHOLD = 4 * 1024 * 1024; // Compress files larger than 4MB
+        const COMPRESS_THRESHOLD = 1 * 1024 * 1024; // Compress files larger than 1MB (aggressive optimization)
 
         const invalidFiles = [];
         const toProcess = [];
@@ -985,12 +985,12 @@ class PhotoProcessor {
                 // Compress if file is larger than threshold
                 if (file.size > COMPRESS_THRESHOLD) {
                     const options = {
-                        maxSizeMB: 4,
-                        maxWidthOrHeight: 4000,
+                        maxSizeMB: 1,  // Much smaller target for faster uploads
+                        maxWidthOrHeight: 1024,  // Matches server Gemini optimization
                         useWebWorker: true,
                         fileType: file.type,
-                        preserveExif: true,
-                        initialQuality: 0.9
+                        preserveExif: false,  // Remove EXIF for smaller files
+                        initialQuality: 0.85  // Slightly lower quality for better compression
                     };
                     
                     console.log(`Compressing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
@@ -1320,31 +1320,37 @@ class PhotoProcessor {
         
         console.log(`📦 Split ${files.length} photos into ${batches.length} batches of ${BATCH_SIZE} photos each`);
         
-        // Upload each batch
-        for (let i = 0; i < batches.length; i++) {
-            const batch = batches[i];
-            const batchNum = i + 1;
+        // Upload batches in parallel (3 concurrent) for much faster uploads
+        const CONCURRENT_BATCHES = 3;
+        const uploadBtn = document.getElementById('upload-btn');
+        
+        for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+            const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+            const batchNumbers = concurrentBatches.map((_, idx) => i + idx + 1);
             
             try {
-                console.log(`📦 Uploading batch ${batchNum}/${batches.length} (${batch.length} photos)...`);
+                console.log(`📦 Uploading ${concurrentBatches.length} batches concurrently (${batchNumbers[0]}-${batchNumbers[batchNumbers.length - 1]}/${batches.length})...`);
                 
                 // Update progress in UI
-                const uploadBtn = document.getElementById('upload-btn');
-                uploadBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Uploading batch ${batchNum}/${batches.length}...`;
+                uploadBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Uploading ${concurrentBatches.length} batches concurrently...`;
                 
-                const batchPhotoIds = await this.uploadBatch(batch, batchNum, batches.length);
-                allPhotoIds.push(...batchPhotoIds);
+                // Upload all batches in this group concurrently
+                const batchPromises = concurrentBatches.map((batch, idx) => 
+                    this.uploadBatch(batch, batchNumbers[idx], batches.length)
+                );
                 
-                console.log(`✅ Batch ${batchNum}/${batches.length} uploaded successfully (${batchPhotoIds.length} photos)`);
+                const batchResults = await Promise.all(batchPromises);
                 
-                // Small delay between batches to avoid overwhelming the server
-                if (i < batches.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                // Flatten all results from concurrent batches
+                for (const batchPhotoIds of batchResults) {
+                    allPhotoIds.push(...batchPhotoIds);
                 }
                 
+                console.log(`✅ Concurrent batch group completed: ${batchResults.reduce((sum, batch) => sum + batch.length, 0)} photos uploaded`);
+                
             } catch (error) {
-                console.error(`❌ Batch ${batchNum}/${batches.length} failed:`, error);
-                throw new Error(`Batch upload ${batchNum}/${batches.length} failed: ${error.message}`);
+                console.error(`❌ Concurrent batch group (${batchNumbers[0]}-${batchNumbers[batchNumbers.length - 1]}) failed:`, error);
+                throw new Error(`Concurrent batch upload failed: ${error.message}`);
             }
         }
         

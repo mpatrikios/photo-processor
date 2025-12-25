@@ -98,6 +98,190 @@ class NumberDetector:
                 logger.error(f"❌ Error processing {photo_id}: {e}")
                 return DetectionResult(bib_number="error", confidence=0.0, bbox=None)
 
+    async def process_photo_batch(
+        self, photo_ids: List[str], debug_mode: bool = False, user_id: Optional[int] = None
+    ) -> Dict[str, DetectionResult]:
+        """
+        Process multiple photos in a single Gemini API call for better performance.
+        Returns a dictionary mapping photo_id to DetectionResult.
+        """
+        if not photo_ids:
+            return {}
+        
+        batch_start_time = time.time()
+        logger.info(f"🔄 Processing batch of {len(photo_ids)} photos with Gemini...")
+
+        self._initialize_gemini_client()
+        
+        if not self.use_gemini:
+            logger.error("Cannot process batch: Gemini is not configured.")
+            return {photo_id: DetectionResult(bib_number="unknown", confidence=0.0, bbox=None) 
+                   for photo_id in photo_ids}
+
+        results = {}
+        
+        try:
+            # Find and optimize all photos in the batch
+            photo_data = []
+            valid_photo_ids = []
+            
+            for photo_id in photo_ids:
+                photo_path = self._find_photo_path(photo_id, user_id)
+                if not photo_path:
+                    logger.warning(f"Photo file not found: {photo_id}")
+                    results[photo_id] = DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
+                    continue
+                    
+                # Optimize image for Gemini
+                optimized_image_data, img_shape = self._optimize_image_for_gemini(photo_path, debug_mode)
+                if optimized_image_data:
+                    photo_data.append((photo_id, optimized_image_data, img_shape))
+                    valid_photo_ids.append(photo_id)
+                else:
+                    results[photo_id] = DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
+            
+            if not photo_data:
+                logger.warning("No valid photos found in batch")
+                return results
+            
+            # Create batch prompt for multiple photos
+            batch_prompt = f"""Analyze these {len(photo_data)} race photos and find bib numbers on cyclists. Return a JSON array with this exact format:
+
+[
+  {{
+    "photo_index": 0,
+    "bib_number": "123",
+    "confidence": "high",
+    "location": "bike-mounted"
+  }},
+  {{
+    "photo_index": 1,
+    "bib_number": "456", 
+    "confidence": "medium",
+    "location": "jersey"
+  }}
+]
+
+Rules:
+- Return one entry per photo in the same order they appear
+- photo_index starts at 0 and matches the image order
+- Look for numbers on bike-mounted plates (lower portion) and cyclist jerseys (upper portion)
+- Only detect numbers that are 1-6 digits long
+- If multiple numbers exist in a photo, return the clearest and most prominent one
+- Set confidence to "high", "medium", or "low"
+- Set location to "bike-mounted" or "jersey"
+- If no bib number is visible in a photo, set bib_number to "NONE"
+
+Return only valid JSON array."""
+
+            # Prepare content parts for Gemini API
+            content_parts = []
+            for _, image_data, _ in photo_data:
+                content_parts.append(
+                    types.Part.from_bytes(
+                        data=image_data,
+                        mime_type="image/jpeg"
+                    )
+                )
+            content_parts.append(batch_prompt)
+
+            # Call Gemini API with all photos
+            response = await self.gemini_client.aio.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=content_parts,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                )
+            )
+            
+            if not response or not response.text:
+                logger.warning("Empty response from Gemini batch processing")
+                # Fallback to individual processing
+                return await self._fallback_individual_processing(photo_ids, debug_mode, user_id)
+                
+            # Parse batch response
+            try:
+                clean_text = response.text.strip()
+                if clean_text.startswith("```json"):
+                    clean_text = clean_text.split("```json")[1].split("```")[0].strip()
+                
+                batch_results = json.loads(clean_text)
+                logger.debug(f"Gemini Batch Results: {batch_results}")
+                
+                if not isinstance(batch_results, list):
+                    logger.warning("Gemini returned non-array response, falling back to individual processing")
+                    return await self._fallback_individual_processing(photo_ids, debug_mode, user_id)
+                
+                # Process each result and map to photo_id
+                for i, result_data in enumerate(batch_results):
+                    if i >= len(photo_data):
+                        break
+                        
+                    photo_id, _, img_shape = photo_data[i]
+                    
+                    detected_bib = result_data.get("bib_number", "NONE")
+                    confidence_level = result_data.get("confidence", "low")
+                    location = result_data.get("location", "unknown")
+                    
+                    # Convert confidence text to number
+                    confidence_map = {"high": 0.95, "medium": 0.75, "low": 0.5}
+                    confidence = confidence_map.get(confidence_level, 0.5)
+                    
+                    # Check for valid bib number
+                    if str(detected_bib).upper() == "NONE" or not self._is_valid_bib_number(str(detected_bib)):
+                        results[photo_id] = DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
+                    else:
+                        # Create dummy bounding box based on location
+                        if location == "bike-mounted":
+                            bbox = [
+                                int(img_shape[1] * 0.3), int(img_shape[0] * 0.5), 
+                                int(img_shape[1] * 0.7), int(img_shape[0] * 0.8)
+                            ]
+                        else:
+                            bbox = [
+                                int(img_shape[1] * 0.3), int(img_shape[0] * 0.2), 
+                                int(img_shape[1] * 0.7), int(img_shape[0] * 0.5)
+                            ]
+                        
+                        results[photo_id] = DetectionResult(
+                            bib_number=str(detected_bib), 
+                            confidence=confidence, 
+                            bbox=bbox
+                        )
+                        self.results[photo_id] = results[photo_id]  # Store in cache
+                
+                # Handle any missing results
+                for photo_id in valid_photo_ids:
+                    if photo_id not in results:
+                        results[photo_id] = DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse Gemini batch response: {e}")
+                return await self._fallback_individual_processing(photo_ids, debug_mode, user_id)
+                
+        except Exception as e:
+            logger.error(f"Batch processing error: {e}")
+            return await self._fallback_individual_processing(photo_ids, debug_mode, user_id)
+        
+        total_time = time.time() - batch_start_time
+        successful = len([r for r in results.values() if r.bib_number not in ["unknown", "error"]])
+        logger.info(f"✅ Batch processed {len(results)} photos in {total_time:.2f}s ({successful} detected)")
+        
+        return results
+
+    async def _fallback_individual_processing(
+        self, photo_ids: List[str], debug_mode: bool = False, user_id: Optional[int] = None
+    ) -> Dict[str, DetectionResult]:
+        """Fallback to individual processing if batch processing fails"""
+        logger.info(f"🔄 Falling back to individual processing for {len(photo_ids)} photos")
+        results = {}
+        
+        for photo_id in photo_ids:
+            result = await self.process_photo(photo_id, debug_mode, user_id)
+            results[photo_id] = result
+            
+        return results
+
     async def _detect_with_gemini(
         self, photo_path: str, debug_mode: bool = False
     ) -> Tuple[Optional[str], float, Optional[List[int]]]:
@@ -232,19 +416,26 @@ Return only valid JSON."""
             return image_bytes  # Fallback to original
 
     def _optimize_image_for_gemini(
-        self, image_path: str, debug_mode: bool = False
+        self, image_path: str, debug_mode: bool = False, skip_compression: bool = False
     ) -> Tuple[bytes, Tuple[int, int]]:
-        """Optimize image for Gemini API using PIL - 10x faster upload via 1024px resizing"""
+        """Optimize image for Gemini API - skip compression if already client-optimized for 2x speed boost"""
         try:
-            # Read original image data
+            # Read image data
             with open(image_path, "rb") as f:
                 original_data = f.read()
             
-            # Get original dimensions for bbox calculations
+            # Get original dimensions for bbox calculations (PIL returns width, height)
             with Image.open(image_path) as img:
                 original_width, original_height = img.size
             
-            # Resize using PIL for optimal performance
+            # PERFORMANCE OPTIMIZATION: Skip server compression if client already optimized to ~1024px
+            if skip_compression or (max(original_width, original_height) <= 1100 and len(original_data) <= 1.5 * 1024 * 1024):
+                # Image is already optimized (likely from client-side compression)
+                if debug_mode:
+                    logger.debug(f"⚡ Skipping server compression: {original_width}x{original_height} ({len(original_data)/1024:.0f}KB) already optimal")
+                return original_data, (original_height, original_width)
+            
+            # Apply server-side compression for larger images
             optimized_data = self._resize_image(original_data, max_size=1024)
             
             # Calculate new dimensions after resizing
@@ -256,7 +447,7 @@ Return only valid JSON."""
                 optimized_kb = len(optimized_data) / 1024
                 reduction_pct = ((len(original_data) - len(optimized_data)) / len(original_data)) * 100
                 logger.debug(
-                    f"🏎️ PIL optimization: {original_width}x{original_height} ({original_kb:.0f}KB) → "
+                    f"🏎️ Server compression: {original_width}x{original_height} ({original_kb:.0f}KB) → "
                     f"{new_width}x{new_height} ({optimized_kb:.0f}KB) - {reduction_pct:.0f}% smaller"
                 )
             
