@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
-from app.api import analytics, auth, batch, download, feedback, process, upload, users, payment, direct_upload
+from app.api import analytics, auth, batch, download, feedback, process_tasks, upload, users, payment, direct_upload
 from app.core.config import settings
 from app.core.errors import register_error_handlers
 from app.core.security_middleware import SecurityHeaders, custom_rate_limit_handler, limiter
@@ -148,8 +148,7 @@ async def startup_event():
             logger.info(f"🔄 Recovered {recovered_jobs} processing jobs")
 
         # Load active processing jobs into memory
-        from app.api.process import cleanup_old_jobs, sync_jobs_from_database
-
+        from app.api.process_tasks import cleanup_old_jobs, sync_jobs_from_database
         sync_jobs_from_database()
         cleanup_old_jobs()
 
@@ -236,7 +235,7 @@ async def database_status():
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
-app.include_router(process.router, prefix="/api/process", tags=["process"])
+app.include_router(process_tasks.router, prefix="/api/process", tags=["process"])
 app.include_router(download.router, prefix="/api/download", tags=["download"])
 app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 app.include_router(batch.router, prefix="/api/batch", tags=["batch"])

@@ -1586,16 +1586,19 @@ class PhotoProcessor {
                 throw new Error(`Results fetch failed: ${response.statusText}`);
             }
 
-            this.groupedPhotos = await response.json();
-            console.log('Grouped photos received:', this.groupedPhotos);
+            const groupedPhotosObj = await response.json();
+            console.log('Grouped photos received:', groupedPhotosObj);
+            
+            // Convert Object format to Array format for compatibility with existing code
+            this.groupedPhotos = this.convertGroupedPhotosObjectToArray(groupedPhotosObj);
             
             // Track successful processing completion
             if (window.analyticsDashboard) {
-                const totalPhotos = Object.values(this.groupedPhotos).reduce((sum, group) => sum + group.length, 0);
-                const detectedPhotos = Object.keys(this.groupedPhotos).filter(key => key !== 'unknown').length > 0 
-                    ? Object.keys(this.groupedPhotos).filter(key => key !== 'unknown').reduce((sum, key) => sum + this.groupedPhotos[key].length, 0) 
+                const totalPhotos = Object.values(groupedPhotosObj).reduce((sum, group) => sum + group.length, 0);
+                const detectedPhotos = Object.keys(groupedPhotosObj).filter(key => key !== 'unknown').length > 0 
+                    ? Object.keys(groupedPhotosObj).filter(key => key !== 'unknown').reduce((sum, key) => sum + groupedPhotosObj[key].length, 0) 
                     : 0;
-                const unknownPhotos = this.groupedPhotos.unknown ? this.groupedPhotos.unknown.length : 0;
+                const unknownPhotos = groupedPhotosObj.unknown ? groupedPhotosObj.unknown.length : 0;
                 
                 window.analyticsDashboard.trackEngagement('success_action', 'processing_completed', {
                     total_photos: totalPhotos,
@@ -1645,6 +1648,19 @@ class PhotoProcessor {
         AppRouter.safeReplaceState('processing');
     }
 
+    /**
+     * Convert grouped photos from Object format to Array format
+     * Backend returns: {bib_123: [...], unknown: [...]}
+     * Frontend expects: [{bib_number: "123", photos: [...], count: N}, ...]
+     */
+    convertGroupedPhotosObjectToArray(groupedPhotosObj) {
+        return Object.entries(groupedPhotosObj).map(([bibNumber, photos]) => ({
+            bib_number: bibNumber,
+            photos: photos,
+            count: photos.length
+        }));
+    }
+
     showResultsSection() {
         document.getElementById('upload-section').classList.add('d-none');
         document.getElementById('processing-section').classList.add('d-none');
@@ -1671,6 +1687,7 @@ class PhotoProcessor {
     }
 
     updateStatsCards() {
+        // groupedPhotos is now an Array: [{bib_number: "123", photos: [...], count: N}, ...]
         const totalPhotos = this.groupedPhotos.reduce((sum, group) => sum + group.count, 0);
         const detectedPhotos = this.groupedPhotos
             .filter(group => group.bib_number !== 'unknown')
@@ -3170,7 +3187,7 @@ class PhotoProcessor {
     downloadCurrentPhoto() {
         if (this.currentLightboxGroup && this.currentPhotoIndex >= 0) {
             const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
-            window.open(this.getImageUrl(photo.id), '_blank');
+            window.open(photo.image_url, '_blank');
         }
     }
 
@@ -3411,7 +3428,8 @@ class PhotoProcessor {
                 credentials: 'include'
             });
             if (response.ok) {
-                this.groupedPhotos = await response.json();
+                const groupedPhotosObj = await response.json();
+                this.groupedPhotos = this.convertGroupedPhotosObjectToArray(groupedPhotosObj);
                 this.displayResults();
             }
         } catch (error) {
@@ -3591,7 +3609,7 @@ class PhotoProcessor {
         if (!photo) return;
 
         // Set up modal content
-        document.getElementById('labelPhotoPreview').src = this.getImageUrl(photoId);
+        document.getElementById('labelPhotoPreview').src = this.getImageUrl(photo.id);
         document.getElementById('labelPhotoFilename').textContent = photo.filename;
         document.getElementById('manualBibNumber').value = '';
 
@@ -3713,7 +3731,8 @@ class PhotoProcessor {
                     credentials: 'include'
                 });
                 if (response.ok) {
-                    this.groupedPhotos = await response.json();
+                    const groupedPhotosObj = await response.json();
+                    this.groupedPhotos = this.convertGroupedPhotosObjectToArray(groupedPhotosObj);
                     this.updateStatsCards();
                     this.displayResults();
 

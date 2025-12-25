@@ -23,6 +23,7 @@ from app.models.usage import ProcessingJob
 from app.models.usage import ProcessingJob as ProcessingJobDB
 from app.models.usage import UsageLog
 from app.models.user import User
+from app.services.analytics_service import analytics_service
 from database import get_db
 
 router = APIRouter()
@@ -31,15 +32,13 @@ logger = logging.getLogger(__name__)
 @router.get("/daily-metrics")
 async def get_daily_metrics(
     days: int = Query(30, description="Number of days to analyze"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get daily metrics for overview dashboard."""
+    """Get user-scoped metrics for dashboard. SECURITY: Only current user's data."""
     since_date = datetime.utcnow() - timedelta(days=days)
     
-    # Get total users
-    total_users = db.query(User).count()
-    
-    # Get processing job statistics
+    # SECURITY: User-scoped processing job statistics only
     job_stats = (
         db.query(
             func.count(ProcessingJob.id).label("total_jobs"),
@@ -49,21 +48,20 @@ async def get_daily_metrics(
             func.sum(ProcessingJob.total_processing_time_seconds).label("total_time")
         )
         .filter(
+            ProcessingJob.user_id == current_user.id,  # SECURITY: User isolation
             ProcessingJob.created_at >= since_date,
             ProcessingJob.status == "completed"
         )
         .first()
     )
     
-    # Calculate accuracy
-    total_processed = job_stats.total_processed or 0
-    total_detected = job_stats.total_detected or 0
-    avg_detection_accuracy = (total_detected / total_processed * 100) if total_processed > 0 else 0
+    # Calculate PRECISE AI accuracy using first-pass yield formula
+    avg_detection_accuracy = await analytics_service.get_ai_first_pass_accuracy(db, current_user.id, days)
     
     # Calculate average processing time per photo
     avg_time_per_photo = job_stats.avg_time_per_photo or 0
     
-    # Get daily trends for the chart
+    # SECURITY: User-scoped daily trends only
     daily_trends = (
         db.query(
             func.date(ProcessingJob.created_at).label("date"),
@@ -72,6 +70,7 @@ async def get_daily_metrics(
             func.avg(ProcessingJob.average_time_per_photo).label("avg_time")
         )
         .filter(
+            ProcessingJob.user_id == current_user.id,  # SECURITY: User isolation
             ProcessingJob.created_at >= since_date,
             ProcessingJob.status == "completed"
         )
@@ -91,13 +90,12 @@ async def get_daily_metrics(
     ]
     
     return {
-        "revenue_usd": 0,  # Placeholder - would integrate with Stripe for real revenue
-        "total_users": total_users,
-        "avg_detection_accuracy": round(avg_detection_accuracy, 1),
+        "user_id": current_user.id,  # SECURITY: Make clear this is user-scoped
+        "ai_first_pass_accuracy": avg_detection_accuracy,  # PRECISE: First-pass yield formula
         "average_processing_time_per_photo": round(avg_time_per_photo, 3),
         "trends": trends,
         "total_jobs": job_stats.total_jobs or 0,
-        "total_processed_photos": total_processed,
+        "total_processed_photos": job_stats.total_processed or 0,
         "period_days": days
     }
 
@@ -145,13 +143,9 @@ async def get_user_dashboard(
     no_bibs = stats.no_bibs or 0
     corrections = stats.corrections or 0
 
-    # 2. Accuracy Math
-    # logic: (Detected - Mistakes) / (Total - Photos that actually had no bib)
-    effective_bib_pool = max(0, processed - no_bibs)
-    correct_detections = max(0, detected - corrections)
-    
-    accuracy = (correct_detections / effective_bib_pool * 100) if effective_bib_pool > 0 else 0
-    avg_speed_ms = (time_sec / processed * 1000) if processed > 0 else 0
+    # 2. Accuracy Math - PRECISE: Use first-pass yield formula
+    accuracy = await analytics_service.get_ai_first_pass_accuracy(db, current_user.id, days)
+    avg_speed_ms = (time_sec / processed * 1000) if processed > 0 else 0.0
 
     return {
         "performance": {

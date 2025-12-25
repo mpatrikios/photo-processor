@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
-from app.api.process import detector as process_detector
+from app.api.process_tasks import detector as process_detector
 from app.models.schemas import ExportRequest
 from app.models.user import User
 from app.services.detector import NumberDetector

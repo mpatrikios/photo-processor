@@ -4858,3 +4858,371 @@ html {
         transform: translateY(0);
     }
 }
+
+/* ===== MODERN ANALYTICS DASHBOARD STYLES ===== */
+
+:root {
+    /* Analytics Dashboard Variables */
+    --analytics-bg: #f8fafc;
+    --analytics-card-bg: rgba(255, 255, 255, 0.95);
+    --analytics-glass-bg: rgba(255, 255, 255, 0.25);
+    --analytics-border: rgba(255, 255, 255, 0.18);
+    --analytics-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    --analytics-shadow-hover: 0 12px 48px rgba(0, 0, 0, 0.12);
+    --analytics-text-primary: #1e293b;
+    --analytics-text-secondary: #64748b;
+    --analytics-accent: #3b82f6;
+    --analytics-accent-light: #dbeafe;
+    --analytics-success: #10b981;
+    --analytics-warning: #f59e0b;
+    --analytics-danger: #ef4444;
+    --analytics-border-radius: 16px;
+    --analytics-border-radius-lg: 24px;
+    --analytics-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Analytics Modal Styling */
+#analyticsModal .modal-dialog {
+    max-width: 95vw;
+    width: 95vw;
+    height: 95vh;
+    margin: 2.5vh auto;
+}
+
+#analyticsModal .modal-content {
+    height: 100%;
+    border: none;
+    border-radius: var(--analytics-border-radius-lg);
+    background: var(--analytics-bg);
+    backdrop-filter: blur(20px);
+    box-shadow: var(--analytics-shadow);
+    overflow: hidden;
+}
+
+#analyticsModal .modal-header {
+    background: linear-gradient(135deg, var(--analytics-card-bg) 0%, var(--analytics-glass-bg) 100%);
+    border-bottom: 1px solid var(--analytics-border);
+    border-radius: var(--analytics-border-radius-lg) var(--analytics-border-radius-lg) 0 0;
+    padding: 1.5rem 2rem;
+    backdrop-filter: blur(10px);
+}
+
+#analyticsModal .modal-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--analytics-text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+#analyticsModal .modal-title::before {
+    content: "📊";
+    font-size: 1.5rem;
+}
+
+#analyticsModal .btn-close {
+    background: var(--analytics-glass-bg);
+    border-radius: 50%;
+    opacity: 0.8;
+    transition: var(--analytics-transition);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#analyticsModal .btn-close:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    background: var(--analytics-accent-light);
+}
+
+#analyticsModal .modal-body {
+    padding: 2rem;
+    height: calc(100% - 100px);
+    overflow-y: auto;
+    background: var(--analytics-bg);
+}
+
+/* Analytics Grid Layout */
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Analytics Cards */
+.analytics-card {
+    background: var(--analytics-card-bg);
+    border: 1px solid var(--analytics-border);
+    border-radius: var(--analytics-border-radius);
+    padding: 1.5rem;
+    backdrop-filter: blur(10px);
+    box-shadow: var(--analytics-shadow);
+    transition: var(--analytics-transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.analytics-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--analytics-accent), var(--analytics-success));
+    opacity: 0;
+    transition: var(--analytics-transition);
+}
+
+.analytics-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--analytics-shadow-hover);
+}
+
+.analytics-card:hover::before {
+    opacity: 1;
+}
+
+.analytics-card h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--analytics-text-secondary);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.analytics-card .metric-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--analytics-text-primary);
+    margin-bottom: 0.5rem;
+    line-height: 1;
+}
+
+.analytics-card .metric-label {
+    font-size: 0.875rem;
+    color: var(--analytics-text-secondary);
+    margin-bottom: 1rem;
+}
+
+.analytics-card .metric-trend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.metric-trend.positive {
+    color: var(--analytics-success);
+}
+
+.metric-trend.negative {
+    color: var(--analytics-danger);
+}
+
+.metric-trend.neutral {
+    color: var(--analytics-text-secondary);
+}
+
+/* Chart Container */
+.chart-container {
+    background: var(--analytics-card-bg);
+    border: 1px solid var(--analytics-border);
+    border-radius: var(--analytics-border-radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    backdrop-filter: blur(10px);
+    box-shadow: var(--analytics-shadow);
+    transition: var(--analytics-transition);
+}
+
+.chart-container:hover {
+    box-shadow: var(--analytics-shadow-hover);
+}
+
+.chart-container h4 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--analytics-text-primary);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.chart-wrapper {
+    position: relative;
+    height: 300px;
+    width: 100%;
+}
+
+/* Custom Chart Styling */
+.chart-canvas {
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+/* Statistics List */
+.stats-list {
+    background: var(--analytics-card-bg);
+    border: 1px solid var(--analytics-border);
+    border-radius: var(--analytics-border-radius);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--analytics-shadow);
+    overflow: hidden;
+}
+
+.stats-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--analytics-border);
+    transition: var(--analytics-transition);
+}
+
+.stats-list-item:last-child {
+    border-bottom: none;
+}
+
+.stats-list-item:hover {
+    background: var(--analytics-glass-bg);
+}
+
+.stats-list-label {
+    font-weight: 500;
+    color: var(--analytics-text-primary);
+}
+
+.stats-list-value {
+    font-weight: 700;
+    color: var(--analytics-accent);
+    font-size: 1.1rem;
+}
+
+/* Loading States */
+.analytics-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    color: var(--analytics-text-secondary);
+}
+
+.analytics-loading .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--analytics-accent-light);
+    border-top: 4px solid var(--analytics-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Error States */
+.analytics-error {
+    text-align: center;
+    padding: 3rem;
+    color: var(--analytics-danger);
+}
+
+.analytics-error .error-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    #analyticsModal .modal-dialog {
+        width: 98vw;
+        height: 98vh;
+        margin: 1vh auto;
+    }
+    
+    #analyticsModal .modal-header {
+        padding: 1rem;
+    }
+    
+    #analyticsModal .modal-title {
+        font-size: 1.5rem;
+    }
+    
+    #analyticsModal .modal-body {
+        padding: 1rem;
+    }
+    
+    .analytics-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .analytics-card {
+        padding: 1rem;
+    }
+    
+    .analytics-card .metric-value {
+        font-size: 2rem;
+    }
+    
+    .chart-wrapper {
+        height: 250px;
+    }
+}
+
+@media (max-width: 480px) {
+    .analytics-card .metric-value {
+        font-size: 1.75rem;
+    }
+    
+    .chart-wrapper {
+        height: 200px;
+    }
+    
+    .stats-list-item {
+        padding: 0.75rem 1rem;
+    }
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn 0.6s ease-out;
+}
+
+.slide-up {
+    animation: slideUp 0.6s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

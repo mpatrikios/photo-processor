@@ -14,6 +14,7 @@ from app.models.analytics import (
     UserRetentionCohort,
     ConversionFunnel
 )
+from app.models.processing import PhotoDB
 from app.models.usage import ActionType, ProcessingJob, UsageLog
 from app.models.user import User
 
@@ -113,14 +114,205 @@ class AnalyticsService:
             
         db.commit()
 
-    def get_accuracy_report(self, db: Session, days: int = 30):
-        """High-speed accuracy report by Model Method."""
-        since = datetime.utcnow() - timedelta(days=days)
-        return db.query(
-            DetectionAccuracyLog.detection_method,
-            func.avg(DetectionAccuracyLog.is_correct.cast(func.Float)).label("accuracy"),
-            func.avg(DetectionAccuracyLog.processing_time_ms).label("speed")
-        ).filter(DetectionAccuracyLog.detected_at >= since)\
-         .group_by(DetectionAccuracyLog.detection_method).all()
+    async def get_ai_first_pass_accuracy(self, db: Session, user_id: int, days: int = 30) -> float:
+        """
+        Calculate AI first-pass yield: measures how often AI gets it right on first try.
+        Formula: (total_bibs_initially_detected - bibs_that_were_relabeled) / (total_pictures_uploaded - pictures_labeled_as_no_bib) * 100
+        
+        SECURITY: User-scoped queries only.
+        PRODUCTION: Zero-division protection.
+        """
+        since_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Single efficient query with conditional aggregation
+        stats = db.query(
+            func.count(PhotoDB.id).label("total_uploads"),
+            func.count(func.case(
+                (func.or_(
+                    PhotoDB.detected_number.is_(None), 
+                    PhotoDB.detected_number == 'unknown',
+                    PhotoDB.manual_label == 'unknown'
+                ), 1)
+            )).label("no_bibs"),
+            func.count(func.case(
+                (func.and_(
+                    PhotoDB.manual_label.isnot(None),
+                    PhotoDB.manual_label != PhotoDB.detected_number,
+                    PhotoDB.manual_label != 'unknown'
+                ), 1)
+            )).label("relabels")
+        ).filter(
+            PhotoDB.user_id == user_id,  # SECURITY: User isolation
+            PhotoDB.created_at >= since_date
+        ).first()
+        
+        # Zero-division protection (CRITICAL for production)
+        total_uploads = stats.total_uploads or 0
+        no_bibs = stats.no_bibs or 0
+        relabels = stats.relabels or 0
+        
+        denominator = total_uploads - no_bibs
+        if denominator <= 0:
+            return 0.0
+            
+        # Precise formula: (Initially correct - Had to fix) / (Total with bibs)
+        bibs_initially_detected = denominator  # total_uploads - no_bibs
+        accuracy = ((bibs_initially_detected - relabels) / denominator) * 100
+        return round(max(0.0, accuracy), 2)  # Ensure non-negative
+        
+
+    def get_user_stats(self, db: Session, user_id: int, days: int = 30) -> dict:
+        """
+        Get comprehensive usage statistics for a user with user isolation.
+        SECURITY: Only returns data for the specified user_id.
+        """
+        since_date = datetime.utcnow() - timedelta(days=days)
+
+        # SECURITY: User-scoped queries only
+        usage_logs = (
+            db.query(UsageLog)
+            .filter(UsageLog.user_id == user_id, UsageLog.created_at >= since_date)
+            .all()
+        )
+
+        processing_jobs = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.user_id == user_id, ProcessingJob.created_at >= since_date
+            )
+            .all()
+        )
+
+        # Calculate statistics with ZeroDivisionError protection
+        stats = {
+            "user_id": user_id,
+            "period_days": days,
+            "since_date": since_date.isoformat(),
+            # Action counts
+            "total_actions": len(usage_logs),
+            "uploads": len([log for log in usage_logs if log.action_type == ActionType.UPLOAD]),
+            "processes": len([log for log in usage_logs if log.action_type == ActionType.PROCESS]),
+            "exports": len([log for log in usage_logs if log.action_type == ActionType.EXPORT]),
+            "logins": len([log for log in usage_logs if log.action_type == ActionType.LOGIN]),
+            # Photo statistics
+            "total_photos_uploaded": sum(
+                log.photo_count for log in usage_logs if log.action_type == ActionType.UPLOAD
+            ),
+            "total_photos_processed": sum(
+                log.photo_count for log in usage_logs if log.action_type == ActionType.PROCESS
+            ),
+            # Processing statistics with null safety
+            "total_processing_time_seconds": sum(
+                job.total_processing_time_seconds or 0 for job in processing_jobs
+            ),
+            "average_processing_time_per_job": (
+                sum(job.total_processing_time_seconds or 0 for job in processing_jobs)
+                / len(processing_jobs) if processing_jobs else 0.0
+            ),
+            "average_photos_per_job": (
+                sum(job.total_photos for job in processing_jobs) 
+                / len(processing_jobs) if processing_jobs else 0.0
+            ),
+            # Success rates with null safety
+            "success_rate": (
+                len([log for log in usage_logs if log.success]) / len(usage_logs) * 100
+                if usage_logs else 100.0
+            ),
+            "total_file_size_mb": sum(log.file_size_mb or 0 for log in usage_logs),
+            # Job statistics
+            "total_jobs": len(processing_jobs),
+            "completed_jobs": len([
+                job for job in processing_jobs 
+                if job.status == ProcessingStatus.COMPLETED
+            ]),
+            "failed_jobs": len([
+                job for job in processing_jobs 
+                if job.status == ProcessingStatus.FAILED
+            ])
+        }
+
+        return stats
+
+    def get_user_activity_timeline(self, db: Session, user_id: int, days: int = 7) -> List[Dict[str, Any]]:
+        """
+        Get user activity timeline with strict user isolation.
+        SECURITY: Only returns activity for the specified user_id.
+        """
+        since_date = datetime.utcnow() - timedelta(days=days)
+
+        # SECURITY: User-scoped queries only
+        logs = (
+            db.query(UsageLog)
+            .filter(UsageLog.user_id == user_id, UsageLog.created_at >= since_date)
+            .order_by(desc(UsageLog.created_at))
+            .all()
+        )
+
+        jobs = (
+            db.query(ProcessingJob)
+            .filter(
+                ProcessingJob.user_id == user_id, ProcessingJob.created_at >= since_date
+            )
+            .order_by(desc(ProcessingJob.created_at))
+            .all()
+        )
+
+        # Combine timeline events
+        timeline = []
+
+        for log in logs:
+            timeline.append({
+                "type": "action",
+                "timestamp": log.created_at.isoformat(),
+                "action": log.action_type.value,
+                "success": log.success,
+                "photo_count": log.photo_count,
+                "processing_time": log.processing_time_seconds,
+                "error_message": log.error_message,
+            })
+
+        for job in jobs:
+            timeline.append({
+                "type": "job",
+                "timestamp": job.created_at.isoformat(),
+                "job_id": job.job_id,
+                "status": job.status,
+                "total_photos": job.total_photos,
+                "photos_detected": job.photos_detected,
+                "photos_unknown": job.photos_unknown,
+                "processing_time": job.total_processing_time_seconds,
+            })
+
+        # Sort by timestamp (newest first)
+        timeline.sort(key=lambda x: x["timestamp"], reverse=True)
+        return timeline
+
+    def get_popular_hours(self, db: Session, user_id: int, days: int = 30) -> Dict[int, int]:
+        """
+        Get user-specific usage patterns by hour.
+        SECURITY: Only analyzes activity for the specified user_id.
+        """
+        since_date = datetime.utcnow() - timedelta(days=days)
+
+        # SECURITY: User-scoped query only
+        result = (
+            db.query(
+                func.extract("hour", UsageLog.created_at).label("hour"),
+                func.count(UsageLog.id).label("count"),
+            )
+            .filter(
+                UsageLog.user_id == user_id,  # SECURITY: User isolation
+                UsageLog.created_at >= since_date
+            )
+            .group_by(func.extract("hour", UsageLog.created_at))
+            .all()
+        )
+
+        # Initialize all hours to 0
+        hour_stats = {hour: 0 for hour in range(24)}
+        for hour, count in result:
+            hour_stats[int(hour)] = count
+
+        return hour_stats
 
 analytics_service = AnalyticsService()

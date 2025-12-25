@@ -3,9 +3,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user
+from app.api.auth import get_current_user, require_admin
 from app.models.user import User
 from app.services.usage_tracker import usage_tracker
+from app.services.analytics_service import analytics_service
 from database import get_db
 
 router = APIRouter()
@@ -19,7 +20,7 @@ async def get_my_usage_stats(
 ):
     """Get detailed usage statistics for the current user."""
 
-    stats = usage_tracker.get_user_stats(db, current_user.id, days)
+    stats = analytics_service.get_user_stats(db, current_user.id, days)
 
     return {
         "user": current_user.to_dict(),
@@ -59,7 +60,7 @@ async def get_my_activity_timeline(
 ):
     """Get activity timeline for the current user."""
 
-    timeline = usage_tracker.get_user_activity_timeline(db, current_user.id, days)
+    timeline = analytics_service.get_user_activity_timeline(db, current_user.id, days)
 
     return {
         "user_id": current_user.id,
@@ -178,13 +179,10 @@ async def delete_my_account(
 @router.get("/stats/system")
 async def get_system_stats(
     days: int = Query(30, ge=1, le=365, description="Number of days to look back"),
-    current_user: User = Depends(get_current_user),
+    admin_user: User = Depends(require_admin),  # SECURITY: Admin-only access
     db: Session = Depends(get_db),
 ):
-    """Get system-wide usage statistics (requires admin access in future)."""
-
-    # TODO: Add admin role check when roles are implemented
-    # For now, any authenticated user can access system stats
+    """Get system-wide usage statistics. ADMIN ONLY."""
 
     stats = usage_tracker.get_system_stats(db, days)
 
@@ -199,7 +197,7 @@ async def get_popular_hours(
 ):
     """Get usage statistics by hour of day."""
 
-    hour_stats = usage_tracker.get_popular_hours(db, days)
+    hour_stats = analytics_service.get_popular_hours(db, current_user.id, days)  # SECURITY: User-scoped only
 
     # Convert to more readable format
     hourly_data = [
