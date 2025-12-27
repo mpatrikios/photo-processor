@@ -153,9 +153,9 @@ class ProcessingJob(Base):
         if error_message:
             self.error_message = error_message
 
-        # Calculate processing time
-        if self.started_at:
-            processing_time = (self.completed_at - self.started_at).total_seconds()
+        # Calculate processing time from upload start to completion (full user experience)
+        if self.created_at:
+            processing_time = (self.completed_at - self.created_at).total_seconds()
             self.total_processing_time_seconds = processing_time
             if self.total_photos > 0:
                 self.average_time_per_photo = processing_time / self.total_photos

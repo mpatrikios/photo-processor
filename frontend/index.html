@@ -518,29 +518,31 @@
                             </a>
                             <p class="lead">Upload event photos and automatically sort them by bib numbers</p>
                             
-                            <!-- Top Right Buttons -->
+                            <!-- Top Right Navigation Pills -->
                             <div class="position-absolute top-0 end-0">
-                                <button class="btn btn-outline-secondary btn-sm me-2" 
-                                        id="profileBtn" 
-                                        onclick="showProfileModal()"
-                                        title="View profile and quota">
-                                    <i class="fas fa-user-circle me-1"></i>
-                                    Profile
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm me-2" 
-                                        id="feedbackBtn" 
-                                        onclick="photoProcessor.showFeedbackModal()"
-                                        title="Report bugs or suggest improvements">
-                                    <i class="fas fa-comment-alt me-1"></i>
-                                    Feedback
-                                </button>
-                                <button class="btn btn-outline-danger btn-sm" 
-                                        id="logoutBtn" 
-                                        onclick="logout()"
-                                        title="Sign out">
-                                    <i class="fas fa-sign-out-alt me-1"></i>
-                                    Logout
-                                </button>
+                                <div class="nav-pill-container">
+                                    <button class="nav-pill-button" 
+                                            id="profileBtn" 
+                                            onclick="showProfileModal()"
+                                            title="View profile and quota">
+                                        <i class="fas fa-user-circle me-1"></i>
+                                        Profile
+                                    </button>
+                                    <button class="nav-pill-button" 
+                                            id="feedbackBtn" 
+                                            onclick="photoProcessor.showFeedbackModal()"
+                                            title="Report bugs or suggest improvements">
+                                        <i class="fas fa-comment-alt me-1"></i>
+                                        Feedback
+                                    </button>
+                                    <button class="nav-pill-button logout-button" 
+                                            id="logoutBtn" 
+                                            onclick="logout()"
+                                            title="Sign out">
+                                        <i class="fas fa-sign-out-alt me-1"></i>
+                                        Logout
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

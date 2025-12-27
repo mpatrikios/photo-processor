@@ -6,7 +6,6 @@ class AnalyticsDashboard {
     constructor(stateManager) {
         this.state = stateManager;
         this.refreshInterval = null;
-        this.charts = {};
         this.isVisible = false;
         
         this.initializeDashboard();
@@ -28,10 +27,10 @@ class AnalyticsDashboard {
      * Add dashboard button to the main navigation
      */
     addDashboardButton() {
-        const navSection = document.querySelector('.position-absolute.top-0.end-0');
-        if (navSection) {
+        const navPillContainer = document.querySelector('.nav-pill-container');
+        if (navPillContainer) {
             const button = document.createElement('button');
-            button.className = 'btn btn-outline-secondary btn-sm me-2';
+            button.className = 'nav-pill-button';
             button.id = 'analytics-dashboard-btn';
             button.innerHTML = '<i class="fas fa-chart-line me-1"></i> Analytics';
             button.title = 'View analytics dashboard';
@@ -41,10 +40,10 @@ class AnalyticsDashboard {
                 this.showDashboard();
             });
             
-            // Insert before profile button
+            // Insert before profile button (first in the pill)
             const profileBtn = document.getElementById('profileBtn');
             if (profileBtn) {
-                navSection.insertBefore(button, profileBtn);
+                navPillContainer.insertBefore(button, profileBtn);
             }
         }
     }
@@ -84,13 +83,6 @@ class AnalyticsDashboard {
                             <div class="analytics-grid fade-in" id="analytics-content" style="display: none;">
                                 <!-- KPI Cards -->
                                 <div class="analytics-card">
-                                    <h5>Total Users</h5>
-                                    <div class="metric-value" id="total-users-metric">-</div>
-                                    <div class="metric-label">Active users</div>
-                                    <div class="metric-trend neutral" id="users-growth">+0% this month</div>
-                                </div>
-                                
-                                <div class="analytics-card">
                                     <h5>Photos Processed</h5>
                                     <div class="metric-value" id="photos-processed-metric">-</div>
                                     <div class="metric-label">Total processed</div>
@@ -112,20 +104,6 @@ class AnalyticsDashboard {
                                 </div>
                             </div>
                             
-                            <!-- Charts Section -->
-                            <div class="chart-container fade-in" id="activity-chart-container" style="display: none;">
-                                <h4>📈 Classification Activity Trends</h4>
-                                <div class="chart-wrapper">
-                                    <canvas id="activity-trends-chart" class="chart-canvas"></canvas>
-                                </div>
-                            </div>
-                            
-                            <div class="chart-container fade-in" id="performance-chart-container" style="display: none;">
-                                <h4>🎯 Gemini Flash Performance Distribution</h4>
-                                <div class="chart-wrapper">
-                                    <canvas id="processing-methods-chart" class="chart-canvas"></canvas>
-                                </div>
-                            </div>
                             
                             <!-- Statistics List -->
                             <div class="stats-list fade-in" id="stats-list" style="display: none;">
@@ -147,19 +125,6 @@ class AnalyticsDashboard {
                                 </div>
                             </div>
                             
-                            <!-- Export Controls -->
-                            <div class="analytics-card fade-in" id="export-controls" style="display: none;">
-                                <h5>📊 Export Analytics</h5>
-                                <div class="metric-label">Download analytics reports</div>
-                                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                                    <button class="btn btn-outline-primary btn-sm" onclick="window.analyticsDashboard?.exportReport('business_report', 'json')">
-                                        <i class="fas fa-download me-1"></i>Business Report (JSON)
-                                    </button>
-                                    <button class="btn btn-outline-secondary btn-sm" onclick="window.analyticsDashboard?.exportReport('detection_accuracy', 'csv')">
-                                        <i class="fas fa-download me-1"></i>Detection Data (CSV)
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -289,10 +254,7 @@ class AnalyticsDashboard {
     showLoadingState() {
         document.getElementById('analytics-loading').style.display = 'flex';
         document.getElementById('analytics-content').style.display = 'none';
-        document.getElementById('activity-chart-container').style.display = 'none';
-        document.getElementById('performance-chart-container').style.display = 'none';
         document.getElementById('stats-list').style.display = 'none';
-        document.getElementById('export-controls').style.display = 'none';
     }
     
     /**
@@ -308,24 +270,9 @@ class AnalyticsDashboard {
         }, 200);
         
         setTimeout(() => {
-            document.getElementById('activity-chart-container').style.display = 'block';
-            document.getElementById('activity-chart-container').classList.add('slide-up');
-        }, 400);
-        
-        setTimeout(() => {
-            document.getElementById('performance-chart-container').style.display = 'block';
-            document.getElementById('performance-chart-container').classList.add('slide-up');
-        }, 600);
-        
-        setTimeout(() => {
             document.getElementById('stats-list').style.display = 'block';
             document.getElementById('stats-list').classList.add('slide-up');
-        }, 800);
-        
-        setTimeout(() => {
-            document.getElementById('export-controls').style.display = 'block';
-            document.getElementById('export-controls').classList.add('slide-up');
-        }, 1000);
+        }, 400);
     }
     
     /**
@@ -379,30 +326,24 @@ class AnalyticsDashboard {
             }
             
             const data = await response.json();
-            console.log('Analytics data received:', data);
+            console.log('🔍 FRONTEND DEBUG - Raw analytics data received:', data);
+            console.log('🔍 FRONTEND DEBUG - Key fields:', {
+                ai_first_pass_accuracy: data.ai_first_pass_accuracy,
+                total_processed_photos: data.total_processed_photos,
+                total_jobs: data.total_jobs,
+                user_id: data.user_id
+            });
             
             // Transform the API data to match the expected format for updateOverviewMetrics
             const transformedData = {
                 user_stats: {
-                    current_quota: { 
-                        user_id: data.total_users || 1,
-                        current_month: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-                    },
-                    total_photos_processed: data.total_jobs || 0,
+                    total_photos_processed: data.total_processed_photos || 0,  // FIXED: Use actual photo count
                     uploads: data.trends?.reduce((sum, trend) => sum + (trend.photos || 0), 0) || 0
                 },
                 detection_accuracy: {
-                    percentage: data.avg_detection_accuracy || 0,
+                    percentage: data.ai_first_pass_accuracy || 0,
                     avg_processing_time_ms: (data.average_processing_time_per_photo || 0) * 1000,
-                    total_photos: data.trends?.reduce((sum, trend) => sum + (trend.photos || 0), 0) || 0
-                },
-                processing_trends: (data.trends || []).map(trend => ({
-                    value: trend.photos || 0,
-                    processing_time: (trend.avg_time || 0) * 1000
-                })),
-                detection_stats: {
-                    gemini_detections: Math.floor((data.total_jobs || 0) * 0.85), // Most should be Gemini
-                    manual_labels: Math.floor((data.total_jobs || 0) * 0.15) // Some manual
+                    total_photos: data.total_processed_photos || 0
                 }
             };
             
@@ -417,14 +358,12 @@ class AnalyticsDashboard {
     
     showNoDataMessage(message) {
         // Update metrics to show error state
-        document.getElementById('total-users-metric').textContent = 'Error';
         document.getElementById('photos-processed-metric').textContent = 'Error';
         document.getElementById('accuracy-metric').textContent = 'Error';
         document.getElementById('avg-processing-time-metric').textContent = 'Error';
         
         // Update trend messages
-        document.getElementById('users-growth').textContent = message;
-        document.getElementById('photos-growth').textContent = 'Check console for details';
+        document.getElementById('photos-growth').textContent = message;
         document.getElementById('processing-time-trend').textContent = 'Refresh to retry';
     }
     
@@ -433,13 +372,11 @@ class AnalyticsDashboard {
      */
     updateOverviewMetrics(data) {
         // Update KPI cards
-        const totalUsers = data.user_stats?.current_quota?.user_id || 1;
         const photosProcessed = data.user_stats?.total_photos_processed || data.detection_accuracy?.total_photos || 0;
         const accuracy = data.detection_accuracy?.percentage || 0;
         const avgProcessingTime = data.detection_accuracy?.avg_processing_time_ms || 0;
         
         // Update analytics cards with modern styling
-        document.getElementById('total-users-metric').textContent = totalUsers.toLocaleString();
         document.getElementById('photos-processed-metric').textContent = photosProcessed.toLocaleString();
         document.getElementById('accuracy-metric').textContent = accuracy > 0 ? `${accuracy.toFixed(1)}%` : 'N/A';
         
@@ -450,12 +387,8 @@ class AnalyticsDashboard {
             : 'N/A';
         
         // Update trend indicators with appropriate colors
-        const currentMonth = data.user_stats?.current_quota?.current_month || new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         const uploads = data.user_stats?.uploads || 0;
         const totalPhotos = data.detection_accuracy?.total_photos || 0;
-        
-        document.getElementById('users-growth').textContent = `Active in ${currentMonth}`;
-        document.getElementById('users-growth').className = 'metric-trend neutral';
         
         document.getElementById('photos-growth').textContent = `${uploads} uploads this period`;
         document.getElementById('photos-growth').className = uploads > 0 ? 'metric-trend positive' : 'metric-trend neutral';

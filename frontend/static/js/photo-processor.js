@@ -209,7 +209,7 @@ class PhotoProcessor {
                             });
                             
                             if (resultsResponse.ok) {
-                                this.groupedPhotos = await resultsResponse.json();
+                                this.groupedPhotos = this.convertGroupedPhotosObjectToArray(await resultsResponse.json());
                                 window.stateManager.markJobCompleted(currentJobId, 'completed');
                                 this.showResultsSection();
                                 return;
@@ -273,7 +273,7 @@ class PhotoProcessor {
                 window.stateManager.set('photos.groupedPhotos', results);
                 
                 // Show results section instead of upload section
-                this.groupedPhotos = results;
+                this.groupedPhotos = this.convertGroupedPhotosObjectToArray(results);
                 this.showResultsSection();
                 
                 // Show restoration notification
@@ -2649,15 +2649,6 @@ class PhotoProcessor {
             }
         });
         
-        // Add event listener for "No Bib Visible" button
-        const noBibBtn = document.getElementById('noBibVisibleBtn');
-        if (noBibBtn) {
-            noBibBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.saveInlineLabelAsNoBib();
-            });
-        }
-        
         // Removed infinite loop focus fix that was causing console spam
 
         // Inline labeling initialized
@@ -2685,12 +2676,19 @@ class PhotoProcessor {
     setupEnhancedInlineLabeling(photo) {
         const inlineContainer = document.getElementById('inlineLabelContainer');
         
-        // Determine the current bib number for pre-filling
+        // Determine the current bib number for pre-filling (prioritize effective bib number)
         let currentBibNumber = '';
         
-        if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
+        // Priority 1: Use groupBibNumber (effective bib number including manual labels)
+        if (photo.groupBibNumber && photo.groupBibNumber !== 'unknown') {
+            currentBibNumber = photo.groupBibNumber;
+        }
+        // Priority 2: Use detected bib number
+        else if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
             currentBibNumber = photo.detection_result.bib_number;
-        } else if (this.currentLightboxGroup && this.currentLightboxGroup.bib_number !== 'unknown') {
+        } 
+        // Priority 3: Use current lightbox group as fallback
+        else if (this.currentLightboxGroup && this.currentLightboxGroup.bib_number !== 'unknown') {
             currentBibNumber = this.currentLightboxGroup.bib_number;
         }
         
@@ -2722,6 +2720,15 @@ class PhotoProcessor {
         // Re-initialize event listeners for the new elements after DOM update
         setTimeout(() => {
             this.initializeInlineLabeling();
+            
+            // Set up "No Bib Visible" button event listener
+            const noBibBtn = document.getElementById('noBibVisibleBtn');
+            if (noBibBtn) {
+                noBibBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.saveInlineLabelAsNoBib();
+                });
+            }
             
             // Focus and select the input, ensuring it's enabled and clickable
             const input = document.getElementById('inlineBibInput');
@@ -3710,12 +3717,12 @@ class PhotoProcessor {
             });
         }
         
-        const response = await fetch(`${this.apiBase}/process/manual-label`, {
-            method: 'PUT',
+        const response = await fetch(`${this.apiBase}/batch/update-labels`, {
+            method: 'POST',
             headers: this.getAuthHeaders(),
             credentials: 'include',
             body: JSON.stringify({
-                photo_id: photoId,
+                photo_ids: [photoId],
                 bib_number: bibNumber
             })
         });

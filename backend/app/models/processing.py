@@ -48,7 +48,7 @@ class PhotoDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     photo_id = Column(String(36), unique=True, index=True, nullable=False)  # UUID
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    processing_job_id = Column(String(50), nullable=True) # Change from Integer to String
+    processing_job_id = Column(Integer, ForeignKey("processing_jobs.id"), nullable=True)
 
     # File information
     original_filename = Column(String(255), nullable=False)

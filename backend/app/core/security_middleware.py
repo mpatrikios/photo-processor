@@ -132,6 +132,10 @@ class InputValidator:
         """
         Validate that a bib number is in the correct format.
         """
+        # Special case: allow "unknown" for photos with no visible bib
+        if bib_number == "unknown":
+            return True
+            
         # Bib numbers should be numeric, 1-6 digits
         if not bib_number.isdigit():
             return False

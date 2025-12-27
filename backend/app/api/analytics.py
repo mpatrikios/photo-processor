@@ -38,13 +38,10 @@ async def get_daily_metrics(
     """Get user-scoped metrics for dashboard. SECURITY: Only current user's data."""
     since_date = datetime.utcnow() - timedelta(days=days)
     
-    # SECURITY: User-scoped processing job statistics only
+    # SECURITY: User-scoped processing job statistics for timing data
     job_stats = (
         db.query(
             func.count(ProcessingJob.id).label("total_jobs"),
-            func.sum(ProcessingJob.photos_processed).label("total_processed"),
-            func.sum(ProcessingJob.photos_detected).label("total_detected"),
-            func.avg(ProcessingJob.average_time_per_photo).label("avg_time_per_photo"),
             func.sum(ProcessingJob.total_processing_time_seconds).label("total_time")
         )
         .filter(
@@ -55,11 +52,24 @@ async def get_daily_metrics(
         .first()
     )
     
+    # SECURITY: User-scoped photo count from PhotoDB table (matches accuracy calculation)
+    from app.models.processing import PhotoDB
+    total_processed_photos = db.query(func.count(PhotoDB.id)).filter(
+        PhotoDB.user_id == current_user.id,
+        PhotoDB.created_at >= since_date
+    ).scalar() or 0
+    
     # Calculate PRECISE AI accuracy using first-pass yield formula
     avg_detection_accuracy = await analytics_service.get_ai_first_pass_accuracy(db, current_user.id, days)
     
-    # Calculate average processing time per photo
-    avg_time_per_photo = job_stats.avg_time_per_photo or 0
+    # Calculate average processing time per photo using actual photo count
+    avg_time_per_photo = (
+        (job_stats.total_time / total_processed_photos) 
+        if total_processed_photos and job_stats.total_time else 0
+    )
+    
+    # DEBUG LOGGING for analytics endpoint
+    logger.info(f"🔍 DAILY-METRICS DEBUG for user_id={current_user.id}: total_jobs={job_stats.total_jobs}, total_processed_photos={total_processed_photos}, total_time={job_stats.total_time}, avg_detection_accuracy={avg_detection_accuracy}%")
     
     # SECURITY: User-scoped daily trends only
     daily_trends = (
@@ -95,7 +105,7 @@ async def get_daily_metrics(
         "average_processing_time_per_photo": round(avg_time_per_photo, 3),
         "trends": trends,
         "total_jobs": job_stats.total_jobs or 0,
-        "total_processed_photos": job_stats.total_processed or 0,
+        "total_processed_photos": total_processed_photos,  # FIXED: Use actual photo count from PhotoDB
         "period_days": days
     }
 

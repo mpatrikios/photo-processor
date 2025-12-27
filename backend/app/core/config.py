@@ -114,9 +114,25 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
-        """Parse comma-separated CORS origins."""
+        """Parse CORS origins from Cloud Run JSON array or comma-separated format."""
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
+            v = v.strip()
+            
+            # Handle empty strings
+            if not v:
+                return ["http://localhost:5173"]  # Default for development
+            
+            # Handle Cloud Run JSON array format: ["url1", "url2", ...]
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    import json
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    # Fallback: strip brackets and parse as comma-separated
+                    v = v.strip("[]").replace('"', '').replace("'", "")
+            
+            # Parse as comma-separated string: url1,url2,url3
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
     @field_validator("database_url", mode="before")

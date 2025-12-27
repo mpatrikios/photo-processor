@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_, and_
 from sqlalchemy.orm import Session
 
 from app.models.analytics import (
@@ -14,7 +14,7 @@ from app.models.analytics import (
     UserRetentionCohort,
     ConversionFunnel
 )
-from app.models.processing import PhotoDB
+from app.models.processing import PhotoDB, ProcessingStatus
 from app.models.usage import ActionType, ProcessingJob, UsageLog
 from app.models.user import User
 
@@ -116,49 +116,55 @@ class AnalyticsService:
 
     async def get_ai_first_pass_accuracy(self, db: Session, user_id: int, days: int = 30) -> float:
         """
-        Calculate AI first-pass yield: measures how often AI gets it right on first try.
-        Formula: (total_bibs_initially_detected - bibs_that_were_relabeled) / (total_pictures_uploaded - pictures_labeled_as_no_bib) * 100
+        Calculate AI accuracy using "Guilty Until Proven Innocent" logic for unknowns.
+        
+        AI Successes: Photos where AI detected a number AND user didn't change it
+        AI Valid Silences: Photos where AI said "Unknown" AND user confirmed "No Bib"  
+        Formula: (AI_Successes + AI_Valid_Silences) / Total_Photos * 100
         
         SECURITY: User-scoped queries only.
         PRODUCTION: Zero-division protection.
         """
         since_date = datetime.utcnow() - timedelta(days=days)
         
-        # Single efficient query with conditional aggregation
-        stats = db.query(
-            func.count(PhotoDB.id).label("total_uploads"),
-            func.count(func.case(
-                (func.or_(
-                    PhotoDB.detected_number.is_(None), 
-                    PhotoDB.detected_number == 'unknown',
-                    PhotoDB.manual_label == 'unknown'
-                ), 1)
-            )).label("no_bibs"),
-            func.count(func.case(
-                (func.and_(
-                    PhotoDB.manual_label.isnot(None),
-                    PhotoDB.manual_label != PhotoDB.detected_number,
-                    PhotoDB.manual_label != 'unknown'
-                ), 1)
-            )).label("relabels")
-        ).filter(
-            PhotoDB.user_id == user_id,  # SECURITY: User isolation
+        # Total photos uploaded (fixed denominator)
+        total_uploads = db.query(func.count(PhotoDB.id)).filter(
+            PhotoDB.user_id == user_id,
             PhotoDB.created_at >= since_date
-        ).first()
+        ).scalar() or 0
         
-        # Zero-division protection (CRITICAL for production)
-        total_uploads = stats.total_uploads or 0
-        no_bibs = stats.no_bibs or 0
-        relabels = stats.relabels or 0
-        
-        denominator = total_uploads - no_bibs
-        if denominator <= 0:
+        # Zero-division protection
+        if total_uploads <= 0:
             return 0.0
-            
-        # Precise formula: (Initially correct - Had to fix) / (Total with bibs)
-        bibs_initially_detected = denominator  # total_uploads - no_bibs
-        accuracy = ((bibs_initially_detected - relabels) / denominator) * 100
-        return round(max(0.0, accuracy), 2)  # Ensure non-negative
+        
+        # AI Successes: Photos where AI detected a number AND user didn't manually relabel it
+        ai_successes = db.query(func.count(PhotoDB.id)).filter(
+            PhotoDB.user_id == user_id,
+            PhotoDB.created_at >= since_date,
+            PhotoDB.detected_number.isnot(None),
+            PhotoDB.detected_number != 'unknown',
+            or_(
+                PhotoDB.manual_label.is_(None),
+                PhotoDB.manual_label == PhotoDB.detected_number
+            )
+        ).scalar() or 0
+        
+        # AI Valid Silences: Photos where AI said "Unknown" AND user confirmed "No Bib"
+        ai_valid_silences = db.query(func.count(PhotoDB.id)).filter(
+            PhotoDB.user_id == user_id,
+            PhotoDB.created_at >= since_date,
+            PhotoDB.detected_number == 'unknown',
+            PhotoDB.manual_label == 'unknown'
+        ).scalar() or 0
+        
+        # Calculate accuracy: only proven AI successes count
+        ai_correct_decisions = ai_successes + ai_valid_silences
+        accuracy = (ai_correct_decisions / total_uploads) * 100
+        
+        # DEBUG LOGGING for analytics accuracy calculation
+        logger.info(f"🔍 ACCURACY DEBUG for user_id={user_id}: total_uploads={total_uploads}, ai_successes={ai_successes}, ai_valid_silences={ai_valid_silences}, ai_correct_decisions={ai_correct_decisions}, calculated_accuracy={accuracy:.2f}%")
+        
+        return round(max(0.0, min(100.0, accuracy)), 2)  # Ensure 0-100% range
         
 
     def get_user_stats(self, db: Session, user_id: int, days: int = 30) -> dict:

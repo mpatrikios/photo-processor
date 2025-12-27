@@ -106,14 +106,17 @@ async def add_security_headers_middleware(request: Request, call_next):
 @app.on_event("startup")
 async def startup_event():
     """Initialize database tables and configuration on startup."""
+    # Enable SQL query logging for debugging
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+    logger.info("🔍 SQL query logging enabled for analytics debugging")
+    
     # Print configuration info
     settings.print_startup_info()
 
-    logger.info("🔄 Initializing database...")
-    create_tables()
-
+    logger.info("🔄 Database connection ready...")
+    
     db_info = get_db_info()
-    logger.info(f"✅ Database initialized: {db_info['database_path']}")
+    logger.info(f"✅ Database connected: {db_info['database_path']}")
     logger.info(f"📊 Database size: {db_info['database_size_mb']} MB")
 
     # Test AuthService singleton and JWT functionality
@@ -137,25 +140,46 @@ async def startup_event():
 
     db = SessionLocal()
     try:
+        # Ensure critical tables exist (self-healing approach)
+        try:
+            from database import Base, engine
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ Database tables verified/created")
+        except Exception as e:
+            logger.warning(f"⚠️ Table creation verification failed: {e}")
+
         # Clean up expired sessions
-        cleaned_sessions = auth_service.cleanup_expired_sessions(db)
-        if cleaned_sessions > 0:
-            logger.info(f"🧹 Cleaned up {cleaned_sessions} expired sessions")
+        try:
+            cleaned_sessions = auth_service.cleanup_expired_sessions(db)
+            if cleaned_sessions > 0:
+                logger.info(f"🧹 Cleaned up {cleaned_sessions} expired sessions")
+        except Exception as e:
+            logger.warning(f"⚠️ Session cleanup failed: {e}")
 
-        # Recover stalled processing jobs
-        recovered_jobs = job_service.recover_jobs_on_startup(db)
-        if recovered_jobs > 0:
-            logger.info(f"🔄 Recovered {recovered_jobs} processing jobs")
+        # Recover stalled processing jobs (gracefully handle missing tables)
+        try:
+            recovered_jobs = job_service.recover_jobs_on_startup(db)
+            if recovered_jobs > 0:
+                logger.info(f"🔄 Recovered {recovered_jobs} processing jobs")
+        except Exception as e:
+            logger.warning(f"⚠️ Job recovery skipped (tables may not exist yet): {e}")
 
-        # Load active processing jobs into memory
-        from app.api.process_tasks import cleanup_old_jobs, sync_jobs_from_database
-        sync_jobs_from_database()
-        cleanup_old_jobs()
+        # Load active processing jobs into memory (gracefully handle missing tables)
+        try:
+            from app.api.process_tasks import cleanup_old_jobs, sync_jobs_from_database
+            sync_jobs_from_database()
+            cleanup_old_jobs()
+            logger.info("🔄 Synced active jobs from database")
+        except Exception as e:
+            logger.warning(f"⚠️ Job sync skipped (tables may not exist yet): {e}")
 
-        # Clean up expired jobs and exports
-        cleaned_jobs = job_service.cleanup_expired_jobs(db)
-        if cleaned_jobs > 0:
-            logger.info(f"🧹 Cleaned up {cleaned_jobs} expired jobs")
+        # Clean up expired jobs and exports (gracefully handle missing tables)
+        try:
+            cleaned_jobs = job_service.cleanup_expired_jobs(db)
+            if cleaned_jobs > 0:
+                logger.info(f"🧹 Cleaned up {cleaned_jobs} expired jobs")
+        except Exception as e:
+            logger.warning(f"⚠️ Job cleanup skipped (tables may not exist yet): {e}")
 
     finally:
         db.close()

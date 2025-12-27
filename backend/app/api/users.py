@@ -137,6 +137,79 @@ async def update_my_profile(
     }
 
 
+@router.put("/me/email")
+async def change_my_email(
+    new_email: str,
+    password: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change current user's email address."""
+    
+    # Verify password for security
+    if not current_user.verify_password(password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Check if email is already taken
+    existing_user = db.query(User).filter(User.email == new_email.lower().strip()).first()
+    if existing_user and existing_user.id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email address is already in use"
+        )
+    
+    # Update email
+    current_user.email = new_email.lower().strip()
+    db.commit()
+    db.refresh(current_user)
+    
+    return {
+        "user": current_user.to_dict(),
+        "message": "Email address updated successfully"
+    }
+
+
+@router.get("/me/subscription")
+async def get_my_subscription(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get current user's subscription information."""
+    
+    # Get user tier information
+    from app.services.tier_service import tier_service
+    
+    tier_info = tier_service.get_user_tier(db, current_user.id)
+    
+    subscription_info = {
+        "tier_name": tier_info.get("tier_name", "trial"),
+        "monthly_photo_limit": tier_info.get("monthly_photo_limit", 50),
+        "features": tier_info.get("features", []),
+        "is_premium": tier_info.get("tier_name", "trial") != "trial"
+    }
+    
+    # Add Stripe subscription status if user has one
+    if hasattr(current_user, 'stripe_customer_id') and current_user.stripe_customer_id:
+        subscription_info.update({
+            "stripe_customer_id": current_user.stripe_customer_id,
+            "has_stripe_subscription": True,
+            "manage_billing_url": f"/api/payment/customer-portal?customer_id={current_user.stripe_customer_id}"
+        })
+    else:
+        subscription_info.update({
+            "has_stripe_subscription": False,
+            "manage_billing_url": None
+        })
+    
+    return {
+        "subscription": subscription_info,
+        "message": "Subscription information retrieved successfully"
+    }
+
+
 @router.delete("/me/account")
 async def delete_my_account(
     confirm_email: str,

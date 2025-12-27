@@ -31,10 +31,63 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from app.models import usage, user  # Import models to register them
-from database import Base
+# Temporarily bypass models import to avoid Settings conflict
+# from app.models import usage, user, analytics, processing  # Import models to register them
+from sqlalchemy import MetaData
 
-target_metadata = Base.metadata
+# Create a minimal metadata object for this migration
+target_metadata = MetaData()
+
+# We'll define the tables manually since we can't import models
+from sqlalchemy import Table, Column, Integer, String, Boolean, DateTime, Float, ForeignKey
+from sqlalchemy.sql import func
+
+# Define analytics tables manually for migration
+analytics_tables = [
+    Table('conversion_funnel', target_metadata,
+        Column('id', Integer, primary_key=True),
+        Column('user_id', Integer, ForeignKey('users.id'), nullable=False),
+        Column('step', String(50), nullable=False),
+        Column('completed_at', DateTime(timezone=True), server_default=func.now()),
+    ),
+    
+    Table('business_metrics', target_metadata,
+        Column('id', Integer, primary_key=True),
+        Column('date', DateTime(timezone=True), nullable=False),
+        Column('period_type', String(20), nullable=False),
+        Column('total_users', Integer),
+        Column('active_users', Integer),
+        Column('total_photos_processed', Integer),
+        Column('revenue_usd', Float),
+        Column('avg_detection_accuracy', Float),
+    ),
+    
+    Table('detection_accuracy_logs', target_metadata,
+        Column('id', Integer, primary_key=True),
+        Column('photo_id', String(36), nullable=False),
+        Column('user_id', Integer, ForeignKey('users.id'), nullable=False),
+        Column('processing_job_id', Integer),
+        Column('detection_method', String(30), nullable=False),
+        Column('processing_time_ms', Float, nullable=False),
+        Column('final_result', String(20)),
+        Column('manual_label', String(20)),
+        Column('is_correct', Boolean),
+        Column('detected_at', DateTime(timezone=True), server_default=func.now()),
+    ),
+    
+    Table('user_retention_cohorts', target_metadata,
+        Column('id', Integer, primary_key=True),
+        Column('cohort_month', String(7), nullable=False),
+        Column('user_count', Integer, nullable=False),
+        Column('month_0', Float),
+        Column('month_1', Float),
+        Column('month_2', Float),
+        Column('month_3', Float),
+        Column('month_6', Float),
+        Column('month_12', Float),
+        Column('last_updated', DateTime(timezone=True), server_default=func.now()),
+    ),
+]
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

@@ -606,34 +606,25 @@ async function showProfileModal() {
     const existingCustomModal = document.getElementById('customProfileModal');
     if (existingCustomModal) existingCustomModal.remove();
     
-    // Create new modal structure
+    // Create new modal structure with modern classes
     const modalBackdrop = document.createElement('div');
     modalBackdrop.id = 'customProfileModal';
-    modalBackdrop.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background-color: rgba(0, 0, 0, 0.5); z-index: 9999;
-        display: flex; align-items: center; justify-content: center;
-    `;
+    modalBackdrop.className = 'modern-modal';
     
     const modalDialog = document.createElement('div');
-    modalDialog.style.cssText = `
-        background-color: white; border-radius: 12px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-        width: 420px; max-width: 95vw; max-height: 85vh;
-        overflow: auto; position: relative;
-    `;
+    modalDialog.className = 'modern-modal-content';
     
     // Loading State HTML
     modalDialog.innerHTML = `
-        <div style="padding: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6; padding-bottom: 15px;">
-                <h4 style="margin: 0; color: #333;">Profile</h4>
-                <button id="customModalClose" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
-            </div>
+        <div class="modern-modal-header">
+            <h4 class="modern-modal-title">Profile</h4>
+            <button id="customModalClose" class="modern-modal-close">&times;</button>
+        </div>
+        <div class="modern-modal-body">
             <div id="customModalContent">
-                <div style="text-align: center; padding: 40px;">
-                    <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                    <p style="margin-top: 15px; color: #666;">Loading profile data...</p>
+                <div class="modern-loading">
+                    <div class="modern-spinner"></div>
+                    <div class="modern-loading-text">Loading profile data...</div>
                 </div>
             </div>
         </div>
@@ -657,10 +648,13 @@ async function showProfileModal() {
         const contentDiv = document.getElementById('customModalContent');
         if (contentDiv) {
             contentDiv.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: #dc3545;">
-                    <h5>Error Loading Profile</h5>
-                    <p>Unable to load profile data.</p>
-                    <button onclick="this.closest('#customProfileModal').remove()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+                <div class="modern-loading">
+                    <div style="color: #dc3545; margin-bottom: 16px;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 12px;"></i>
+                    </div>
+                    <h5 style="color: #dc3545; margin-bottom: 8px;">Error Loading Profile</h5>
+                    <p style="color: rgba(0,0,0,0.6); margin-bottom: 20px;">Unable to load profile data.</p>
+                    <button onclick="this.closest('#customProfileModal').remove()" class="modern-btn modern-btn-primary">Close</button>
                 </div>
             `;
         }
@@ -675,97 +669,142 @@ async function loadCustomProfileData() {
         
     const headers = { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` };
 
-    const [quotaResponse, statsResponse, timelineResponse] = await Promise.all([
+    const [quotaResponse, statsResponse] = await Promise.all([
         fetch(`${apiBase}/users/me/quota`, { headers }),
-        fetch(`${apiBase}/users/me/stats`, { headers }),
-        fetch(`${apiBase}/users/me/timeline?days=7`, { headers })
+        fetch(`${apiBase}/users/me/stats`, { headers })
     ]);
 
-    if (!quotaResponse.ok || !statsResponse.ok || !timelineResponse.ok) {
+    if (!quotaResponse.ok || !statsResponse.ok) {
         throw new Error('Failed to load profile data');
     }
 
     updateCustomModalContent(
         await quotaResponse.json(),
-        await statsResponse.json(),
-        await timelineResponse.json()
+        await statsResponse.json()
     );
 }
 
-function updateCustomModalContent(quotaData, statsData, timelineData) {
+async function updateCustomModalContent(quotaData, statsData) {
     const contentDiv = document.getElementById('customModalContent');
     if (!contentDiv) return;
     
     const { user, stats } = statsData;
     const { quota } = quotaData;
-    const { timeline } = timelineData;
+    
+    // Load subscription data
+    let subscriptionData = null;
+    try {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        
+        const response = await fetch(`${apiBase}/users/me/subscription`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            subscriptionData = result.subscription;
+        }
+    } catch (error) {
+        console.error('Error loading subscription data:', error);
+    }
     
     contentDiv.innerHTML = `
-        <div style="font-family: system-ui, -apple-system, sans-serif;">
-            <div style="display: flex; border-bottom: 1px solid #dee2e6; margin-bottom: 20px;">
-                <button onclick="showCustomTab('quota')" id="quotaTab" style="padding: 10px 20px; border: none; background: none; border-bottom: 2px solid #007bff; color: #007bff; cursor: pointer; font-weight: 500;">Quota</button>
-                <button onclick="showCustomTab('account')" id="accountTab" style="padding: 10px 20px; border: none; background: none; border-bottom: 2px solid transparent; color: #666; cursor: pointer;">Account</button>
-                <button onclick="showCustomTab('activity')" id="activityTab" style="padding: 10px 20px; border: none; background: none; border-bottom: 2px solid transparent; color: #666; cursor: pointer;">Activity</button>
+        <div>
+            <div class="modern-tab-nav">
+                <button onclick="showCustomTab('quota')" id="quotaTab" class="modern-tab-button active">Quota</button>
+                <button onclick="showCustomTab('account')" id="accountTab" class="modern-tab-button">Account</button>
+                <button onclick="showCustomTab('subscription')" id="subscriptionTab" class="modern-tab-button">Subscription</button>
             </div>
             
             <div id="quotaContent">
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                    <h5 style="margin: 0 0 10px 0;">Monthly Photo Quota</h5>
-                    <div style="font-size: 32px; font-weight: bold; margin-bottom: 5px;">${quota.photos_used_this_month}/${quota.monthly_photo_limit}</div>
-                    <div style="background: rgba(255,255,255,0.3); border-radius: 10px; height: 8px; margin-bottom: 10px;">
-                        <div style="background: ${quota.photos_used_this_month >= quota.monthly_photo_limit ? '#ff6b6b' : '#4ecdc4'}; height: 8px; border-radius: 10px; width: ${Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%;"></div>
+                <div class="modern-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}">
+                    <h5>Monthly Photo Quota</h5>
+                    <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month}/${quota.monthly_photo_limit}</div>
+                    <div class="modern-progress">
+                        <div class="modern-progress-bar ${getQuotaBarClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="width: ${Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%;"></div>
                     </div>
+                    <div style="font-size: 0.9rem; margin-top: 8px; opacity: 0.9;">${getQuotaStatusMessage(quota.photos_used_this_month, quota.monthly_photo_limit)}</div>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div style="background: #f8f9fa; padding: 15px; text-align: center;">
-                        <div style="font-size: 24px; font-weight: bold; color: #28a745;">${stats.total_photos_uploaded || 0}</div>
-                        <div style="color: #666; font-size: 14px;">Total Uploads</div>
+                <div class="modern-stats-grid">
+                    <div class="modern-stat-item">
+                        <div class="modern-stat-value" style="color: #28a745;">${stats.total_photos_uploaded || 0}</div>
+                        <div class="modern-stat-label">Total Uploads</div>
                     </div>
-                    <div style="background: #f8f9fa; padding: 15px; text-align: center;">
-                        <div style="font-size: 24px; font-weight: bold; color: #17a2b8;">${stats.total_processing_jobs || 0}</div>
-                        <div style="color: #666; font-size: 14px;">Jobs Processed</div>
+                    <div class="modern-stat-item">
+                        <div class="modern-stat-value" style="color: #17a2b8;">${stats.total_processing_jobs || 0}</div>
+                        <div class="modern-stat-label">Jobs Processed</div>
                     </div>
                 </div>
             </div>
             
             <div id="accountContent" style="display: none;">
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; font-weight: 500; margin-bottom: 5px;">Email</label>
-                    <input type="email" value="${user.email}" readonly style="width: 100%; padding: 8px; background: #f8f9fa; border: 1px solid #ddd;">
+                <div class="modern-form-field">
+                    <label class="modern-form-label">Email</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="email" id="customEmail" value="${user.email}" class="modern-form-input" style="flex: 1;">
+                        <button onclick="showChangeEmailForm()" class="modern-btn modern-btn-secondary" style="white-space: nowrap;">Change</button>
+                    </div>
                 </div>
-                <div style="margin-bottom: 15px;">
-                    <label style="display: block; font-weight: 500; margin-bottom: 5px;">Full Name</label>
-                    <input type="text" id="customFullName" value="${user.full_name || ''}" style="width: 100%; padding: 8px; border: 1px solid #ddd;">
+                <div class="modern-form-field">
+                    <label class="modern-form-label">Full Name</label>
+                    <input type="text" id="customFullName" value="${user.full_name || ''}" class="modern-form-input">
                 </div>
-                <div style="text-align: right;">
-                    <button onclick="updateCustomProfile()" style="padding: 8px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Save</button>
+                <div class="modern-form-field">
+                    <label class="modern-form-label">Password</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="password" value="••••••••" readonly class="modern-form-input" style="flex: 1;">
+                        <button onclick="showChangePasswordForm()" class="modern-btn modern-btn-secondary" style="white-space: nowrap;">Change</button>
+                    </div>
+                </div>
+                <div style="text-align: right; margin-top: 24px;">
+                    <button onclick="updateCustomProfile()" class="modern-btn modern-btn-primary">Save Changes</button>
                 </div>
             </div>
             
-            <div id="activityContent" style="display: none;">
-                ${timeline.length > 0 ? `
-                    <div style="max-height: 300px; overflow-y: auto;">
-                        ${timeline.map(item => `
-                            <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee;">
-                                <div><div style="font-weight: 500;">${item.action_display}</div><div style="font-size: 12px; color: #666;">${new Date(item.created_at).toLocaleString()}</div></div>
-                                <div>${item.success ? '✓' : '✗'}</div>
-                            </div>
-                        `).join('')}
+            <div id="subscriptionContent" style="display: none;">
+                ${subscriptionData ? `
+                    <div class="modern-card ${subscriptionData.is_premium ? 'gradient-primary' : ''}">
+                        <h5>${subscriptionData.tier_name.charAt(0).toUpperCase() + subscriptionData.tier_name.slice(1)} Plan</h5>
+                        <div style="font-size: 1.25rem; margin-bottom: 12px;">${subscriptionData.monthly_photo_limit} photos/month</div>
+                        ${subscriptionData.features && subscriptionData.features.length > 0 ? `
+                            <ul style="margin-bottom: 16px;">
+                                ${subscriptionData.features.map(feature => `<li>${feature}</li>`).join('')}
+                            </ul>
+                        ` : ''}
                     </div>
-                ` : '<div style="text-align: center; padding: 20px;">No recent activity.</div>'}
+                    ${subscriptionData.has_stripe_subscription ? `
+                        <div style="text-align: center; margin-top: 16px;">
+                            <button onclick="openBillingPortal()" class="modern-btn modern-btn-outline">Manage Billing</button>
+                        </div>
+                    ` : `
+                        <div style="text-align: center; margin-top: 16px;">
+                            <button onclick="window.location.hash=''; location.reload()" class="modern-btn modern-btn-primary">Upgrade Plan</button>
+                        </div>
+                    `}
+                ` : `
+                    <div class="modern-loading">
+                        <div class="modern-loading-text">Loading subscription information...</div>
+                    </div>
+                `}
             </div>
         </div>
     `;
 }
 
 function showCustomTab(tabName) {
-    ['quota', 'account', 'activity'].forEach(name => {
+    ['quota', 'account', 'subscription'].forEach(name => {
         const content = document.getElementById(name + 'Content');
         const tab = document.getElementById(name + 'Tab');
         if (content) content.style.display = name === tabName ? 'block' : 'none';
         if (tab) {
-            tab.style.borderBottomColor = name === tabName ? '#007bff' : 'transparent';
-            tab.style.color = name === tabName ? '#007bff' : '#666';
+            if (name === tabName) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
         }
     });
 }
@@ -780,13 +819,15 @@ async function updateCustomProfile() {
             `${window.location.protocol}//${window.location.hostname}:8000/api` : 
             'https://tagsort-api-486078451066.us-central1.run.app/api';
             
+        const formData = new FormData();
+        formData.append('full_name', fullNameInput.value);
+        
         const response = await fetch(`${apiBase}/users/me/profile`, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
             },
-            body: JSON.stringify({ full_name: fullNameInput.value })
+            body: formData
         });
         
         if (response.ok) {
@@ -810,9 +851,226 @@ async function updateCustomProfile() {
 // 3. GLOBAL ASSIGNMENTS & PLACEHOLDERS
 // ==========================================
 
-// Helper Placeholders
-function showChangePasswordModal() { alert('Coming soon!'); }
-function editProfile() { alert('Coming soon!'); }
+// Quota Color Helper Functions
+function getQuotaCardClass(used, limit) {
+    const percentage = limit > 0 ? (used / limit) * 100 : 0;
+    
+    if (percentage <= 70) return 'modern-card-safe';
+    if (percentage <= 90) return 'modern-card-warning';
+    return 'modern-card-danger';
+}
+
+function getQuotaBarClass(used, limit) {
+    const percentage = limit > 0 ? (used / limit) * 100 : 0;
+    
+    if (percentage <= 70) return 'safe';
+    if (percentage <= 90) return 'warning';
+    return 'danger';
+}
+
+function getQuotaStatusMessage(used, limit) {
+    const percentage = limit > 0 ? (used / limit) * 100 : 0;
+    const remaining = Math.max(0, limit - used);
+    
+    if (percentage <= 70) {
+        return `You have ${remaining} photos remaining this month. Keep uploading!`;
+    } else if (percentage <= 90) {
+        return `You're approaching your limit. ${remaining} photos remaining.`;
+    } else if (percentage < 100) {
+        return `Almost at your limit! Only ${remaining} photos left.`;
+    } else {
+        return `You've reached your monthly limit. Consider upgrading your plan.`;
+    }
+}
+
+// Email Change Functions
+async function showChangeEmailForm() {
+    const emailField = document.querySelector('#customEmail').parentElement;
+    emailField.innerHTML = `
+        <div class="modern-form-field">
+            <label class="modern-form-label">New Email</label>
+            <input type="email" id="newEmail" class="modern-form-input" placeholder="Enter new email">
+        </div>
+        <div class="modern-form-field">
+            <label class="modern-form-label">Current Password</label>
+            <input type="password" id="emailChangePassword" class="modern-form-input" placeholder="Enter your current password">
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button onclick="cancelEmailChange()" class="modern-btn modern-btn-outline">Cancel</button>
+            <button onclick="changeEmail()" class="modern-btn modern-btn-primary">Update Email</button>
+        </div>
+    `;
+}
+
+function cancelEmailChange() {
+    location.reload(); // Simple way to reset the modal
+}
+
+async function changeEmail() {
+    const newEmailInput = document.getElementById('newEmail');
+    const passwordInput = document.getElementById('emailChangePassword');
+    
+    if (!newEmailInput.value || !passwordInput.value) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    try {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
+            
+        const formData = new FormData();
+        formData.append('new_email', newEmailInput.value);
+        formData.append('password', passwordInput.value);
+        
+        const response = await fetch(`${apiBase}/users/me/email`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
+            body: formData
+        });
+        
+        if (response.ok) {
+            alert('Email updated successfully!');
+            document.getElementById('customProfileModal').remove();
+            showProfileModal(); // Reload modal with updated data
+        } else {
+            const error = await response.json();
+            alert(error.detail || 'Error updating email');
+        }
+    } catch (error) {
+        alert('Error updating email');
+    }
+}
+
+// Password Change Functions
+async function showChangePasswordForm() {
+    const passwordField = document.querySelector('#accountContent .modern-form-field:nth-child(3)');
+    passwordField.innerHTML = `
+        <label class="modern-form-label">Change Password</label>
+        <div class="modern-form-field">
+            <input type="password" id="currentPassword" class="modern-form-input" placeholder="Current password">
+        </div>
+        <div class="modern-form-field">
+            <input type="password" id="newPassword" class="modern-form-input" placeholder="New password (min 8 characters)">
+        </div>
+        <div class="modern-form-field">
+            <input type="password" id="confirmPassword" class="modern-form-input" placeholder="Confirm new password">
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button onclick="cancelPasswordChange()" class="modern-btn modern-btn-outline">Cancel</button>
+            <button onclick="changePassword()" class="modern-btn modern-btn-primary">Update Password</button>
+        </div>
+    `;
+}
+
+function cancelPasswordChange() {
+    location.reload(); // Simple way to reset the modal
+}
+
+async function changePassword() {
+    const currentInput = document.getElementById('currentPassword');
+    const newInput = document.getElementById('newPassword');
+    const confirmInput = document.getElementById('confirmPassword');
+    
+    if (!currentInput.value || !newInput.value || !confirmInput.value) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    if (newInput.value !== confirmInput.value) {
+        alert('New passwords do not match');
+        return;
+    }
+    
+    if (newInput.value.length < 8) {
+        alert('New password must be at least 8 characters long');
+        return;
+    }
+    
+    try {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
+            
+        const response = await fetch(`${apiBase}/auth/password/change`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                old_password: currentInput.value,
+                new_password: newInput.value
+            })
+        });
+        
+        if (response.ok) {
+            alert('Password updated successfully!');
+            document.getElementById('customProfileModal').remove();
+        } else {
+            const error = await response.json();
+            alert(error.detail || 'Error updating password');
+        }
+    } catch (error) {
+        alert('Error updating password');
+    }
+}
+
+// Security Functions
+async function logoutAllSessions() {
+    if (!confirm('This will sign you out from all devices. Continue?')) return;
+    
+    try {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
+            
+        const response = await fetch(`${apiBase}/auth/logout-all`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+        });
+        
+        if (response.ok) {
+            logout(); // Use existing logout function
+        } else {
+            alert('Error signing out from all devices');
+        }
+    } catch (error) {
+        alert('Error signing out from all devices');
+    }
+}
+
+// Subscription Functions
+async function openBillingPortal() {
+    try {
+        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
+        const apiBase = isDevelopment ? 
+            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
+            'https://tagsort-api-486078451066.us-central1.run.app/api';
+            
+        const response = await fetch(`${apiBase}/payment/customer-portal`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+        });
+        
+        if (response.ok) {
+            const { url } = await response.json();
+            window.open(url, '_blank');
+        } else {
+            alert('Error opening billing portal');
+        }
+    } catch (error) {
+        alert('Error opening billing portal');
+    }
+}
+
+// Legacy placeholders for compatibility
+function showChangePasswordModal() { showChangePasswordForm(); }
+function editProfile() { showProfileModal(); }
 
 // Expose to window for HTML onClick events
 window.showProfileModal = showProfileModal;
@@ -820,6 +1078,14 @@ window.showCustomTab = showCustomTab;
 window.updateCustomProfile = updateCustomProfile;
 window.showChangePasswordModal = showChangePasswordModal;
 window.editProfile = editProfile;
+window.showChangeEmailForm = showChangeEmailForm;
+window.cancelEmailChange = cancelEmailChange;
+window.changeEmail = changeEmail;
+window.showChangePasswordForm = showChangePasswordForm;
+window.cancelPasswordChange = cancelPasswordChange;
+window.changePassword = changePassword;
+window.logoutAllSessions = logoutAllSessions;
+window.openBillingPortal = openBillingPortal;
 if (typeof logout !== 'undefined') window.logout = logout;
 
 // ==========================================

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Request/Response Models
 class BatchUpdateLabelsRequest(BaseModel):
     photo_ids: List[str] = Field(..., min_items=1, max_items=1000)
-    bib_number: str = Field(..., min_length=1, max_length=6)
+    bib_number: str = Field(..., min_length=1, max_length=7)
 
 
 class BatchDeleteRequest(BaseModel):

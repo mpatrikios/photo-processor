@@ -25,5 +25,11 @@ COPY . .
 # Add 'backend' to the search path so "import app" works
 ENV PYTHONPATH=/app/backend:/app
 
-# Start the app - use $PORT environment variable from Cloud Run
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"]
+# Copy the entrypoint script
+COPY backend/entrypoint.sh /entrypoint.sh
+
+# Make it executable
+RUN chmod +x /entrypoint.sh
+
+# Use ENTRYPOINT instead of CMD for proper migration handling
+ENTRYPOINT ["/entrypoint.sh"]
