@@ -54,3 +54,38 @@
 - **Fail-Fast Deletion:** If a proposed solution is discovered to be incorrect, revert/delete all associated scaffolding before implementing the fix.
 - **Proactive Janitor:** You take pride in a shrinking codebase. Identify unused imports, redundant variables, or legacy endpoints and offer to delete them in every response.
 - **No "Just in Case" Code:** Reject any "future-proof" logic that isn't required for the current task.
+
+## ⚠️ COMMON BUGS TO AVOID
+
+### UUID vs Integer Primary Key Mismatch
+**Symptom:** `invalid input syntax for type integer: "uuid-string"`
+**Root Cause:** Using UUID job_id directly instead of integer primary key for database relations.
+
+```python
+# ❌ WRONG - Uses UUID string
+PhotoDB.processing_job_id == job_id
+
+# ✅ CORRECT - Use integer primary key
+processing_job_record = db.query(ProcessingJobDB).filter(
+    ProcessingJobDB.job_id == job_id,
+    ProcessingJobDB.user_id == user_id
+).first()
+processing_job_pk = processing_job_record.id
+PhotoDB.processing_job_id == processing_job_pk
+```
+
+### Database Field Name Mismatches
+**Symptom:** `type object 'PhotoDB' has no attribute 'status'`
+**Root Cause:** Using wrong field names that don't exist in SQLAlchemy model.
+
+```python
+# ❌ WRONG - Field doesn't exist
+photo.status = ProcessingStatus.COMPLETED
+PhotoDB.status == ProcessingStatus.COMPLETED
+
+# ✅ CORRECT - Use actual field name
+photo.processing_status = ProcessingStatus.COMPLETED
+PhotoDB.processing_status == ProcessingStatus.COMPLETED
+```
+
+**Always verify field names match the SQLAlchemy model definition before using.**

@@ -967,6 +967,7 @@ class PhotoProcessor {
         });
 
         // Show compression progress if needed
+        // Show compression progress for 3072px optimization
         const needsCompression = toProcess.some(file => file.size > COMPRESS_THRESHOLD);
         let progressModal = null;
         
@@ -982,29 +983,31 @@ class PhotoProcessor {
             try {
                 let finalFile = file;
                 
-                // Compress if file is larger than threshold
+                // 3072px Max Accuracy: Optimal for Gemini's internal tiling + OCR precision
                 if (file.size > COMPRESS_THRESHOLD) {
                     const options = {
-                        maxSizeMB: 1,  // Much smaller target for faster uploads
-                        maxWidthOrHeight: 1024,  // Matches server Gemini optimization
+                        maxSizeMB: 5,  // Safe under 20MB API batch limit
+                        maxWidthOrHeight: 3072,  // Matches Gemini's optimal processing tiles
                         useWebWorker: true,
                         fileType: file.type,
                         preserveExif: false,  // Remove EXIF for smaller files
-                        initialQuality: 0.85  // Slightly lower quality for better compression
+                        initialQuality: 0.95  // High quality prevents digit edge artifacts
                     };
                     
-                    console.log(`Compressing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+                    console.log(`Optimizing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB → 3072px max accuracy`);
                     finalFile = await imageCompression(file, options);
                     
                     // Preserve original filename
                     finalFile = new File([finalFile], file.name, { type: finalFile.type });
-                    console.log(`Compressed to: ${(finalFile.size / 1024 / 1024).toFixed(1)}MB`);
-                }
+                    console.log(`Optimized to: ${(finalFile.size / 1024 / 1024).toFixed(1)}MB (3072px, Q95 for OCR)`);
+                } else {
+                    console.log(`Using original file: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+                }  // Debug log
                 
                 processedFiles.push(finalFile);
                 processedCount++;
                 
-                // Update progress
+                // Update compression progress
                 if (progressModal) {
                     this.updateCompressionProgress(processedCount, toProcess.length);
                 }
@@ -1329,7 +1332,6 @@ class PhotoProcessor {
             const batchNumbers = concurrentBatches.map((_, idx) => i + idx + 1);
             
             try {
-                console.log(`📦 Uploading ${concurrentBatches.length} batches concurrently (${batchNumbers[0]}-${batchNumbers[batchNumbers.length - 1]}/${batches.length})...`);
                 
                 // Update progress in UI
                 uploadBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Uploading ${concurrentBatches.length} batches concurrently...`;
@@ -1346,7 +1348,6 @@ class PhotoProcessor {
                     allPhotoIds.push(...batchPhotoIds);
                 }
                 
-                console.log(`✅ Concurrent batch group completed: ${batchResults.reduce((sum, batch) => sum + batch.length, 0)} photos uploaded`);
                 
             } catch (error) {
                 console.error(`❌ Concurrent batch group (${batchNumbers[0]}-${batchNumbers[batchNumbers.length - 1]}) failed:`, error);
@@ -1360,7 +1361,6 @@ class PhotoProcessor {
     // NEW: Direct upload to GCS (bypasses server bottleneck)
     // NEW: Direct upload to GCS (bypasses server bottleneck)
     async uploadBatch(batchFiles, batchNum, totalBatches) {
-        console.log(`🚀 Starting direct upload batch ${batchNum}/${totalBatches} with ${batchFiles.length} files`);
         
         try {
             // Step 1: Get signed URLs from our API
@@ -1390,13 +1390,11 @@ class PhotoProcessor {
             const signedData = await signedResponse.json();
             const { signed_urls } = signedData;
             
-            console.log(`📝 Got ${signed_urls.length} signed URLs for direct upload`);
 
             // Step 2: Upload all files in parallel to Google Cloud Storage
             // We create an array of promises, one for each file upload
             const uploadPromises = batchFiles.map(async (file, i) => {
                 const urlInfo = signed_urls[i];
-                console.log(`⬆️ Uploading ${file.name} directly to GCS...`);
 
                 const uploadResponse = await fetch(urlInfo.signed_url, {
                     method: 'PUT',
@@ -1411,7 +1409,6 @@ class PhotoProcessor {
                     throw new Error(`Direct upload failed for ${file.name}: ${uploadResponse.statusText}`);
                 }
 
-                console.log(`✅ ${file.name} uploaded directly to GCS`);
 
                 // Return the success data for this file
                 return {
@@ -1446,7 +1443,6 @@ class PhotoProcessor {
                 this.updateQuotaDisplay(result.quota_info);
             }
             
-            console.log(`🎉 Batch ${batchNum}/${totalBatches} completed: ${result.successful_uploads} uploads recorded`);
             
             return result.photo_ids || [];
 
@@ -1947,14 +1943,14 @@ class PhotoProcessor {
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-body text-center p-4">
-                            <h5 class="mb-3">Optimizing Photos for Upload</h5>
+                            <h5 class="mb-3">Optimizing for Maximum OCR Accuracy</h5>
                             <div class="progress mb-3" style="height: 25px;">
                                 <div id="compressionProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
                                      role="progressbar" style="width: 0%">
                                     <span id="compressionProgressText">0 / ${totalFiles}</span>
                                 </div>
                             </div>
-                            <p class="text-muted mb-0">Compressing large images for faster upload...</p>
+                            <p class="text-muted mb-0">Processing at 3072px with 95% quality for optimal OCR...</p>
                         </div>
                     </div>
                 </div>

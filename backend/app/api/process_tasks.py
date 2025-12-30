@@ -32,19 +32,16 @@ QUEUE = "photo-processing-queue"
 # This must match your Cloud Run URL
 SERVICE_URL = os.getenv('BASE_URL', 'https://tagsort-api-486078451066.us-central1.run.app')
 
-# # Import Cloud Tasks Client
-# try:
-#     from google.cloud import tasks_v2
-#     task_client = tasks_v2.CloudTasksClient()
-#     CLOUD_TASKS_AVAILABLE = True
-#     logger.info("✅ Cloud Tasks client initialized")
-# except Exception as e:
-#     CLOUD_TASKS_AVAILABLE = False
-#     task_client = None
-#     logger.error(f"❌ Cloud Tasks initialization failed: {e}")
-    
-from google.cloud import tasks_v2
-task_client = tasks_v2.CloudTasksClient()
+# Import Cloud Tasks Client
+try:
+    from google.cloud import tasks_v2
+    task_client = tasks_v2.CloudTasksClient()
+    CLOUD_TASKS_AVAILABLE = True
+    logger.info("✅ Cloud Tasks client initialized")
+except Exception as e:
+    CLOUD_TASKS_AVAILABLE = False
+    task_client = None
+    logger.error(f"❌ Cloud Tasks initialization failed: {e}")
 
 # In-memory job store
 jobs: Dict[str, dict] = {}
@@ -63,13 +60,18 @@ logger.info(f"🔍 - SERVICE_URL: {SERVICE_URL}")
 @router.post("/start", response_model=ProcessingJob)
 async def start_processing_with_tasks(
     photo_ids: List[str],
-    debug: Optional[bool] = Query(True, description="Enable debug mode"),
+    debug: Optional[bool] = Query(None, description="Enable debug mode (overrides env var)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if not photo_ids:
         raise HTTPException(status_code=400, detail="No photo IDs provided")
 
+    # Use environment variable if query param not provided
+    import os
+    if debug is None:
+        debug = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+    
     job_id = str(uuid.uuid4())
     job = ProcessingJob(
         job_id=job_id,
@@ -87,14 +89,24 @@ async def start_processing_with_tasks(
         db=db, user_id=current_user.id, job_id=job_id, total_photos=len(photo_ids)
     )
 
-    # 3. CRITICAL: Link existing PhotoDB records to this job_id
+    # 3. CRITICAL: Link existing PhotoDB records to the processing job
     # This allows the worker to find them when updating progress
     from app.models.processing import PhotoDB
-    db.query(PhotoDB).filter(
-        PhotoDB.photo_id.in_(photo_ids),
-        PhotoDB.user_id == current_user.id
-    ).update({PhotoDB.processing_job_id: job_id}, synchronize_session=False)
-    db.commit()
+    from app.models.usage import ProcessingJob as ProcessingJobDB
+    
+    # Get the INTEGER primary key for this job_id 
+    processing_job_record = db.query(ProcessingJobDB).filter(
+        ProcessingJobDB.job_id == job_id,
+        ProcessingJobDB.user_id == current_user.id
+    ).first()
+    
+    if processing_job_record:
+        # Use the INTEGER primary key instead of UUID string
+        db.query(PhotoDB).filter(
+            PhotoDB.photo_id.in_(photo_ids),
+            PhotoDB.user_id == current_user.id
+        ).update({PhotoDB.processing_job_id: processing_job_record.id}, synchronize_session=False)
+        db.commit()
 
     # 4. Update status
     job.status = ProcessingStatus.PROCESSING
@@ -150,8 +162,8 @@ async def start_processing_with_tasks(
         asyncio.create_task(process_photos_async_fallback(job_id, photo_ids, current_user.id, debug))
         return job
     
-    # Group photos into batches of 3 for optimal Gemini rate limiting
-    BATCH_SIZE = 3
+    # Group photos into batches of 1 for testing Elite OCR system
+    BATCH_SIZE = 1
     photo_batches = []
     for i in range(0, len(photo_ids), BATCH_SIZE):
         batch = photo_ids[i:i + BATCH_SIZE]
@@ -188,7 +200,9 @@ async def start_processing_with_tasks(
             
             logger.info(f"✅ Created task {batch_idx + 1}/{len(photo_batches)}: {len(photo_batch)} photos")
             if batch_idx == 0:  # Log details for first task only
-                logger.debug(f"🔍 Task details: {task_response.name}")
+                logger.info(f"🔍 Task details: {task_response.name}")
+                logger.info(f"🔍 Task URL: {worker_url}")
+                logger.info(f"🔍 Task payload: {len(photo_batch)} photos for job {job_id}")
                 
         except Exception as task_error:
             logger.error(f"❌ Failed to create task {batch_idx + 1}: {task_error}")
@@ -206,43 +220,44 @@ async def start_processing_with_tasks(
     return job
 
 
-@router.post("/worker")
-async def process_single_photo_worker(request: Request):
-    """
-    Cloud Tasks Worker Endpoint
-    Each request handles exactly ONE photo for maximum reliability.
-    """
-    # Create a fresh database session for this specific photo task
-    db = SessionLocal()
-    try:
-        payload = await request.json()
-        photo_id = payload.get("photo_id")
-        job_id = payload.get("job_id")
-        user_id = payload.get("user_id")
-        debug_mode = payload.get("debug_mode", False)
-        
-        if not all([photo_id, job_id, user_id]):
-            return {"status": "error", "message": "Missing required payload fields"}
-        
-        # 1. Run detection (Gemini)
-        detection_result = await detector.process_photo(
-            photo_id, debug_mode=debug_mode, user_id=user_id
-        )
-        
-        # 2. Save result to DB (updates status to 'completed' for this photo)
-        await save_detection_to_database(photo_id, user_id, detection_result, job_id)
-        
-        # 3. Update the overall Job Progress (calculates % based on completed photos)
-        await update_job_progress(job_id, db)
-        
-        return {"status": "success", "photo_id": photo_id}
-            
-    except Exception as e:
-        logger.error(f"🔥 Worker failed for photo {photo_id if 'photo_id' in locals() else 'unknown'}: {e}")
-        # Raising 500 tells Cloud Tasks to RETRY this specific photo automatically
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
+# COMMENTED OUT: Force batch-only processing
+# @router.post("/worker")
+# async def process_single_photo_worker(request: Request):
+#     """
+#     Cloud Tasks Worker Endpoint
+#     Each request handles exactly ONE photo for maximum reliability.
+#     """
+#     # Create a fresh database session for this specific photo task
+#     db = SessionLocal()
+#     try:
+#         payload = await request.json()
+#         photo_id = payload.get("photo_id")
+#         job_id = payload.get("job_id")
+#         user_id = payload.get("user_id")
+#         debug_mode = payload.get("debug_mode", False)
+#         
+#         if not all([photo_id, job_id, user_id]):
+#             return {"status": "error", "message": "Missing required payload fields"}
+#         
+#         # 1. Run detection (Gemini)
+#         detection_result = await detector.process_photo(
+#             photo_id, debug_mode=debug_mode, user_id=user_id
+#         )
+#         
+#         # 2. Save result to DB (updates status to 'completed' for this photo)
+#         await save_detection_to_database(photo_id, user_id, detection_result, job_id)
+#         
+#         # 3. Update the overall Job Progress (calculates % based on completed photos)
+#         await update_job_progress(job_id, db)
+#         
+#         return {"status": "success", "photo_id": photo_id}
+#             
+#     except Exception as e:
+#         logger.error(f"🔥 Worker failed for photo {photo_id if 'photo_id' in locals() else 'unknown'}: {e}")
+#         # Raising 500 tells Cloud Tasks to RETRY this specific photo automatically
+#         raise HTTPException(status_code=500, detail=str(e))
+#     finally:
+#         db.close()
 
 
 @router.post("/batch-worker")
@@ -264,14 +279,17 @@ async def process_batch_photos_worker(request: Request):
         if not all([photo_ids, job_id, user_id]) or not isinstance(photo_ids, list):
             return {"status": "error", "message": "Missing or invalid payload fields"}
         
-        logger.info(f"🔄 Batch worker {batch_index}/{total_batches}: Processing {len(photo_ids)} photos")
+        logger.info(f"🔄 BATCH WORKER START: {batch_index}/{total_batches} processing {len(photo_ids)} photos")
         
         # 1. Run batch detection with Gemini (2-3x faster than individual calls)
         batch_results = await detector.process_photo_batch(
             photo_ids, debug_mode=debug_mode, user_id=user_id
         )
         
+        logger.info(f"🔄 BATCH WORKER COMPLETE: {batch_index}/{total_batches} received {len(batch_results)} results")
+        
         if not batch_results:
+            logger.error(f"❌ BATCH FAILED: No results returned from detector")
             return {"status": "error", "message": "Batch processing failed"}
         
         # 2. Save all results to database in a single transaction
@@ -303,8 +321,17 @@ async def save_batch_results_to_database(batch_results: Dict[str, DetectionResul
     db_session = SessionLocal()
     try:
         from app.models.processing import PhotoDB, ProcessingStatus
+        from app.models.usage import ProcessingJob as ProcessingJobDB
         
         processed_time = datetime.utcnow()
+        
+        # Get the INTEGER primary key for this job_id 
+        processing_job_record = db_session.query(ProcessingJobDB).filter(
+            ProcessingJobDB.job_id == processing_job_id,
+            ProcessingJobDB.user_id == user_id
+        ).first()
+        
+        processing_job_pk = processing_job_record.id if processing_job_record else None
         
         # Simple approach: update each photo individually in a transaction
         for photo_id, detection_result in batch_results.items():
@@ -319,8 +346,8 @@ async def save_batch_results_to_database(batch_results: Dict[str, DetectionResul
                     photo.detected_number = detection_result.bib_number
                     photo.confidence = detection_result.confidence
                     photo.detection_method = "gemini_flash_batch"
-                    photo.status = ProcessingStatus.COMPLETED
-                    photo.processing_job_id = processing_job_id
+                    photo.processing_status = ProcessingStatus.COMPLETED
+                    photo.processing_job_id = processing_job_pk
                     photo.processed_at = processed_time
                     
                     # Add bounding box if available
@@ -334,14 +361,14 @@ async def save_batch_results_to_database(batch_results: Dict[str, DetectionResul
                     photo.detected_number = "unknown"
                     photo.confidence = 0.0
                     photo.detection_method = "gemini_flash_batch"
-                    photo.status = ProcessingStatus.COMPLETED
-                    photo.processing_job_id = processing_job_id
+                    photo.processing_status = ProcessingStatus.COMPLETED
+                    photo.processing_job_id = processing_job_pk
                     photo.processed_at = processed_time
             else:
                 logger.warning(f"Photo {photo_id} not found for user {user_id}")
         
         db_session.commit()
-        logger.info(f"✅ Batch results saved for {len(batch_results)} photos")
+        logger.info(f"✅ BATCH SAVED: {len(batch_results)} photos saved to database with job_pk={processing_job_pk}")
         
     except Exception as e:
         db_session.rollback()
@@ -355,9 +382,17 @@ async def save_detection_to_database(photo_id: str, user_id: int, detection_resu
     """Save detection result to PhotoDB table after OCR processing."""
     try:
         from app.models.processing import PhotoDB, ProcessingStatus
+        from app.models.usage import ProcessingJob as ProcessingJobDB
         
         db_session = SessionLocal()
         try:
+            # Get the INTEGER primary key for this job_id 
+            processing_job_record = db_session.query(ProcessingJobDB).filter(
+                ProcessingJobDB.job_id == processing_job_id,
+                ProcessingJobDB.user_id == user_id
+            ).first()
+            
+            processing_job_pk = processing_job_record.id if processing_job_record else None
             # Check if photo record already exists
             existing_photo = db_session.query(PhotoDB).filter(
                 PhotoDB.photo_id == photo_id,
@@ -375,15 +410,15 @@ async def save_detection_to_database(photo_id: str, user_id: int, detection_resu
                         existing_photo.bbox_y1 = detection_result.bbox[1] 
                         existing_photo.bbox_x2 = detection_result.bbox[2]
                         existing_photo.bbox_y2 = detection_result.bbox[3]
-                    existing_photo.status = ProcessingStatus.COMPLETED
-                    existing_photo.processing_job_id = processing_job_id
+                    existing_photo.processing_status = ProcessingStatus.COMPLETED
+                    existing_photo.processing_job_id = processing_job_pk
                     existing_photo.processed_at = datetime.utcnow()
                 else:
                     existing_photo.detected_number = "unknown"
                     existing_photo.confidence = 0.0
                     existing_photo.detection_method = "gemini_flash"
-                    existing_photo.status = ProcessingStatus.COMPLETED
-                    existing_photo.processing_job_id = processing_job_id
+                    existing_photo.processing_status = ProcessingStatus.COMPLETED
+                    existing_photo.processing_job_id = processing_job_pk
                     existing_photo.processed_at = datetime.utcnow()
                 
                 db_session.commit()
@@ -406,14 +441,28 @@ async def save_detection_to_database(photo_id: str, user_id: int, detection_resu
 async def update_job_progress(job_id: str, db: Session):
     """Update job progress based on completed photos"""
     try:
-        from app.models.processing import PhotoDB
+        from app.models.processing import PhotoDB, ProcessingStatus
+        from app.models.usage import ProcessingJob as ProcessingJobDB
+        
+        # Get the INTEGER primary key for this job_id 
+        processing_job_record = db.query(ProcessingJobDB).filter(
+            ProcessingJobDB.job_id == job_id
+        ).first()
+        
+        if not processing_job_record:
+            logger.warning(f"Processing job not found: {job_id}")
+            return
+            
+        processing_job_pk = processing_job_record.id
         
         # Get total photos and completed photos for this job
-        total_photos = db.query(PhotoDB).filter(PhotoDB.processing_job_id == job_id).count()
+        total_photos = db.query(PhotoDB).filter(PhotoDB.processing_job_id == processing_job_pk).count()
         completed_photos = db.query(PhotoDB).filter(
-            PhotoDB.processing_job_id == job_id,
-            PhotoDB.status == "completed"
+            PhotoDB.processing_job_id == processing_job_pk,
+            PhotoDB.processing_status == ProcessingStatus.COMPLETED
         ).count()
+        
+        logger.info(f"🔢 PROGRESS COUNT: {job_id[:8]}... {completed_photos}/{total_photos} photos completed (pk={processing_job_pk})")
         
         if total_photos > 0:
             progress = int((completed_photos / total_photos) * 100)
@@ -421,8 +470,13 @@ async def update_job_progress(job_id: str, db: Session):
             # Update in-memory job
             job_data = jobs.get(job_id)
             if job_data:
+                old_progress = job_data["job"].progress
+                old_status = job_data["job"].status
+                
                 job_data["job"].progress = progress
                 job_data["job"].completed_photos = completed_photos
+                
+                logger.info(f"📊 UPDATING: {job_id[:8]}... progress {old_progress}→{progress}, status={old_status}")
                 
                 # Check if job is complete
                 if completed_photos >= total_photos:
@@ -437,7 +491,7 @@ async def update_job_progress(job_id: str, db: Session):
                         completed_at=datetime.utcnow(),
                     )
                     
-                    logger.info(f"🎉 Job {job_id} completed: {completed_photos}/{total_photos} photos")
+                    logger.info(f"🎉 JOB COMPLETED: {job_id[:8]}... {completed_photos}/{total_photos} photos")
                 else:
                     # Update progress in database
                     usage_tracker.update_processing_job(
@@ -445,6 +499,9 @@ async def update_job_progress(job_id: str, db: Session):
                         job_id=job_id,
                         progress=progress,
                     )
+                    logger.info(f"📈 PROGRESS UPDATE: {job_id[:8]}... {progress}% ({completed_photos}/{total_photos})")
+            else:
+                logger.warning(f"❌ Job not found in memory during progress update: {job_id[:8]}...")
             
         db.commit()
         
@@ -454,17 +511,64 @@ async def update_job_progress(job_id: str, db: Session):
 
 # Keep existing endpoints for compatibility
 @router.get("/status/{job_id}")
-async def get_processing_status(job_id: str, current_user: User = Depends(get_current_user)):
-    """Get the current status of a processing job"""
+async def get_processing_status(job_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Get the current status of a processing job with real-time database check"""
+    logger.info(f"🔍 STATUS REQUEST: {job_id[:8]}... from user {current_user.id}")
+    
     job_data = jobs.get(job_id)
     if not job_data:
+        logger.warning(f"❌ Job not found in memory: {job_id[:8]}...")
         raise HTTPException(status_code=404, detail="Job not found")
     
     # SECURITY: Verify job belongs to current user
     if job_data["user_id"] != current_user.id:
+        logger.warning(f"❌ Access denied to job {job_id[:8]}... for user {current_user.id}")
         raise HTTPException(status_code=403, detail="Access denied to job")
     
-    return job_data["job"]
+    # Log current in-memory state
+    current_status = job_data["job"].status
+    current_progress = job_data["job"].progress
+    logger.info(f"📊 CURRENT STATE: {job_id[:8]}... status={current_status}, progress={current_progress}")
+    
+    # Real-time check: Update job status from database if still processing
+    if current_status == ProcessingStatus.PROCESSING:
+        logger.info(f"🔄 Job still processing, checking database for updates: {job_id[:8]}...")
+        try:
+            # Force update job progress from database
+            await update_job_progress(job_id, db)
+            
+            # Check if status changed after update
+            new_status = job_data["job"].status
+            new_progress = job_data["job"].progress
+            if new_status != current_status or new_progress != current_progress:
+                logger.info(f"📈 STATUS CHANGE: {job_id[:8]}... {current_status}→{new_status}, {current_progress}→{new_progress}")
+            else:
+                logger.info(f"📊 NO CHANGE: {job_id[:8]}... still {current_status} at {current_progress}%")
+            
+            # Timeout protection: If job has been processing for more than 10 minutes, mark as failed
+            from datetime import datetime, timedelta
+            if hasattr(job_data["job"], 'created_at'):
+                time_elapsed = datetime.utcnow() - job_data["job"].created_at
+                if time_elapsed > timedelta(minutes=10):
+                    logger.warning(f"⏰ TIMEOUT: {job_id[:8]}... after {time_elapsed.total_seconds():.1f}s")
+                    job_data["job"].status = ProcessingStatus.FAILED
+                    job_data["job"].progress = 0
+                    
+        except Exception as e:
+            logger.error(f"❌ Failed to update job progress for {job_id[:8]}...: {e}")
+    else:
+        logger.info(f"✅ Job already completed: {job_id[:8]}... status={current_status}")
+    
+    # Ensure proper JSON serialization by converting to dict if it's a Pydantic model
+    job_response = job_data["job"]
+    if hasattr(job_response, 'dict'):
+        job_response = job_response.dict()
+    
+    final_status = job_response.get('status', 'unknown')
+    final_progress = job_response.get('progress', 0)
+    logger.info(f"📤 RESPONSE: {job_id[:8]}... returning status={final_status}, progress={final_progress}")
+    
+    return job_response
 
 
 @router.get("/results/{job_id}")  
@@ -482,9 +586,22 @@ async def get_processing_results(job_id: str, current_user: User = Depends(get_c
         
         # Get all photos for this job from the database
         from app.models.processing import PhotoDB
+        from app.models.usage import ProcessingJob as ProcessingJobDB
+        
+        # Get the INTEGER primary key for this job_id 
+        processing_job_record = db.query(ProcessingJobDB).filter(
+            ProcessingJobDB.job_id == job_id,
+            ProcessingJobDB.user_id == current_user.id
+        ).first()
+        
+        if not processing_job_record:
+            logger.warning(f"Processing job not found: {job_id}")
+            return {"unknown": []}
+            
+        processing_job_pk = processing_job_record.id
         
         photos = db.query(PhotoDB).filter(
-            PhotoDB.processing_job_id == job_id,
+            PhotoDB.processing_job_id == processing_job_pk,
             PhotoDB.user_id == current_user.id
         ).all()
         

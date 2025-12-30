@@ -27,11 +27,9 @@ try:
     if BUCKET_NAME:
         storage_client = storage.Client()
         bucket = storage_client.bucket(BUCKET_NAME)
-        logger.info(f"✅ Connected to GCS bucket: {BUCKET_NAME}")
     else:
         bucket = None
 except Exception as e:
-    logger.warning(f"⚠️ GCS Connection failed: {e}")
     bucket = None
 
 # --- HELPERS ---
@@ -107,7 +105,6 @@ async def serve_photo_with_token(
             )
             return RedirectResponse(url=signed_url)
         except Exception as e:
-            logger.error(f"Signed URL error: {e}")
             # Fallback to streaming if signing fails
             return StreamingResponse(io.BytesIO(blob.download_as_bytes()), media_type="image/jpeg")
     

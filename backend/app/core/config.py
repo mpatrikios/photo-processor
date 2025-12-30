@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     # Application Settings
     environment: str = Field(default="development")
     debug: bool = Field(default=False)
-    max_file_size_mb: int = Field(default=10)
+    max_file_size_mb: int = Field(default=30)  # Increased for uncompressed race photos
     max_files_per_upload: int = Field(default=100)
     processing_timeout_seconds: int = Field(default=300)
     rate_limit_per_minute: int = Field(default=60)
