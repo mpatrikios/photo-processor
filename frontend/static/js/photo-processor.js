@@ -25,6 +25,10 @@ class PhotoProcessor {
         this.isActivelyProcessing = false;
         this.beforeUnloadHandler = null;
         
+        // Session restoration tracking to prevent duplicate notifications
+        this.hasRestoredSession = false;
+        this.restorationInProgress = false;
+        
         // Initialize authentication from localStorage
         const storedToken = localStorage.getItem('auth_token');
         this.authToken = storedToken || null;
@@ -183,6 +187,15 @@ class PhotoProcessor {
     }
 
     async checkAndRestoreRecentJob() {
+        // Prevent concurrent restoration attempts and duplicate notifications
+        if (this.hasRestoredSession || this.restorationInProgress) {
+            console.log('Session restoration already handled/in progress, skipping');
+            return;
+        }
+        
+        // Set flag immediately to block concurrent calls
+        this.restorationInProgress = true;
+        
         try {
             // First check for active/interrupted processing jobs
             const currentJobId = window.stateManager?.get('processing.currentJobId');
@@ -212,6 +225,8 @@ class PhotoProcessor {
                                 this.groupedPhotos = this.convertGroupedPhotosObjectToArray(await resultsResponse.json());
                                 window.stateManager.markJobCompleted(currentJobId, 'completed');
                                 this.showResultsSection();
+                                // Mark session as restored to prevent duplicate notifications
+                                this.hasRestoredSession = true;
                                 return;
                             }
                         } else if (jobStatus.status === 'processing' || jobStatus.status === 'pending') {
@@ -229,6 +244,8 @@ class PhotoProcessor {
                             }
                             
                             this.pollProcessingStatus();
+                            // Mark session as handled to prevent duplicate restoration attempts
+                            this.hasRestoredSession = true;
                             return;
                         } else if (jobStatus.status === 'failed') {
                             console.log('Active job failed, marking as failed');
@@ -248,6 +265,7 @@ class PhotoProcessor {
             // Check if StateManager has a recent completed job
             if (!window.stateManager || !window.stateManager.hasRecentCompletedJob()) {
                 console.log('No recent completed job found in localStorage');
+                this.hasRestoredSession = true; // Mark as handled even if nothing to restore
                 return;
             }
 
@@ -279,6 +297,9 @@ class PhotoProcessor {
                 // Show restoration notification
                 showNotification(`Restored your previous session (${Array.isArray(results) ? results.length : 0} photo groups)`, 'info');
                 
+                // Mark session as restored to prevent duplicate notifications
+                this.hasRestoredSession = true;
+                
             } else {
                 console.warn('Failed to restore job results, clearing saved state');
                 window.stateManager.clearCompletedJob();
@@ -290,6 +311,9 @@ class PhotoProcessor {
             if (window.stateManager) {
                 window.stateManager.clearCompletedJob();
             }
+        } finally {
+            // Always clear the progress flag regardless of outcome
+            this.restorationInProgress = false;
         }
     }
 

@@ -18,6 +18,9 @@
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js"></script>
 </head>
 <body>
+    <!-- Modern Toast Container -->
+    <div id="alert-container"></div>
+    
     <div id="app">
         <!-- Landing Page -->
         <div id="landing-page">
@@ -35,30 +38,30 @@
                     </button>
                     
                     <div class="collapse navbar-collapse" id="navbarNav">
-                        <ul class="navbar-nav ms-auto align-items-center">
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#home">Home</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#pricing">Pricing</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#about">About</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#feedback">Feedback</a>
-                            </li>
-                            <li class="nav-item ms-3">
+                        <div class="d-flex ms-auto align-items-center">
+                            <ul class="navbar-nav glass-pill me-3">
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#home">Home</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#pricing">Pricing</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#about">About</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#feedback">Feedback</a>
+                                </li>
+                            </ul>
+                            <div class="d-flex align-items-center">
                                 <button class="btn clean-btn-ghost me-3" onclick="showSignInModal()">
                                     Sign In
                                 </button>
-                            </li>
-                            <li class="nav-item">
                                 <button class="btn clean-btn-primary" onclick="showCreateAccountModal()">
                                     Start 3-Day Free Trial
                                 </button>
-                            </li>
-                        </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </nav>
