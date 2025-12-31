@@ -3,14 +3,16 @@ import os
 import uuid
 import zipfile
 from collections import defaultdict
+from datetime import timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from google.cloud import storage
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.api.process_tasks import detector as process_detector
+from app.core.config import settings
 from app.models.schemas import ExportRequest
 from app.models.user import User
 from app.services.detector import NumberDetector
@@ -26,6 +28,44 @@ detector = NumberDetector()
 # Store export metadata with user association
 export_metadata: Dict[str, dict] = {}
 
+# GCS Configuration (reusing pattern from upload.py)
+BUCKET_NAME = settings.bucket_name
+
+# Initialize GCS Client (reusing pattern from upload.py)
+try:
+    if BUCKET_NAME:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+    else:
+        bucket = None
+except Exception as e:
+    bucket = None
+
+
+def generate_signed_download_url(blob, expires_minutes=15):
+    """
+    Reuse existing signed URL logic from upload.py:99-106
+    """
+    try:
+        from google.auth import default
+        from google.auth.transport import requests as google_requests
+        
+        credentials, _ = default()
+        auth_request = google_requests.Request()
+        credentials.refresh(auth_request)
+        
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(minutes=expires_minutes),
+            method="GET",
+            service_account_email=getattr(credentials, 'service_account_email', None),
+            access_token=getattr(credentials, 'token', None),
+        )
+        return signed_url
+    except Exception as e:
+        logger.error(f"Failed to generate signed URL: {e}")
+        return None
+
 
 @router.post("/export")
 async def create_export(
@@ -38,18 +78,21 @@ async def create_export(
 
     export_id = str(uuid.uuid4())
 
-    # Create user-specific export directory
-    user_export_dir = os.path.join(EXPORT_DIR, str(current_user.id))
-    os.makedirs(user_export_dir, exist_ok=True)
-
     zip_filename = f"tag_photos_{export_id}.zip"
-    zip_path = os.path.join(user_export_dir, zip_filename)
+    
+    # GCS storage path
+    gcs_blob_path = f"{current_user.id}/exports/{zip_filename}"
+    
+    # Temporary local path for ZIP creation before GCS upload
+    temp_dir = os.path.join(EXPORT_DIR, "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_zip_path = os.path.join(temp_dir, f"{export_id}_{zip_filename}")
 
     # Store metadata for access control
     export_metadata[export_id] = {
         "user_id": current_user.id,
         "filename": zip_filename,
-        "path": zip_path,
+        "gcs_blob_path": gcs_blob_path,
     }
 
     try:
@@ -63,7 +106,8 @@ async def create_export(
         files_added = 0
         total_size = 0
 
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        # Create temporary ZIP file for GCS upload
+        with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             for bib_number, photos in grouped_photos.items():
                 folder_name = (
                     f"Bib_{bib_number}" if bib_number != "unknown" else "Unknown"
@@ -101,8 +145,34 @@ async def create_export(
                         logger.warning(f"Skipping missing file: {photo_path} for photo_id: {photo_id}")
 
         logger.info(f"Export {export_id} completed: {files_added} files added, total size: {total_size} bytes")
-        logger.info(f"ZIP file created at: {zip_path}, size: {os.path.getsize(zip_path) if os.path.exists(zip_path) else 'N/A'}")
+        
+        zip_size = os.path.getsize(temp_zip_path) if os.path.exists(temp_zip_path) else 0
+        logger.info(f"Temporary ZIP file created: {temp_zip_path}, size: {zip_size}")
 
+        # Upload ZIP to GCS (required - no fallback)
+        if not bucket:
+            raise HTTPException(status_code=500, detail="Google Cloud Storage not configured")
+            
+        if not os.path.exists(temp_zip_path):
+            raise HTTPException(status_code=500, detail="Failed to create export file")
+            
+        try:
+            blob = bucket.blob(gcs_blob_path)
+            with open(temp_zip_path, 'rb') as zip_file:
+                blob.upload_from_file(zip_file, content_type='application/zip')
+            
+            logger.info(f"✅ ZIP uploaded to GCS: {gcs_blob_path}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to upload ZIP to GCS: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload export: {str(e)}")
+            
+        finally:
+            # Always clean up temporary file
+            if os.path.exists(temp_zip_path):
+                os.remove(temp_zip_path)
+                logger.info(f"🧹 Cleaned up temporary ZIP file: {temp_zip_path}")
+        
         return {
             "export_id": export_id,
             "download_url": f"/api/download/file/{export_id}",
@@ -120,36 +190,38 @@ async def create_export(
 async def download_export(
     export_id: str, current_user: User = Depends(get_current_user)
 ):
-    # Default filename in case it's not set elsewhere
-    zip_filename = f"export_{export_id}.zip"
+    """
+    Return signed URL for ZIP download instead of streaming the file.
+    Reuses existing signed URL logic from upload.py.
+    """
     
     # Check if export exists and user has access
     if export_id not in export_metadata:
-        # Try to reconstruct path for backwards compatibility
-        user_export_dir = os.path.join(EXPORT_DIR, str(current_user.id))
-        zip_filename = f"tag_photos_{export_id}.zip"
-        zip_path = os.path.join(user_export_dir, zip_filename)
-
-        if not os.path.exists(zip_path):
-            # Try legacy path without user directory
-            legacy_path = os.path.join(EXPORT_DIR, zip_filename)
-            if not os.path.exists(legacy_path):
-                raise HTTPException(status_code=404, detail="Export not found")
-            zip_path = legacy_path
-    else:
-        export_info = export_metadata[export_id]
-        if export_info["user_id"] != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
-        zip_path = export_info["path"]
-        # Extract filename from path for proper download name
-        zip_filename = os.path.basename(zip_path)
-
-    if not os.path.exists(zip_path):
-        raise HTTPException(status_code=404, detail="Export file not found")
-
-    return FileResponse(
-        path=zip_path, filename=zip_filename, media_type="application/zip"
-    )
+        raise HTTPException(status_code=404, detail="Export not found")
+    
+    export_info = export_metadata[export_id]
+    if export_info["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # GCS signed URL (production method)
+    if bucket and "gcs_blob_path" in export_info:
+        gcs_blob_path = export_info["gcs_blob_path"]
+        blob = bucket.blob(gcs_blob_path)
+        
+        if blob.exists():
+            # Generate signed URL using existing logic from upload.py
+            signed_url = generate_signed_download_url(blob, expires_minutes=15)
+            if signed_url:
+                logger.info(f"✅ Generated signed URL for export {export_id}")
+                return {
+                    "signed_url": signed_url,
+                    "filename": export_info["filename"],
+                    "expires_in_minutes": 15,
+                }
+    
+    # If we reach here, the file is not available
+    logger.error(f"❌ Export {export_id} not found in GCS or failed to generate signed URL")
+    raise HTTPException(status_code=404, detail="Export file not found or expired")
 
 
 def find_photo_path(photo_id: str, user_id: int = None) -> Optional[str]:

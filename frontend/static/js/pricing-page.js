@@ -86,7 +86,7 @@ class PricingPage {
 
         if (!response.ok) {
             const error = await response.json();
-            alert(`Failed to start payment: ${error.detail}`);
+            showNotification(`Failed to start payment: ${error.detail}`, 'error');
             this.render(); // Go back to pricing cards
             return;
         }

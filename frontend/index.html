@@ -11,13 +11,22 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Custom CSS -->
+    <!-- Custom CSS - Modular Structure -->
+    <link rel="stylesheet" href="static/css/core.css">
+    <link rel="stylesheet" href="static/css/components.css">
+    <link rel="stylesheet" href="static/css/photo-viewer.css">
     <link rel="stylesheet" href="static/css/global.css">
     
     <!-- Browser Image Compression -->
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js"></script>
+    
+    <!-- dotLottie Animations -->
+    <script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.8.11/dist/dotlottie-wc.js" type="module"></script>
 </head>
 <body>
+    <!-- Modern Toast Container -->
+    <div id="alert-container"></div>
+    
     <div id="app">
         <!-- Landing Page -->
         <div id="landing-page">
@@ -35,30 +44,30 @@
                     </button>
                     
                     <div class="collapse navbar-collapse" id="navbarNav">
-                        <ul class="navbar-nav ms-auto align-items-center">
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#home">Home</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#pricing">Pricing</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#about">About</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link clean-nav-link" href="#feedback">Feedback</a>
-                            </li>
-                            <li class="nav-item ms-3">
+                        <div class="d-flex ms-auto align-items-center">
+                            <ul class="navbar-nav glass-pill me-3">
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#home">Home</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#pricing">Pricing</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#about">About</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link clean-nav-link" href="#feedback">Feedback</a>
+                                </li>
+                            </ul>
+                            <div class="d-flex align-items-center">
                                 <button class="btn clean-btn-ghost me-3" onclick="showSignInModal()">
                                     Sign In
                                 </button>
-                            </li>
-                            <li class="nav-item">
                                 <button class="btn clean-btn-primary" onclick="showCreateAccountModal()">
                                     Start 3-Day Free Trial
                                 </button>
-                            </li>
-                        </ul>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </nav>
@@ -623,24 +632,37 @@
                 </div>
             </div>
 
-            <!-- Processing Section -->
+            <!-- Processing Section with Unified Progress -->
             <div id="processing-section" class="d-none">
-                <div class="row justify-content-center">
-                    <div class="col-lg-8">
-                        <div class="card shadow">
-                            <div class="card-body p-5">
-                                <h3 class="card-title text-center mb-4">
-                                    <i class="fas fa-cog fa-spin text-primary me-2"></i>
-                                    Processing Photos
-                                </h3>
-                                
-                                <div class="text-center mb-4">
-                                    <div class="progress mb-3" style="height: 20px;">
-                                        <div id="progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                    <p id="progress-text" class="text-muted">Initializing...</p>
+                <div class="row">
+                    <div class="col-12 text-center">
+                        <!-- Premium SaaS Progress Interface -->
+                        <div class="animation-viewport mb-3">
+                            <dotlottie-wc
+                                id="progress-animation"
+                                src="https://lottie.host/e6756db5-32c8-42f8-ac7c-59e803a2b16f/tzIArfl6ZX.lottie"
+                                autoplay
+                                loop
+                                renderer="svg">
+                            </dotlottie-wc>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-end mx-auto mb-2" style="max-width: 600px; margin-top: 2rem;">
+                            <h5 id="journey-status" class="fw-bold text-dark mb-0">Uploading photos...</h5>
+                            <span id="progress-percentage" class="fw-bold h5 mb-0" style="color: #1a1a1a;">25%</span>
+                        </div>
+
+                        <div class="journey-bar-wrapper mx-auto" style="max-width: 600px; position: relative; z-index: 10;">
+                            <div class="journey-bar-container" style="height: 12px; background: #f1f5f9; border-radius: 20px; overflow: hidden; position: relative; z-index: 10;">
+                                <div id="unified-progress-bar" 
+                                     class="journey-bar-fill" 
+                                     style="width: 25%; height: 100%; background: linear-gradient(90deg, #e30022, #ff6b6b); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative; z-index: 10;">
                                 </div>
                             </div>
+                            
+                            <button id="cancel-unified-process" class="btn btn-link text-muted mt-4 text-decoration-none small">
+                                Cancel Upload
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -807,102 +829,106 @@
                         <button type="button" class="btn btn-outline-light btn-sm me-2" id="fullscreenBtn" title="Fullscreen (F11)">
                             <i class="fas fa-expand"></i>
                         </button>
-                        <button type="button" class="btn btn-outline-light btn-sm me-2" id="downloadPhotoBtn" title="Download">
-                            <i class="fas fa-download"></i>
-                        </button>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                 </div>
                 
-                <div class="modal-body p-0 d-flex flex-column">
-                    <!-- Photo Container with Navigation -->
-                    <div class="position-relative d-flex align-items-center justify-content-center photo-viewing-area">
-                        <!-- Navigation Arrows -->
-                        <button type="button" class="btn btn-dark btn-lg position-absolute start-0 ms-3 z-3" id="prevPhotoBtn" title="Previous (Left Arrow)">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                        <button type="button" class="btn btn-dark btn-lg position-absolute end-0 me-3 z-3" id="nextPhotoBtn" title="Next (Right Arrow)">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
-                        
-                        <!-- Photo Container with Zoom -->
-                        <div class="photo-container w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
-                            <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
-                            
-                            <!-- Loading Spinner -->
-                            <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
+                <div class="modal-body p-0">
+                    <!-- Split Screen Layout -->
+                    <div class="photo-modal-split">
+                        <!-- Left Column: Image Viewer -->
+                        <div class="photo-viewer-left">
+                            <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
+                                <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
+                                
+                                <!-- Loading Spinner -->
+                                <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                                
+                                <!-- Zoom Controls -->
+                                <div class="position-absolute top-50 end-0 me-3 d-flex flex-column gap-2" id="zoomControls">
+                                    <button type="button" class="btn btn-dark btn-sm" id="zoomInBtn" title="Zoom In (+)">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-dark btn-sm" id="zoomOutBtn" title="Zoom Out (-)">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-dark btn-sm" id="zoomResetBtn" title="Reset Zoom (0)">
+                                        <i class="fas fa-search"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Zoom Controls -->
-                        <div class="position-absolute top-50 end-0 me-3 d-flex flex-column gap-2" id="zoomControls">
-                            <button type="button" class="btn btn-dark btn-sm" id="zoomInBtn" title="Zoom In (+)">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                            <button type="button" class="btn btn-dark btn-sm" id="zoomOutBtn" title="Zoom Out (-)">
-                                <i class="fas fa-minus"></i>
-                            </button>
-                            <button type="button" class="btn btn-dark btn-sm" id="zoomResetBtn" title="Reset Zoom (0)">
-                                <i class="fas fa-search"></i>
-                            </button>
+                        <!-- Right Column: Labeling Sidebar -->
+                        <div class="photo-viewer-right">
+                            <!-- Header -->
+                            <div class="sidebar-header">
+                                <h6 id="sidebarPhotoTitle">Photo Details</h6>
+                            </div>
+                            
+                            
+                            <!-- Bib Input Section -->
+                            <div class="bib-input-section">
+                                <label class="bib-input-label" for="inlineBibInput">Bib Number</label>
+                                <input type="text" 
+                                       class="form-control bib-input-field" 
+                                       id="inlineBibInput" 
+                                       placeholder="Enter bib number"
+                                       maxlength="6" 
+                                       pattern="[0-9]{1,6}">
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="labeling-actions">
+                                <button type="button" class="btn btn-confirm-bib" id="confirmBibBtn">
+                                    <i class="fas fa-check me-2"></i>
+                                    Save Bib Number
+                                </button>
+                                <button type="button" class="btn btn-no-bib" id="noBibBtn">
+                                    <i class="fas fa-eye-slash me-2"></i>
+                                    No Bib Visible
+                                </button>
+                            </div>
+                            
+                            <!-- Photo Metadata -->
+                            <div class="photo-metadata">
+                                <div class="metadata-item" id="confidenceItem" style="display: none;">
+                                    <span class="metadata-label">AI Confidence:</span>
+                                    <span class="metadata-value" id="sidebarPhotoConfidence">95%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Keyboard Shortcuts -->
+                            <div class="shortcuts-hint">
+                                <h6>Keyboard Shortcuts</h6>
+                                <div class="shortcut-item">
+                                    <span>Save bib number</span>
+                                    <span class="shortcut-key">Enter</span>
+                                </div>
+                                <div class="shortcut-item">
+                                    <span>No bib visible</span>
+                                    <span class="shortcut-key">X</span>
+                                </div>
+                                <div class="shortcut-item">
+                                    <span>Previous photo</span>
+                                    <span class="shortcut-key">←</span>
+                                </div>
+                                <div class="shortcut-item">
+                                    <span>Next photo</span>
+                                    <span class="shortcut-key">→</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Thumbnail Strip -->
-                <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-90 p-2" id="thumbnailStrip">
-                    <div class="d-flex gap-2 justify-content-center overflow-auto" id="thumbnailContainer">
-                        <!-- Thumbnails will be populated here -->
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Fixed Photo Metadata Panel (Outside Modal) -->
-    <div class="text-white d-none photo-metadata-hidden" id="photoMetadata">
-        <div class="photo-metadata-enhanced">
-            <div class="photo-info-section">
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="fas fa-hashtag me-1"></i>
-                        Bib Number
-                    </div>
-                    <div class="info-value">
-                        <!-- Static display for detected photos -->
-                        <div id="photoBibNumberContainer" class="d-flex align-items-center gap-2">
-                            <div id="photoBibNumber">123</div>
-                            <button class="btn btn-sm d-none" 
-                                    id="editBibBtn" 
-                                    type="button" 
-                                    title="Edit bib number">
-                                <i class="fas fa-edit me-1"></i>
-                                Edit
-                            </button>
-                        </div>
-                        
-                        <!-- Enhanced Inline labeling for unknown/editing photos -->
-                        <div id="inlineLabelContainer" class="d-none">
-                            <!-- Content will be dynamically populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="fas fa-bullseye me-1"></i>
-                        Confidence
-                    </div>
-                    <div class="info-value confidence-display">
-                        <div class="confidence-badge-enhanced" id="photoConfidenceDetail">95.2%</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Gallery Modal -->
     <div class="modal fade" id="galleryModal" tabindex="-1" aria-labelledby="galleryModalLabel" aria-hidden="true">
@@ -980,50 +1006,6 @@
         </div>
     </div>
 
-    <!-- Single Photo Manual Labeling Modal -->
-    <div class="modal fade" id="manualLabelModal" tabindex="-1" aria-labelledby="manualLabelModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="manualLabelModalLabel">
-                        <i class="fas fa-tag me-2"></i>
-                        Label Photo
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <img id="labelPhotoPreview" src="" alt="Photo to label" class="img-fluid rounded mb-3">
-                            <p class="text-muted small" id="labelPhotoFilename">filename.jpg</p>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="manualBibNumber" class="form-label">Bib Number</label>
-                                <input type="text" class="form-control form-control-lg" id="manualBibNumber" 
-                                       placeholder="Enter bib number" maxlength="6" pattern="[0-9]{1,6}">
-                                <div class="form-text">Enter 1-6 digits (1-99999)</div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Current Status</label>
-                                <div class="alert alert-warning mb-0">
-                                    <i class="fas fa-question-circle me-2"></i>
-                                    <span id="currentPhotoStatus">No bib number detected</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" id="apply-single-label-btn" class="btn btn-primary">
-                        <i class="fas fa-check me-2"></i>
-                        Apply Label
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 
 
     <!-- Feedback Modal -->
