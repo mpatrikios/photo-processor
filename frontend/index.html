@@ -16,6 +16,9 @@
     
     <!-- Browser Image Compression -->
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js"></script>
+    
+    <!-- dotLottie Animations -->
+    <script src="https://unpkg.com/@lottiefiles/dotlottie-wc@0.8.11/dist/dotlottie-wc.js" type="module"></script>
 </head>
 <body>
     <!-- Modern Toast Container -->
@@ -626,24 +629,37 @@
                 </div>
             </div>
 
-            <!-- Processing Section -->
+            <!-- Processing Section with Unified Progress -->
             <div id="processing-section" class="d-none">
-                <div class="row justify-content-center">
-                    <div class="col-lg-8">
-                        <div class="card shadow">
-                            <div class="card-body p-5">
-                                <h3 class="card-title text-center mb-4">
-                                    <i class="fas fa-cog fa-spin text-primary me-2"></i>
-                                    Processing Photos
-                                </h3>
-                                
-                                <div class="text-center mb-4">
-                                    <div class="progress mb-3" style="height: 20px;">
-                                        <div id="progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                    <p id="progress-text" class="text-muted">Initializing...</p>
+                <div class="row">
+                    <div class="col-12 text-center">
+                        <!-- Premium SaaS Progress Interface -->
+                        <div class="animation-viewport mb-3">
+                            <dotlottie-wc
+                                id="progress-animation"
+                                src="https://lottie.host/e6756db5-32c8-42f8-ac7c-59e803a2b16f/tzIArfl6ZX.lottie"
+                                autoplay
+                                loop
+                                renderer="svg">
+                            </dotlottie-wc>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-end mx-auto mb-2" style="max-width: 600px; margin-top: 2rem;">
+                            <h5 id="journey-status" class="fw-bold text-dark mb-0">Uploading photos...</h5>
+                            <span id="progress-percentage" class="fw-bold h5 mb-0" style="color: #1a1a1a;">25%</span>
+                        </div>
+
+                        <div class="journey-bar-wrapper mx-auto" style="max-width: 600px; position: relative; z-index: 10;">
+                            <div class="journey-bar-container" style="height: 12px; background: #f1f5f9; border-radius: 20px; overflow: hidden; position: relative; z-index: 10;">
+                                <div id="unified-progress-bar" 
+                                     class="journey-bar-fill" 
+                                     style="width: 25%; height: 100%; background: linear-gradient(90deg, #e30022, #ff6b6b); transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative; z-index: 10;">
                                 </div>
                             </div>
+                            
+                            <button id="cancel-unified-process" class="btn btn-link text-muted mt-4 text-decoration-none small">
+                                Cancel Upload
+                            </button>
                         </div>
                     </div>
                 </div>

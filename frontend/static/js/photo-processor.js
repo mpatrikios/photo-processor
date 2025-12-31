@@ -29,6 +29,9 @@ class PhotoProcessor {
         this.hasRestoredSession = false;
         this.restorationInProgress = false;
         
+        // Unified progress tracking
+        this.unifiedProgress = null;
+        
         // Initialize authentication from localStorage
         const storedToken = localStorage.getItem('auth_token');
         this.authToken = storedToken || null;
@@ -136,25 +139,8 @@ class PhotoProcessor {
     }
 
     showProcessingWarning() {
-        // Add warning banner if not already present
-        let warningBanner = document.getElementById('processing-warning-banner');
-        if (!warningBanner) {
-            warningBanner = document.createElement('div');
-            warningBanner.id = 'processing-warning-banner';
-            warningBanner.className = 'alert alert-warning alert-dismissible d-flex align-items-center position-fixed';
-            warningBanner.style.cssText = 'top: 80px; left: 50%; transform: translateX(-50%); z-index: 1060; max-width: 600px;';
-            warningBanner.innerHTML = `
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <div>
-                    <strong>Processing in Progress</strong><br>
-                    <small>Don't close or reload this page! Your photos are being processed and manual labels are being saved. Progress is automatically saved and will resume if the page refreshes.</small>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            document.body.appendChild(warningBanner);
-        }
-        
-        // Add beforeunload warning
+        // Warning message is now integrated into the processing page HTML
+        // Just add beforeunload warning to prevent accidental page close
         this.beforeUnloadHandler = (e) => {
             if (this.isActivelyProcessing) {
                 const message = 'Photo processing is in progress. Manual labels are saved, but leaving now may interrupt processing. Are you sure you want to leave?';
@@ -170,13 +156,8 @@ class PhotoProcessor {
     }
 
     hideProcessingWarning() {
-        // Remove warning banner
-        const warningBanner = document.getElementById('processing-warning-banner');
-        if (warningBanner) {
-            warningBanner.remove();
-        }
-        
-        // Remove beforeunload warning
+        // Warning message is now integrated into the processing page HTML
+        // Just remove beforeunload warning
         if (this.beforeUnloadHandler) {
             window.removeEventListener('beforeunload', this.beforeUnloadHandler);
             this.beforeUnloadHandler = null;
@@ -293,9 +274,6 @@ class PhotoProcessor {
                 // Show results section instead of upload section
                 this.groupedPhotos = this.convertGroupedPhotosObjectToArray(results);
                 this.showResultsSection();
-                
-                // Show restoration notification
-                showNotification(`Restored your previous session (${Array.isArray(results) ? results.length : 0} photo groups)`, 'info');
                 
                 // Mark session as restored to prevent duplicate notifications
                 this.hasRestoredSession = true;
@@ -966,7 +944,7 @@ class PhotoProcessor {
         await this.handleFileSelect(files);
     }
 
-    // File Selection Handler
+    // File Selection Handler - Validation Only (No Compression)
     async handleFileSelect(files, isFolder = false) {
         // Clear any previous completed job state when starting new upload
         if (window.stateManager) {
@@ -976,79 +954,24 @@ class PhotoProcessor {
         
         const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
         const SUPPORTED_FORMATS = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        const COMPRESS_THRESHOLD = 1 * 1024 * 1024; // Compress files larger than 1MB (aggressive optimization)
 
         const invalidFiles = [];
-        const toProcess = [];
+        const validFiles = [];
         
-        // First pass: filter invalid files
+        // Validate files: format and size only
         Array.from(files).forEach(file => {
             if (!SUPPORTED_FORMATS.includes(file.type)) {
-                invalidFiles.push(file.name);
+                invalidFiles.push(`${file.name} - unsupported format`);
+            } else if (file.size > MAX_FILE_SIZE) {
+                invalidFiles.push(`${file.name} - too large (${this.formatFileSize(file.size)})`);
             } else {
-                toProcess.push(file);
+                validFiles.push(file);
+                console.log(`Added ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB (raw)`);
             }
         });
 
-        // Show compression progress if needed
-        // Show compression progress for 3072px optimization
-        const needsCompression = toProcess.some(file => file.size > COMPRESS_THRESHOLD);
-        let progressModal = null;
-        
-        if (needsCompression && toProcess.length > 0) {
-            progressModal = this.showCompressionProgress(toProcess.length);
-        }
-
-        // Process files with compression
-        const processedFiles = [];
-        let processedCount = 0;
-        
-        for (const file of toProcess) {
-            try {
-                let finalFile = file;
-                
-                // 3072px Max Accuracy: Optimal for Gemini's internal tiling + OCR precision
-                if (file.size > COMPRESS_THRESHOLD) {
-                    const options = {
-                        maxSizeMB: 5,  // Safe under 20MB API batch limit
-                        maxWidthOrHeight: 3072,  // Matches Gemini's optimal processing tiles
-                        useWebWorker: true,
-                        fileType: file.type,
-                        preserveExif: false,  // Remove EXIF for smaller files
-                        initialQuality: 0.95  // High quality prevents digit edge artifacts
-                    };
-                    
-                    console.log(`Optimizing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB → 3072px max accuracy`);
-                    finalFile = await imageCompression(file, options);
-                    
-                    // Preserve original filename
-                    finalFile = new File([finalFile], file.name, { type: finalFile.type });
-                    console.log(`Optimized to: ${(finalFile.size / 1024 / 1024).toFixed(1)}MB (3072px, Q95 for OCR)`);
-                } else {
-                    console.log(`Using original file: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
-                }  // Debug log
-                
-                processedFiles.push(finalFile);
-                processedCount++;
-                
-                // Update compression progress
-                if (progressModal) {
-                    this.updateCompressionProgress(processedCount, toProcess.length);
-                }
-                
-            } catch (error) {
-                console.error(`Failed to process ${file.name}:`, error);
-                invalidFiles.push(file.name);
-            }
-        }
-
-        // Hide progress modal
-        if (progressModal) {
-            this.hideCompressionProgress();
-        }
-
-        // Add to existing files instead of replacing
-        this.selectedFiles = [...this.selectedFiles, ...processedFiles];
+        // Add valid files to selection (raw, uncompressed)
+        this.selectedFiles = [...this.selectedFiles, ...validFiles];
 
         // Remove duplicates based on file name and size
         this.selectedFiles = this.selectedFiles.filter((file, index, self) =>
@@ -1300,13 +1223,27 @@ class PhotoProcessor {
         }
 
         try {
-            console.log(`📦 Starting batch upload of ${this.selectedFiles.length} photos...`);
+            console.log(`📦 Starting unified upload process for ${this.selectedFiles.length} photos...`);
             
+            // Initialize unified progress manager
+            this.unifiedProgress = new UnifiedProgressManager();
+            this.showUnifiedProgress();
+            
+            // Disable upload button and show unified progress
             document.getElementById('upload-btn').disabled = true;
-            document.getElementById('upload-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
+            document.getElementById('upload-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
 
-            // Upload in batches to avoid Cloud Run 32MB limit
-            const allPhotoIds = await this.uploadInBatches(this.selectedFiles);
+            // Phase 1: Compression (0-25%)
+            this.unifiedProgress.setPhase('compression', 0, { totalFiles: this.selectedFiles.length });
+            const compressedFiles = await this.compressFilesWithUnifiedProgress(this.selectedFiles);
+            
+            // Phase 2: Upload (25-50%)
+            const totalBatches = Math.ceil(compressedFiles.length / 5);
+            this.unifiedProgress.setPhase('upload', 0, { 
+                totalFiles: compressedFiles.length, 
+                totalBatches: totalBatches 
+            });
+            const allPhotoIds = await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
             
             console.log(`✅ All batches uploaded successfully. Total photos: ${allPhotoIds.length}`);
             
@@ -1318,12 +1255,16 @@ class PhotoProcessor {
                 });
             }
             
-            this.showProcessingSection();
+            // Phase 3: Processing (50-100%)
+            this.unifiedProgress.setPhase('processing', 0);
             this.showProcessingWarning();
-            this.startProcessing(allPhotoIds);
+            await this.startProcessingWithUnifiedProgress(allPhotoIds);
 
         } catch (error) {
             console.error('🔐 Upload error:', error);
+            this.hideProcessingWarning();
+            this.showUploadSection();
+            
             if (error.message.includes('quota') || error.message.includes('limit')) {
                 this.showError(`Quota exceeded: ${error.message}`);
             } else {
@@ -1331,6 +1272,183 @@ class PhotoProcessor {
             }
             document.getElementById('upload-btn').disabled = false;
             document.getElementById('upload-btn').innerHTML = '<i class="fas fa-upload me-2"></i>Upload Photos';
+        }
+    }
+
+    showUnifiedProgress() {
+        // Hide all other sections
+        const sections = ['upload-section', 'results-section', 'unknown-photos-section'];
+        sections.forEach(sectionId => {
+            const section = document.getElementById(sectionId);
+            if (section) section.classList.add('d-none');
+        });
+        
+        // Show processing section with unified progress
+        this.showProcessingSection();
+    }
+
+    async compressFilesWithUnifiedProgress(files) {
+        const COMPRESS_THRESHOLD = 1 * 1024 * 1024;
+        const processedFiles = [];
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            let finalFile = file;
+            
+            if (file.size > COMPRESS_THRESHOLD) {
+                const options = {
+                    maxSizeMB: 5,
+                    maxWidthOrHeight: 3072,
+                    useWebWorker: true,
+                    fileType: file.type,
+                    preserveExif: false,
+                    initialQuality: 0.95
+                };
+                
+                console.log(`Optimizing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB → 3072px max accuracy`);
+                finalFile = await imageCompression(file, options);
+                finalFile = new File([finalFile], file.name, { type: finalFile.type });
+                console.log(`Optimized to: ${(finalFile.size / 1024 / 1024).toFixed(1)}MB (3072px, Q95 for OCR)`);
+            }
+            
+            processedFiles.push(finalFile);
+            
+            // Update compression progress (0-100% within compression phase)
+            const progressPercent = ((i + 1) / files.length) * 100;
+            this.unifiedProgress?.updatePhaseProgress(progressPercent);
+        }
+        
+        return processedFiles;
+    }
+
+    async uploadInBatchesWithUnifiedProgress(files) {
+        const BATCH_SIZE = 5;
+        const CONCURRENT_BATCHES = 3;
+        const batches = [];
+        const allPhotoIds = [];
+        
+        // Split files into batches
+        for (let i = 0; i < files.length; i += BATCH_SIZE) {
+            batches.push(files.slice(i, i + BATCH_SIZE));
+        }
+        
+        console.log(`📦 Split ${files.length} photos into ${batches.length} batches of ${BATCH_SIZE} photos each`);
+        
+        for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+            const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+            const batchNumbers = concurrentBatches.map((_, idx) => i + idx + 1);
+            
+            // Update progress with current batch info
+            this.unifiedProgress?.setPhase('upload', 
+                (i / batches.length) * 100, 
+                { currentBatch: i + 1, totalBatches: batches.length }
+            );
+            
+            const batchPromises = concurrentBatches.map((batch, idx) => 
+                this.uploadBatch(batch, batchNumbers[idx], batches.length)
+            );
+            
+            const batchResults = await Promise.all(batchPromises);
+            batchResults.forEach(result => allPhotoIds.push(...result));
+            
+            // Update progress after completing these batches
+            const completedBatches = Math.min(i + CONCURRENT_BATCHES, batches.length);
+            this.unifiedProgress?.updatePhaseProgress((completedBatches / batches.length) * 100);
+        }
+        
+        return allPhotoIds;
+    }
+
+    async startProcessingWithUnifiedProgress(allPhotoIds) {
+        // Start the processing job
+        const response = await fetch(`${this.apiBase}/process/start`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(true),
+            credentials: 'include',
+            body: JSON.stringify(allPhotoIds)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to start processing');
+        }
+
+        const jobData = await response.json();
+        this.currentJobId = jobData.job_id;
+        
+        // Store the job ID for potential restoration
+        if (window.stateManager) {
+            window.stateManager.set('processing.currentJobId', this.currentJobId);
+            window.stateManager.set('processing.startTime', new Date().toISOString());
+            window.stateManager.set('processing.totalPhotos', allPhotoIds.length);
+        }
+
+        // Poll processing status with unified progress
+        await this.pollProcessingStatusWithUnifiedProgress();
+    }
+
+    async pollProcessingStatusWithUnifiedProgress() {
+        const startTime = Date.now();
+        const maxWaitTime = 600000; // 10 minutes max
+        
+        while (true) {
+            try {
+                const response = await fetch(`${this.apiBase}/process/status/${this.currentJobId}`, {
+                    method: 'GET',
+                    headers: this.getAuthHeaders(false),
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to check processing status');
+                }
+
+                const statusData = await response.json();
+                console.log('📊 Processing Status:', statusData);
+
+                // Update unified progress in processing phase (50-100%)
+                if (statusData.progress !== undefined) {
+                    this.unifiedProgress?.updatePhaseProgress(statusData.progress);
+                }
+
+                if (statusData.status === 'completed') {
+                    this.unifiedProgress?.complete();
+                    
+                    // Fetch and display results
+                    if (this.isUploadMoreOperation) {
+                        // Upload more: merge new results with existing
+                        await this.fetchAndMergeResults();
+                        this.hideProcessingWarning();
+                        // Stay on results section, just refresh display
+                        this.displayResults();
+                        this.showSuccess('Additional photos processed and merged!');
+                        this.isUploadMoreOperation = false; // Reset flag
+                    } else {
+                        // Normal upload: show results section
+                        await this.fetchResults();
+                        this.hideProcessingWarning();
+                        this.showResultsSection();
+                    }
+                    return;
+                }
+
+                if (statusData.status === 'failed') {
+                    throw new Error(statusData.error || 'Processing failed');
+                }
+
+                // Check timeout
+                if (Date.now() - startTime > maxWaitTime) {
+                    throw new Error('Processing timeout - please try again');
+                }
+
+                // Wait before next poll
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            } catch (error) {
+                console.error('Processing status error:', error);
+                this.hideProcessingWarning();
+                this.showUploadSection();
+                throw error;
+            }
         }
     }
 
@@ -1665,6 +1783,57 @@ class PhotoProcessor {
         }
     }
 
+    async fetchAndMergeResults(retryCount = 0) {
+        try {
+            const response = await fetch(`${this.apiBase}/process/results/${this.currentJobId}`, {
+                headers: this.getAuthHeaders(true),
+                credentials: 'include'
+            });
+            if (!response.ok) {
+                // Handle 404 job not found
+                if (response.status === 404) {
+                    console.warn(`Job ${this.currentJobId} not found when fetching results (404). Server may have restarted.`);
+                    this.showError('Processing job was lost due to server restart. Please upload your photos again.');
+                    return;
+                }
+                
+                // If results aren't ready yet and we haven't retried too many times, try again
+                if (response.status === 400 && retryCount < 3) {
+                    console.log(`Results not ready yet, retrying in 1 second... (attempt ${retryCount + 1})`);
+                    setTimeout(() => this.fetchAndMergeResults(retryCount + 1), 1000);
+                    return;
+                }
+                throw new Error(`Results fetch failed: ${response.statusText}`);
+            }
+
+            const newGroupedPhotosObj = await response.json();
+            console.log('New grouped photos received for merging:', newGroupedPhotosObj);
+            
+            // Convert Object format to Array format for compatibility with existing code
+            const newGroupedPhotos = this.convertGroupedPhotosObjectToArray(newGroupedPhotosObj);
+            
+            // Merge with existing results using existing method
+            this.mergeGroupedPhotos(newGroupedPhotos);
+            
+            // Save job completion state to localStorage for persistence
+            if (window.stateManager && this.currentJobId) {
+                window.stateManager.markJobCompleted(this.currentJobId, 'completed');
+                console.log(`Job ${this.currentJobId} completion state saved to localStorage`);
+            }
+
+        } catch (error) {
+            console.error('Results fetch and merge error:', error);
+
+            // If this is the first attempt, try once more after a delay
+            if (retryCount === 0) {
+                console.log('Retrying results fetch after 2 seconds...');
+                setTimeout(() => this.fetchAndMergeResults(1), 2000);
+            } else {
+                this.showError('Failed to fetch additional results. Please try again.');
+            }
+        }
+    }
+
     // UI Section Management
     showProcessingSection() {
         document.getElementById('upload-section').classList.add('d-none');
@@ -1960,65 +2129,6 @@ class PhotoProcessor {
         this.showUploadSection();
     }
 
-    showCompressionProgress(totalFiles) {
-        // Create a progress modal for compression
-        const progressHtml = `
-            <div id="compressionProgressModal" class="modal fade" data-bs-backdrop="static" data-bs-keyboard="false">
-                <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content">
-                        <div class="modal-body text-center p-4">
-                            <h5 class="mb-3">Optimizing for Maximum OCR Accuracy</h5>
-                            <div class="progress mb-3" style="height: 25px;">
-                                <div id="compressionProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                                     role="progressbar" style="width: 0%">
-                                    <span id="compressionProgressText">0 / ${totalFiles}</span>
-                                </div>
-                            </div>
-                            <p class="text-muted mb-0">Processing at 3072px with 95% quality for optimal OCR...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Add modal to body if not exists
-        if (!document.getElementById('compressionProgressModal')) {
-            document.body.insertAdjacentHTML('beforeend', progressHtml);
-        }
-        
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('compressionProgressModal'));
-        modal.show();
-        
-        return modal;
-    }
-    
-    updateCompressionProgress(current, total) {
-        const progressBar = document.getElementById('compressionProgressBar');
-        const progressText = document.getElementById('compressionProgressText');
-        
-        if (progressBar && progressText) {
-            const percentage = Math.round((current / total) * 100);
-            progressBar.style.width = `${percentage}%`;
-            progressText.textContent = `${current} / ${total}`;
-        }
-    }
-    
-    hideCompressionProgress() {
-        const modalEl = document.getElementById('compressionProgressModal');
-        if (modalEl) {
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) {
-                modal.hide();
-            }
-            // Clean up modal after hiding
-            setTimeout(() => {
-                if (modalEl.parentNode) {
-                    modalEl.parentNode.removeChild(modalEl);
-                }
-            }, 500);
-        }
-    }
 
     showError(message) {
         // You can enhance this with a proper modal or toast notification
@@ -2205,11 +2315,6 @@ class PhotoProcessor {
             return;
         }
 
-        const formData = new FormData();
-        this.modalSelectedFiles.forEach(file => {
-            formData.append('files', file);
-        });
-
         try {
             const modalUploadBtn = document.getElementById('modal-upload-btn');
             modalUploadBtn.disabled = true;
@@ -2219,50 +2324,34 @@ class PhotoProcessor {
             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadMoreModal'));
             modal.hide();
 
-            // Upload new photos
-            const response = await fetch(`${this.apiBase}/upload/photos`, {
-                method: 'POST',
-                headers: this.getAuthHeaders(false), // Don't include Content-Type for FormData
-                credentials: 'include',
-                body: formData
-            });
-
-            if (response.status === 402) {
-                // Payment Required - quota exceeded
-                const error = await response.json();
-                throw new Error(error.detail || 'Monthly photo limit exceeded');
-            }
-
-            if (!response.ok) {
-                throw new Error(`Upload failed: ${response.statusText}`);
-            }
-
-            const result = await response.json();
+            console.log(`📦 Starting unified upload more process for ${this.modalSelectedFiles.length} photos...`);
             
-            // Update quota display with new information
-            if (result.quota_info) {
-                this.updateQuotaDisplay(result.quota_info);
-            }
-
-            // Process new photos
-            const processResponse = await fetch(`${this.apiBase}/process/start`, {
-                method: 'POST',
-                headers: this.getAuthHeaders(true),
-                credentials: 'include',
-                body: JSON.stringify(result.photo_ids)
-            });
-
-            if (!processResponse.ok) {
-                throw new Error(`Processing failed: ${processResponse.statusText}`);
-            }
-
-            const job = await processResponse.json();
-
-            // Show processing notification
-            this.showSuccess(`Processing ${this.modalSelectedFiles.length} additional photos...`);
-
-            // Poll for completion and merge results
-            this.pollAdditionalProcessing(job.job_id);
+            // Use existing unified progress flow
+            this.selectedFiles = this.modalSelectedFiles;
+            this.unifiedProgress = new UnifiedProgressManager();
+            this.showUnifiedProgress();
+            
+            // Disable upload button and show unified progress
+            document.getElementById('upload-btn').disabled = true;
+            document.getElementById('upload-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+            
+            // Mark as upload more operation for result handling
+            this.isUploadMoreOperation = true;
+            
+            // Phase 1: Compression (0-25%)
+            this.unifiedProgress.setPhase('compression', 0, { totalFiles: this.selectedFiles.length });
+            const compressedFiles = await this.compressFilesWithUnifiedProgress(this.selectedFiles);
+            
+            // Phase 2: Upload (25-50%)
+            const BATCH_SIZE = 5;
+            const totalBatches = Math.ceil(compressedFiles.length / BATCH_SIZE);
+            this.unifiedProgress.setPhase('upload', 0, { totalBatches: totalBatches });
+            const allPhotoIds = await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
+            
+            // Phase 3: Processing (50-100%)
+            this.unifiedProgress.setPhase('processing', 0);
+            this.showProcessingWarning();
+            await this.startProcessingWithUnifiedProgress(allPhotoIds);
 
         } catch (error) {
             console.error('Upload more error:', error);
@@ -2271,45 +2360,11 @@ class PhotoProcessor {
             } else {
                 this.showError('Failed to upload additional photos. Please try again.');
             }
+            document.getElementById('upload-btn').disabled = false;
+            document.getElementById('upload-btn').innerHTML = '<i class="fas fa-upload me-2"></i>Upload Photos';
         }
     }
 
-    async pollAdditionalProcessing(jobId) {
-        try {
-            const response = await fetch(`${this.apiBase}/process/status/${jobId}`, {
-                headers: this.getAuthHeaders(true),
-                credentials: 'include'
-            });
-            if (!response.ok) throw new Error(`Status check failed: ${response.statusText}`);
-
-            const job = await response.json();
-
-            if (job.status === 'completed') {
-                // Fetch new results
-                const resultsResponse = await fetch(`${this.apiBase}/process/results/${jobId}`, {
-                    headers: this.getAuthHeaders(true),
-                    credentials: 'include'
-                });
-                if (!resultsResponse.ok) throw new Error(`Results fetch failed: ${resultsResponse.statusText}`);
-
-                const newGroupedPhotos = await resultsResponse.json();
-
-                // Merge with existing results
-                this.mergeGroupedPhotos(newGroupedPhotos);
-                this.displayResults();
-                this.showSuccess('Additional photos processed and merged!');
-
-            } else if (job.status === 'failed') {
-                this.showError('Processing additional photos failed.');
-            } else {
-                setTimeout(() => this.pollAdditionalProcessing(jobId), 2000);
-            }
-
-        } catch (error) {
-            console.error('Additional processing error:', error);
-            setTimeout(() => this.pollAdditionalProcessing(jobId), 2000);
-        }
-    }
 
     mergeGroupedPhotos(newGroupedPhotos) {
         // Merge new grouped photos with existing ones
@@ -3780,4 +3835,112 @@ class PhotoProcessor {
         }
     }
 
+}
+
+class UnifiedProgressManager {
+    constructor() {
+        this.phases = {
+            compression: { 
+                start: 0, 
+                end: 25, 
+                weight: 0.25,
+                title: 'Optimizing photos...',
+                description: 'Reducing file sizes for faster processing'
+            },
+            upload: { 
+                start: 25, 
+                end: 50, 
+                weight: 0.25,
+                title: 'Uploading batch {current} of {total}...',
+                description: 'Securely transferring your photos'
+            },
+            processing: { 
+                start: 50, 
+                end: 100, 
+                weight: 0.50,
+                title: 'Analyzing bib numbers...',
+                description: 'AI is detecting race numbers in your photos'
+            }
+        };
+        this.currentPhase = 'compression';
+        this.phaseProgress = 0;
+        this.totalFiles = 0;
+        this.currentBatch = 0;
+        this.totalBatches = 0;
+    }
+
+    setPhase(phase, progress = 0, meta = {}) {
+        this.currentPhase = phase;
+        this.phaseProgress = Math.min(100, Math.max(0, progress));
+        
+        if (meta.totalFiles) this.totalFiles = meta.totalFiles;
+        if (meta.currentBatch) this.currentBatch = meta.currentBatch;
+        if (meta.totalBatches) this.totalBatches = meta.totalBatches;
+        
+        // Switch animation based on phase
+        const animationElement = document.getElementById('progress-animation');
+        if (animationElement) {
+            if (phase === 'compression' || phase === 'upload') {
+                // Upload/compression animation
+                animationElement.src = 'https://lottie.host/e0ebd645-bfad-4439-86b0-5099f351b106/zNcAaQQDY1.lottie';
+            } else if (phase === 'processing') {
+                // Detection/processing animation
+                animationElement.src = 'https://lottie.host/e6756db5-32c8-42f8-ac7c-59e803a2b16f/tzIArfl6ZX.lottie';
+            }
+        }
+        
+        this.updateUI();
+    }
+
+    updatePhaseProgress(progress) {
+        this.phaseProgress = Math.min(100, Math.max(0, progress));
+        this.updateUI();
+    }
+
+    calculateOverallProgress() {
+        const phase = this.phases[this.currentPhase];
+        const phaseContribution = (this.phaseProgress / 100) * phase.weight;
+        return phase.start + (phaseContribution * (phase.end - phase.start));
+    }
+
+    updateUI() {
+        // Progress elements are now in the processing section
+        const phase = this.phases[this.currentPhase];
+        const overallProgress = this.calculateOverallProgress();
+
+        const titleElement = document.getElementById('journey-status');
+        const percentageElement = document.getElementById('progress-percentage');
+        const progressBar = document.getElementById('unified-progress-bar');
+
+        if (titleElement) {
+            let title = phase.title;
+            if (this.currentPhase === 'upload' && this.totalBatches > 0) {
+                title = title.replace('{current}', this.currentBatch).replace('{total}', this.totalBatches);
+            }
+            titleElement.textContent = title;
+        }
+
+        if (percentageElement) {
+            percentageElement.textContent = `${Math.round(overallProgress)}%`;
+        }
+
+        if (progressBar) {
+            progressBar.style.width = `${overallProgress}%`;
+        }
+    }
+
+    show() {
+        // Progress is now shown via processing section
+        // This method is kept for compatibility but doesn't need to do anything
+    }
+
+    hide() {
+        // Progress is now hidden via processing section
+        // This method is kept for compatibility but doesn't need to do anything
+    }
+
+    complete() {
+        this.setPhase('processing', 100);
+        setTimeout(() => this.hide(), 1000);
+    }
 }

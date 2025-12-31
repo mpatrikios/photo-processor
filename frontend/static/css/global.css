@@ -398,6 +398,151 @@ body {
     border: none;
 }
 
+/* Processing Section with Unified Progress Styling */
+#processing-section {
+    padding: 2rem 0;
+    background: linear-gradient(135deg, rgba(248, 250, 252, 0.4) 0%, rgba(255, 255, 255, 0.6) 100%);
+    min-height: 100vh;
+}
+
+/* Enhanced processing section glass card */
+#processing-section .glass-card {
+    width: 100% !important;
+}
+
+#processing-section .card-body {
+    padding: 3rem !important;
+}
+
+.unified-progress-container.show {
+    animation: progressSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.glass-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 24px;
+    padding: 0;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 
+        0 25px 50px -12px rgba(0, 0, 0, 0.08),
+        0 0 0 1px rgba(255, 255, 255, 0.7),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 
+        0 32px 64px -12px rgba(0, 0, 0, 0.12),
+        0 0 0 1px rgba(255, 255, 255, 0.8),
+        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.progress-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.progress-header h3 {
+    margin: 0;
+    font-weight: 600;
+    font-size: 2rem;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.progress-header h3 i {
+    background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-hover));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: none;
+}
+
+#progress-percentage {
+    font-weight: 600;
+    font-size: 0.875rem;
+    letter-spacing: 0.02em;
+    background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-hover));
+    border: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: 12px;
+}
+
+/* Removed old .progress styling that was creating full-width bar conflict */
+
+/* Disabled old progress-bar styling to prevent conflicts with new journey-bar-fill */
+/* .progress-bar {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-info) 50%, var(--color-accent-primary) 100%) !important;
+    box-shadow: 
+        0 4px 12px rgba(13, 110, 253, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    position: relative;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+    animation: shimmer 2s infinite;
+    border-radius: inherit;
+} */
+
+.progress-details {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    opacity: 0.8;
+    letter-spacing: 0.01em;
+}
+
+#cancel-unified-process {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: var(--color-text-primary);
+    font-weight: 500;
+    border-radius: 12px;
+    padding: 0.75rem 1.5rem;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#cancel-unified-process:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes progressSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(200%);
+    }
+}
+
 /* Dynamic quota status cards */
 .modern-card-safe {
     background: #ffffff;
@@ -1834,26 +1979,9 @@ body {
     border-color: var(--primary-color);
 }
 
-/* Progress Enhancements */
-.progress {
-    height: 1.5rem;
-    border-radius: var(--border-radius);
-    background-color: var(--gray-200);
-    overflow: hidden;
-}
+/* Removed progress enhancements that conflict with unified progress bar */
 
-.progress-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    transition: width 0.4s ease, background-color 0.3s ease;
-}
-
-.progress-bar small {
-    font-weight: 600;
-}
+/* Removed generic .progress-bar styling that creates full-width bars */
 
 /* Selection Feedback */
 .selection-feedback {
@@ -1910,38 +2038,9 @@ body {
     opacity: 0.25;
 }
 
-/* Progress Bar Enhancements */
-.progress {
-    border-radius: 1rem;
-    overflow: hidden;
-    background-color: var(--gray-200);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-}
+/* Removed all generic .progress-bar styling that creates full-width bar conflicts */
 
-.progress-bar {
-    background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
-    border-radius: 1rem;
-    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-}
-
-.progress-bar::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%, transparent 75%, transparent);
-    background-size: 1rem 1rem;
-    animation: progress-bar-stripes 1s linear infinite;
-}
-
-@keyframes progress-bar-stripes {
-    0% { background-position: 1rem 0; }
-    100% { background-position: 0 0; }
-}
+/* Removed unused progress-bar-stripes animation */
 
 /* Button Enhancements */
 .btn {
@@ -5242,8 +5341,8 @@ body.metadata-panel-visible .photo-viewing-area {
     min-height: 400px;
 }
 
-/* Progress bar styling for quotas */
-.progress {
+/* Progress bar styling for quotas - specific to quota section only */
+#quota-status .progress {
     background-color: #e9ecef;
     border-radius: 0.25rem;
     overflow: hidden;
@@ -5255,9 +5354,7 @@ body.metadata-panel-visible .photo-viewing-area {
     100% { transform: rotate(360deg); }
 }
 
-.progress-bar {
-    transition: width 0.3s ease;
-}
+/* Removed final generic .progress-bar rule */
 
 /* About Page Styling */
 /* Team headshots - circular with border and shadow */
@@ -5394,7 +5491,7 @@ html {
     border: none !important;
     box-shadow: none !important;
     transition: all 0.4s ease;
-    padding: 1.5rem 0 2rem 0; /* Generous vertical padding for breathing room */
+    padding: 1rem 0 0.5rem 0; /* Reduced padding to move content closer to navbar */
     z-index: 1050;
     position: fixed !important;
     top: 0;
@@ -5555,6 +5652,58 @@ html {
     opacity: 0.7;
 }
 
+/* Lottie Animation Quality Optimizations */
+dotlottie-wc {
+    /* Force high-quality SVG rendering */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+#progress-animation {
+    /* 1. Set the size here only */
+    width: 450px !important; 
+    height: auto !important;
+    display: block;
+    margin: 0 auto;
+
+    /* 2. Sharpness & Performance */
+    image-rendering: -webkit-optimize-contrast;
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* 3. The secret to killing the blur */
+#progress-animation svg {
+    shape-rendering: geometricPrecision !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Professional Progress Bar Container */
+.journey-bar-container {
+    height: 12px;
+    background: #f1f5f9;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+}
+
+.journey-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #e30022, #ff6b6b);
+    border-radius: 20px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Removed !important overrides - fixed root CSS conflicts instead */
+
+/* Enhanced Percentage Display */
+#progress-percentage {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.05em;
+    /* Prevents UI from shaking during updates */
+}
+
 /* Clean hamburger lines */
 .clean-toggler-line {
     display: block;
@@ -5565,6 +5714,65 @@ html {
     transition: all 0.3s ease;
     margin: 2px 0;
     transform-origin: center;
+}
+
+/* Professional Progress UI Styling */
+#progress-percentage {
+    font-variant-numeric: tabular-nums;
+    min-width: 3.5rem;
+    text-align: right;
+}
+
+.journey-bar-fill {
+    background: linear-gradient(90deg, #e30022, #ff6b6b);
+    box-shadow: 0 0 15px rgba(227, 0, 34, 0.2);
+    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Lottie Animation Clipping Fix */
+#progress-animation {
+    overflow: hidden !important;
+    contain: content;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.animation-viewport {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    overflow: hidden;
+    background: transparent !important;
+}
+
+/* Processing Section Layout Override */
+#processing-section {
+    padding: 0;
+    background: linear-gradient(135deg, rgba(248, 250, 252, 0.4) 0%, rgba(255, 255, 255, 0.6) 100%);
+    min-height: 100vh;
+}
+
+/* Canvas Bottom Padding */
+:host > canvas {
+    width: 100%;
+    height: 100%;
+    padding: 0 0 0 3rem;
+}
+
+/* Override any transform conflicts causing blur */
+#progress-animation svg {
+    transform: unset !important;
+    shape-rendering: geometricPrecision !important;
+    image-rendering: -webkit-optimize-contrast !important;
+    image-rendering: crisp-edges;
+}
+
+/* Force exact dimensions to prevent scaling blur */
+dotlottie-wc {
+    transform: none !important;
+    -webkit-font-smoothing: antialiased;
+    image-rendering: crisp-edges;
 }
 
 /* Simple hamburger animation */

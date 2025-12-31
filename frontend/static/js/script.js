@@ -806,11 +806,11 @@ async function updateCustomModalContent(quotaData, statsData) {
                 <div class="modern-stats-grid">
                     <div class="modern-stat-item">
                         <div class="modern-stat-value" style="color: #28a745;">${stats.total_photos_uploaded || 0}</div>
-                        <div class="modern-stat-label">Total Uploads</div>
+                        <div class="modern-stat-label">All-Time Uploads</div>
                     </div>
                     <div class="modern-stat-item">
                         <div class="modern-stat-value" style="color: #17a2b8;">${stats.total_processing_jobs || 0}</div>
-                        <div class="modern-stat-label">Jobs Processed</div>
+                        <div class="modern-stat-label">All-Time Jobs</div>
                     </div>
                 </div>
             </div>
