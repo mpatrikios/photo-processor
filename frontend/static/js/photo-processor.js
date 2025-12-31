@@ -13,7 +13,6 @@ class PhotoProcessor {
         this.currentJobId = null;
         this.groupedPhotos = [];
         this.filteredGroups = [];
-        this.selectedGroups = [];
         this.modalSelectedFiles = []; // For upload more modal
         this.currentFilter = 'all';
         this.currentSort = 'bib-asc';
@@ -469,99 +468,9 @@ class PhotoProcessor {
             this.selectNone();
         });
 
-        // Export options change handlers
-        document.getElementById('exportFormat').addEventListener('change', () => {
-            this.updateExportPreview();
-        });
-
-        document.getElementById('filenamePattern').addEventListener('change', () => {
-            this.updateExportPreview();
-        });
     }
 
-    selectAllGroups() {
-        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-        this.selectedGroups = groupsToShow.map(group => group.bib_number);
-        this.updateSelectionUI();
-        this.updateExportPreview();
-    }
 
-    selectDetectedGroups() {
-        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-        this.selectedGroups = groupsToShow
-            .filter(group => group.bib_number !== 'unknown')
-            .map(group => group.bib_number);
-        this.updateSelectionUI();
-        this.updateExportPreview();
-    }
-
-    selectUnknownGroups() {
-        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-        this.selectedGroups = groupsToShow
-            .filter(group => group.bib_number === 'unknown')
-            .map(group => group.bib_number);
-        this.updateSelectionUI();
-        this.updateExportPreview();
-    }
-
-    selectNone() {
-        this.selectedGroups = [];
-        document.getElementById('selectAllGroups').checked = false;
-        this.updateSelectionUI();
-        this.updateExportPreview();
-    }
-
-    updateSelectionUI() {
-        document.querySelectorAll('.export-checkbox input[type="checkbox"]').forEach(checkbox => {
-            checkbox.checked = this.selectedGroups.includes(checkbox.value);
-            const label = checkbox.closest('.export-checkbox');
-            if (checkbox.checked) {
-                label.classList.add('selected');
-            } else {
-                label.classList.remove('selected');
-            }
-        });
-
-        const count = this.selectedGroups.length;
-        document.getElementById('selectionCount').textContent = `${count} group${count !== 1 ? 's' : ''} selected`;
-        document.getElementById('exportBtnCount').textContent = count;
-
-        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-        const allSelected = groupsToShow.length > 0 && this.selectedGroups.length === groupsToShow.length;
-        document.getElementById('selectAllGroups').checked = allSelected;
-
-        // Enable/disable export button
-        document.getElementById('export-btn').disabled = this.selectedGroups.length === 0;
-    }
-
-    updateExportPreview() {
-        const selectedGroupData = this.groupedPhotos.filter(group => 
-            this.selectedGroups.includes(group.bib_number)
-        );
-
-        const exportPreview = document.getElementById('exportPreview');
-        const exportPreviewList = document.getElementById('exportPreviewList');
-        const exportPhotoCount = document.getElementById('exportPhotoCount');
-
-        if (selectedGroupData.length === 0) {
-            exportPreview.style.display = 'none';
-            return;
-        }
-
-        exportPreview.style.display = 'block';
-
-        const totalPhotos = selectedGroupData.reduce((sum, group) => sum + group.count, 0);
-        exportPhotoCount.textContent = totalPhotos;
-
-        exportPreviewList.innerHTML = selectedGroupData.map(group => `
-            <div class="d-flex justify-content-between align-items-center mb-1">
-                <small class="text-muted">
-                    ${group.bib_number === 'unknown' ? 'Unknown' : `Bib #${group.bib_number}`}
-                </small>
-                <small class="badge bg-secondary">${group.count}</small>
-            </div>
-        `).join('');
-    }
 
     initializeSearchAndFilters() {
         // Search input - only initialize if elements exist
@@ -949,9 +858,8 @@ class PhotoProcessor {
         this.displaySelectedFiles();
 
         // Show feedback messages
-        if (processedFiles.length > 0) {
-            const compressionNote = needsCompression ? ' (compressed for optimal upload)' : '';
-            this.showSuccess(`Added ${processedFiles.length} photos${isFolder ? ' from folder' : ''}${compressionNote}`);
+        if (validFiles.length > 0) {
+            this.showSuccess(`Added ${validFiles.length} photos${isFolder ? ' from folder' : ''}`);
         }
 
         if (invalidFiles.length > 0) {
@@ -1049,35 +957,33 @@ class PhotoProcessor {
         return headers;
     }
 
-    // Helper method to download files with authentication
+    // Production-grade method to download files via signed URLs
     async downloadAuthenticatedFile(url, filename) {
         try {
+            // First, get the signed URL from our backend
             const response = await fetch(url, {
                 method: 'GET',
-                headers: this.getAuthHeaders(false),
+                headers: this.getAuthHeaders(true),
                 credentials: 'include'
             });
 
             if (!response.ok) {
-                throw new Error(`Download failed: ${response.statusText}`);
+                throw new Error(`Download request failed: ${response.statusText}`);
             }
 
-            // Get the blob from response
-            const blob = await response.blob();
+            // Backend now always returns JSON with signed URL
+            const downloadData = await response.json();
             
-            // Create a temporary URL for the blob
-            const blobUrl = window.URL.createObjectURL(blob);
+            if (!downloadData.signed_url) {
+                throw new Error('No signed URL provided by server');
+            }
+
+            // Direct navigation to signed URL - bypasses CORS, goes straight to GCS
+            // This is the production pattern for scalable file downloads
+            window.location.assign(downloadData.signed_url);
             
-            // Create a temporary anchor element and trigger download
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = filename || 'download.zip';
-            document.body.appendChild(link);
-            link.click();
-            
-            // Cleanup
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(blobUrl);
+            // Note: We can't catch download errors with this approach, but that's
+            // the trade-off for production scalability and proper architecture
             
         } catch (error) {
             console.error('Download failed:', error);
@@ -1722,26 +1628,6 @@ class PhotoProcessor {
         this.applyFilters();
     }
 
-    displayExportControls() {
-        const exportGroupsDiv = document.getElementById('export-groups');
-        const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
-
-        exportGroupsDiv.innerHTML = groupsToShow.map(group => `
-            <div class="col-md-6 mb-2">
-                <label class="export-checkbox ${this.selectedGroups.includes(group.bib_number) ? 'selected' : ''}">
-                    <input type="checkbox" value="${group.bib_number}" ${this.selectedGroups.includes(group.bib_number) ? 'checked' : ''} onchange="photoProcessor.toggleGroupSelection('${group.bib_number}')">
-                    <div class="export-info">
-                        <h6>${group.bib_number === 'unknown' ? 'Unknown Bib' : `Bib #${group.bib_number}`}</h6>
-                        <small>${group.count} photos • ${group.bib_number !== 'unknown' ? Math.round(this.getGroupAverageConfidence(group) * 100) + '% confidence' : 'No detection'}</small>
-                    </div>
-                </label>
-            </div>
-        `).join('');
-
-        // Update selection UI after rendering
-        this.updateSelectionUI();
-        this.updateExportPreview();
-    }
 
     getConfidenceClass(confidence) {
         if (confidence >= 0.8) return 'confidence-high';
@@ -1749,89 +1635,7 @@ class PhotoProcessor {
         return 'confidence-low';
     }
 
-    // Export Functions
-    toggleGroupSelection(bibNumber) {
-        const index = this.selectedGroups.indexOf(bibNumber);
-        if (index > -1) {
-            this.selectedGroups.splice(index, 1);
-        } else {
-            this.selectedGroups.push(bibNumber);
-        }
 
-        this.updateSelectionUI();
-        this.updateExportPreview();
-    }
-
-    async exportPhotos() {
-        if (this.selectedGroups.length === 0) return;
-
-        const selectedPhotos = this.groupedPhotos
-            .filter(group => this.selectedGroups.includes(group.bib_number))
-            .flatMap(group => group.photos);
-
-        const photoIds = selectedPhotos.map(photo => photo.id);
-
-        // Get export options
-        const exportFormat = document.getElementById('exportFormat').value;
-        const filenamePattern = document.getElementById('filenamePattern').value;
-
-        try {
-            // Show progress
-            this.showExportProgress('Preparing export...');
-
-            document.getElementById('export-btn').disabled = true;
-            document.getElementById('export-btn').innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Export...';
-
-            const exportData = {
-                photo_ids: photoIds,
-                export_options: {
-                    format: exportFormat,
-                    filename_pattern: filenamePattern,
-                    group_data: this.groupedPhotos.filter(group => 
-                        this.selectedGroups.includes(group.bib_number)
-                    )
-                }
-            };
-
-            const response = await fetch(`${this.apiBase}/download/export`, {
-                method: 'POST',
-                headers: this.getAuthHeaders(true),
-                credentials: 'include',
-                body: JSON.stringify(exportData)
-            });
-
-            if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
-
-            const result = await response.json();
-
-            // Update progress
-            this.updateExportProgress(75, 'Generating ZIP file...');
-
-            // Simulate additional progress steps
-            setTimeout(async () => {
-                this.updateExportProgress(100, 'Download ready!');
-
-                // Download the file with authentication
-                const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
-                await this.downloadAuthenticatedFile(downloadUrl, `tag_photos_${result.export_id}.zip`);
-
-                this.showSuccess(`Successfully exported ${photoIds.length} photos from ${this.selectedGroups.length} groups!`);
-
-                // Hide progress after a delay
-                setTimeout(() => {
-                    this.hideExportProgress();
-                }, 2000);
-            }, 1000);
-
-        } catch (error) {
-            console.error('Export error:', error);
-            this.showError('Export failed. Please try again.');
-            this.hideExportProgress();
-        } finally {
-            document.getElementById('export-btn').disabled = false;
-            document.getElementById('export-btn').innerHTML = `<i class="fas fa-file-archive me-2"></i>Export Selected (<span id="exportBtnCount">${this.selectedGroups.length}</span>)`;
-        }
-    }
 
     async downloadAllPhotos() {
         // Track download initiation
@@ -1851,12 +1655,10 @@ class PhotoProcessor {
         }
 
         try {
-            // Show progress
-            this.showExportProgress('Preparing download...');
-
             const downloadBtn = document.getElementById('download-all-btn');
-            downloadBtn.disabled = true;
-            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating ZIP...';
+            
+            // Start progress animation
+            this.startButtonProgress(downloadBtn, 'Creating ZIP...');
 
             const exportData = {
                 photo_ids: photoIds,
@@ -1873,9 +1675,9 @@ class PhotoProcessor {
             if (!response.ok) throw new Error(`Export failed: ${response.statusText}`);
             const result = await response.json();
 
-            // Show completion and download
+            // Update to completion state and download
             setTimeout(async () => {
-                this.updateExportProgress(100, 'Download ready!');
+                this.completeButtonProgress(downloadBtn, 'Download Ready');
 
                 // Download the file with authentication
                 const downloadUrl = `${this.apiBase}/download/file/${result.export_id}`;
@@ -1892,39 +1694,77 @@ class PhotoProcessor {
 
                 this.showSuccess(`Successfully downloaded ${photoIds.length} photos organized by bib number!`);
 
-                // Hide progress after a delay
+                // Reset button after a delay
                 setTimeout(() => {
-                    this.hideExportProgress();
+                    this.resetButtonProgress(downloadBtn, '<i class="fas fa-download me-2"></i>Download All Photos as ZIP');
                 }, 2000);
 
             }, 1000);
         } catch (error) {
             console.error('Download error:', error);
             this.showError('Download failed. Please try again.');
-            this.hideExportProgress();
-        } finally {
             const downloadBtn = document.getElementById('download-all-btn');
-            downloadBtn.disabled = false;
-            downloadBtn.innerHTML = '<i class="fas fa-download me-2"></i>Download All Photos as ZIP';
+            this.resetButtonProgress(downloadBtn, '<i class="fas fa-download me-2"></i>Download All Photos as ZIP');
         }
     }
 
-    showExportProgress(message) {
-        const progress = document.getElementById('exportProgress');
-        const progressBar = progress.querySelector('.progress-bar');
-        progress.style.display = 'block';
-        progressBar.style.width = '25%';
-        progressBar.innerHTML = `<small>${message}</small>`;
+    // Integrated Button Progress Methods
+    startButtonProgress(button, message) {
+        if (!button) return;
+        
+        button.disabled = true;
+        button.classList.add('btn-progress', 'loading');
+        
+        const content = button.querySelector('.btn-content') || button;
+        content.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>${message}`;
+        
+        // Start the progress fill animation
+        setTimeout(() => {
+            if (button.style) {
+                button.style.setProperty('--progress-width', '0%');
+                button.style.setProperty('--progress-width', '75%');
+            }
+        }, 100);
     }
-
-    updateExportProgress(percent, message) {
-        const progressBar = document.querySelector('#exportProgress .progress-bar');
-        progressBar.style.width = `${percent}%`;
-        progressBar.innerHTML = `<small>${message}</small>`;
+    
+    updateButtonProgress(button, percent, message) {
+        if (!button) return;
+        
+        const content = button.querySelector('.btn-content') || button;
+        if (message) {
+            content.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>${message}`;
+        }
+        
+        // Update the progress fill
+        const beforeElement = button.querySelector('::before');
+        if (beforeElement) {
+            beforeElement.style.width = `${percent}%`;
+        }
     }
-
-    hideExportProgress() {
-        document.getElementById('exportProgress').style.display = 'none';
+    
+    completeButtonProgress(button, message) {
+        if (!button) return;
+        
+        button.classList.remove('loading');
+        button.classList.add('complete');
+        
+        const content = button.querySelector('.btn-content') || button;
+        content.innerHTML = `<i class="fas fa-check me-2"></i>${message}`;
+    }
+    
+    resetButtonProgress(button, originalContent) {
+        if (!button) return;
+        
+        button.disabled = false;
+        button.classList.remove('btn-progress', 'loading', 'complete');
+        
+        const content = button.querySelector('.btn-content') || button;
+        content.innerHTML = originalContent;
+        
+        // Reset any inline styles
+        if (button.style) {
+            button.style.removeProperty('--progress-width');
+        }
     }
 
     // Utility Functions
@@ -1932,7 +1772,6 @@ class PhotoProcessor {
         this.selectedFiles = [];
         this.currentJobId = null;
         this.groupedPhotos = [];
-        this.selectedGroups = [];
 
         // Clear both completed and current job state from localStorage
         if (window.stateManager) {
@@ -2317,8 +2156,6 @@ class PhotoProcessor {
         // Fullscreen toggle
         document.getElementById('fullscreenBtn').onclick = () => this.toggleFullscreen();
 
-        // Download button
-        document.getElementById('downloadPhotoBtn').onclick = () => this.downloadCurrentPhoto();
 
 
 
@@ -2350,7 +2187,7 @@ class PhotoProcessor {
         modalImage.src = this.getImageUrl(photo.id);
         modalImage.alt = photo.filename;
 
-        // Update metadata
+        // Update header metadata
         document.getElementById('photoModalLabel').textContent = `${photo.groupBibNumber === 'unknown' ? 'Photo' : `Bib #${photo.groupBibNumber}`}`;
         document.getElementById('photoPosition').textContent = `${index + 1} of ${this.allPhotosFlat.length}`;
         
@@ -2372,13 +2209,6 @@ class PhotoProcessor {
             }
             if (confidenceBadge) confidenceBadge.style.display = '';
         }
-        
-        // Update filename if element exists (may be hidden for clean UI)
-        const filenameElement = document.getElementById('photoFilename');
-        if (filenameElement) {
-            filenameElement.textContent = photo.filename;
-        }
-        
 
         // Update confidence
         if (photo.detection_result) {
@@ -2393,12 +2223,217 @@ class PhotoProcessor {
             document.getElementById('photoConfidence').className = 'badge bg-secondary';
         }
 
-        // Navigation handled via keyboard only
-
-
+        // Update sidebar elements
+        this.updatePhotoSidebar(photo, index);
 
         // Reset zoom
         this.resetZoom();
+    }
+
+    updatePhotoSidebar(photo, index) {
+        // Update sidebar header
+        const sidebarTitle = document.getElementById('sidebarPhotoTitle');
+        
+        if (sidebarTitle) {
+            sidebarTitle.textContent = photo.groupBibNumber === 'unknown' ? 'Label Photo' : `Bib #${photo.groupBibNumber}`;
+        }
+
+        // Update bib input and metadata
+        const bibInput = document.getElementById('inlineBibInput');
+        const confidenceItem = document.getElementById('confidenceItem');
+        const sidebarConfidence = document.getElementById('sidebarPhotoConfidence');
+
+        const isUnknown = photo.groupBibNumber === 'unknown';
+
+        if (!isUnknown && photo.groupBibNumber) {
+            // Pre-fill with detected bib number from groupBibNumber
+            if (bibInput) {
+                bibInput.value = photo.groupBibNumber;
+                bibInput.classList.add('has-ai-value');
+            }
+            if (confidenceItem && sidebarConfidence && photo.detection_result) {
+                const confidence = Math.round((photo.detection_result.confidence / 1.5) * 100);
+                sidebarConfidence.textContent = `${confidence}%`;
+                confidenceItem.style.display = '';
+            }
+        } else {
+            // Clear input for unknown photos
+            if (bibInput) {
+                bibInput.value = '';
+                bibInput.classList.remove('has-ai-value');
+            }
+            if (confidenceItem) {
+                confidenceItem.style.display = 'none';
+            }
+        }
+
+
+        // Auto-focus and select text in input field
+        this.focusAndSelectBibInput();
+
+        // Set up inline labeling event listeners
+        this.setupInlineLabelingListeners(photo);
+    }
+
+    setupInlineLabelingListeners(photo) {
+        const bibInput = document.getElementById('inlineBibInput');
+        const confirmBtn = document.getElementById('confirmBibBtn');
+        const noBibBtn = document.getElementById('noBibBtn');
+
+        // Remove existing listeners
+        const newBibInput = bibInput.cloneNode(true);
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        const newNoBibBtn = noBibBtn.cloneNode(true);
+        
+        bibInput.parentNode.replaceChild(newBibInput, bibInput);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        noBibBtn.parentNode.replaceChild(newNoBibBtn, noBibBtn);
+
+        // Add new listeners
+        newBibInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.saveInlineLabel(photo);
+            }
+        });
+
+        newBibInput.addEventListener('input', (e) => {
+            this.validateBibInput(e.target);
+        });
+
+        newConfirmBtn.addEventListener('click', () => {
+            this.saveInlineLabel(photo);
+        });
+
+        newNoBibBtn.addEventListener('click', () => {
+            this.saveInlineLabel(photo, 'unknown');
+        });
+
+        // Global keyboard shortcuts
+        document.addEventListener('keydown', this.handleGlobalKeyShortcuts.bind(this));
+    }
+
+    handleGlobalKeyShortcuts(e) {
+        // Only handle shortcuts when photo modal is open
+        const modal = document.getElementById('photoModal');
+        if (!modal.classList.contains('show')) return;
+
+        if (e.key === 'x' || e.key === 'X') {
+            e.preventDefault();
+            const photo = this.allPhotosFlat[this.currentPhotoIndex];
+            this.saveInlineLabel(photo, 'unknown');
+        }
+    }
+
+    validateBibInput(input) {
+        const value = input.value.trim();
+        
+        // Remove validation classes
+        input.classList.remove('is-valid', 'is-invalid');
+        
+        if (!value) {
+            return;
+        }
+
+        if (this.validateBibNumber(value)) {
+            input.classList.add('is-valid');
+        } else {
+            input.classList.add('is-invalid');
+        }
+    }
+
+    async saveInlineLabel(photo, bibNumber = null) {
+        if (!bibNumber) {
+            const bibInput = document.getElementById('inlineBibInput');
+            bibNumber = bibInput.value.trim();
+        }
+
+        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
+            this.showError('Please enter a valid bib number (1-6 digits, 1-99999) or click "No Bib Visible"');
+            return;
+        }
+
+        try {
+            // Show loading state
+            const confirmBtn = document.getElementById('confirmBibBtn');
+            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+            confirmBtn.disabled = true;
+
+            await this.labelPhoto(photo.id, bibNumber);
+
+            this.showSuccess(`Photo labeled as ${bibNumber === 'unknown' ? 'No Bib Visible' : `Bib #${bibNumber}`}`);
+
+            // Refresh displays
+            await this.refreshAfterLabeling();
+
+            // Advance to next photo if this was an unknown photo
+            if (photo.groupBibNumber === 'unknown' || 
+                !photo.detection_result || 
+                photo.detection_result.bib_number === 'unknown') {
+                
+                this.advanceToNextUnknownPhoto();
+            }
+
+        } catch (error) {
+            this.showError(`Failed to label photo: ${error.message}`);
+        } finally {
+            // Reset button state
+            const confirmBtn = document.getElementById('confirmBibBtn');
+            if (confirmBtn) {
+                confirmBtn.innerHTML = '<i class="fas fa-check me-2"></i>Save Bib Number';
+                confirmBtn.disabled = false;
+            }
+        }
+    }
+
+    // Helper method to focus and select text in bib input
+    focusAndSelectBibInput() {
+        const bibInput = document.getElementById('inlineBibInput');
+        if (!bibInput) return;
+
+        // Use multiple attempts with increasing delays for better reliability
+        const attemptSelection = (attempt = 0) => {
+            if (attempt > 3) return; // Give up after 3 attempts
+
+            setTimeout(() => {
+                try {
+                    bibInput.focus();
+                    
+                    // Use multiple selection methods for maximum browser compatibility
+                    if (bibInput.value.length > 0) {
+                        bibInput.select();
+                        
+                        // Fallback for browsers that don't support select()
+                        if (bibInput.setSelectionRange) {
+                            bibInput.setSelectionRange(0, bibInput.value.length);
+                        }
+                        
+                        // Additional fallback
+                        if (bibInput.selectionStart !== 0 || bibInput.selectionEnd !== bibInput.value.length) {
+                            // If selection didn't work, try again
+                            attemptSelection(attempt + 1);
+                        }
+                    }
+                } catch (e) {
+                    console.log('Selection attempt failed:', e);
+                    if (attempt < 3) {
+                        attemptSelection(attempt + 1);
+                    }
+                }
+            }, 50 + (attempt * 100)); // Increasing delay: 50ms, 150ms, 250ms, 350ms
+        };
+
+        attemptSelection();
+    }
+
+    // Helper Methods (keeping existing ones)
+    validateBibNumber(bibNumber) {
+        // Allow "unknown" as a special case for "no bib visible"
+        if (bibNumber.toLowerCase() === 'unknown') {
+            return true;
+        }
+        // Standard numeric validation
+        const num = parseInt(bibNumber);
+        return /^\d{1,6}$/.test(bibNumber) && num >= 1 && num <= 99999;
     }
 
 
@@ -2428,6 +2463,8 @@ class PhotoProcessor {
     previousPhoto() {
         if (this.currentPhotoIndex > 0) {
             this.showPhotoInLightbox(this.currentPhotoIndex - 1);
+            // Ensure text is selected after navigation
+            setTimeout(() => this.focusAndSelectBibInput(), 200);
         } else {
         }
     }
@@ -2435,6 +2472,8 @@ class PhotoProcessor {
     nextPhoto() {
         if (this.currentPhotoIndex < this.allPhotosFlat.length - 1) {
             this.showPhotoInLightbox(this.currentPhotoIndex + 1);
+            // Ensure text is selected after navigation
+            setTimeout(() => this.focusAndSelectBibInput(), 200);
         } else {
         }
     }
@@ -2448,7 +2487,7 @@ class PhotoProcessor {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.1 : 0.1;
             this.adjustZoom(delta);
-        });
+        }, { passive: false });
 
         // Touch zoom (pinch)
         let initialDistance = 0;
@@ -2460,7 +2499,7 @@ class PhotoProcessor {
                 initialDistance = this.getTouchDistance(e.touches);
                 initialZoom = this.zoomLevel;
             }
-        });
+        }, { passive: false });
 
         photoContainer.addEventListener('touchmove', (e) => {
             if (e.touches.length === 2) {
@@ -2470,7 +2509,7 @@ class PhotoProcessor {
                 this.zoomLevel = Math.max(0.5, Math.min(5, initialZoom * scale));
                 this.applyZoom();
             }
-        });
+        }, { passive: false });
 
         // Drag to pan when zoomed
         let isDragging = false;
@@ -2968,79 +3007,9 @@ class PhotoProcessor {
     // Selection Management
 
     // Manual Labeling Methods
-    currentPhotoToLabel = null;
 
-    showSinglePhotoLabelModal(photoId) {
-        this.currentPhotoToLabel = photoId;
-        const photo = this.findPhotoById(photoId);
 
-        if (!photo) return;
 
-        // Set up modal content
-        document.getElementById('labelPhotoPreview').src = this.getImageUrl(photo.id);
-        document.getElementById('labelPhotoFilename').textContent = photo.filename;
-        document.getElementById('manualBibNumber').value = '';
-
-        // Set current status
-        const statusEl = document.getElementById('currentPhotoStatus');
-        if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
-            statusEl.innerHTML = `Currently labeled as Bib #${photo.detection_result.bib_number}`;
-            statusEl.parentElement.className = 'alert alert-info mb-0';
-        } else {
-            statusEl.innerHTML = 'No bib number detected';
-            statusEl.parentElement.className = 'alert alert-warning mb-0';
-        }
-
-        // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('manualLabelModal'));
-        modal.show();
-
-        // Set up event listener
-        this.setupSingleLabelEventListener();
-    }
-
-    setupSingleLabelEventListener() {
-        const btn = document.getElementById('apply-single-label-btn');
-        const input = document.getElementById('manualBibNumber');
-
-        // Remove existing listeners
-        btn.replaceWith(btn.cloneNode(true));
-        const newBtn = document.getElementById('apply-single-label-btn');
-
-        newBtn.addEventListener('click', () => this.applySingleLabel());
-
-        // Allow Enter key to submit
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.applySingleLabel();
-            }
-        });
-    }
-
-    async applySingleLabel() {
-        const bibNumber = document.getElementById('manualBibNumber').value.trim();
-
-        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
-            this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
-            return;
-        }
-
-        try {
-            await this.labelPhoto(this.currentPhotoToLabel, bibNumber);
-
-            // Close modal
-            const modal = bootstrap.Modal.getInstance(document.getElementById('manualLabelModal'));
-            modal.hide();
-
-            this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
-
-            // Refresh displays
-            await this.refreshAfterLabeling();
-
-        } catch (error) {
-            this.showError(`Failed to label photo: ${error.message}`);
-        }
-    }
 
 
     // Helper Methods

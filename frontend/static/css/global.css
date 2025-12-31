@@ -1821,58 +1821,6 @@
     color: white;
 }
 
-/* Export Checkboxes */
-.export-checkbox {
-    display: flex;
-    align-items: center;
-    padding: 1rem;
-    margin-bottom: 0.75rem;
-    background: linear-gradient(135deg, #ffffff 0%, var(--gray-50) 100%);
-    border: 1px solid var(--gray-200);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-}
-
-.export-checkbox::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: var(--primary-color);
-    transform: scaleY(0);
-    transition: transform 0.3s ease;
-}
-
-.export-checkbox:hover {
-    background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
-    border-color: var(--primary-color);
-    transform: translateX(4px);
-}
-
-.export-checkbox:hover::before {
-    transform: scaleY(1);
-}
-
-.export-checkbox.selected {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
-}
-
-.export-checkbox.selected::before {
-    transform: scaleY(1);
-}
-
-.export-checkbox input[type="checkbox"] {
-    margin-right: 1rem;
-    transform: scale(1.2);
-    accent-color: var(--primary-color);
-}
 
 .export-info h6 {
     margin: 0;
