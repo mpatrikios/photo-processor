@@ -11,7 +11,9 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Custom CSS -->
+    <!-- Custom CSS - Modular Structure -->
+    <link rel="stylesheet" href="static/css/core.css">
+    <link rel="stylesheet" href="static/css/components.css">
     <link rel="stylesheet" href="static/css/global.css">
     
     <!-- Browser Image Compression -->
@@ -833,26 +835,15 @@
                     </div>
                 </div>
                 
-                <div class="modal-body p-0 d-flex flex-column">
-                    <!-- Photo Container with Navigation -->
-                    <div class="position-relative d-flex align-items-center justify-content-center photo-viewing-area">
-                        <!-- Navigation Arrows -->
-                        <button type="button" class="btn btn-dark btn-lg position-absolute start-0 ms-3 z-3" id="prevPhotoBtn" title="Previous (Left Arrow)">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                        <button type="button" class="btn btn-dark btn-lg position-absolute end-0 me-3 z-3" id="nextPhotoBtn" title="Next (Right Arrow)">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
+                <div class="modal-body p-0">
+                    <!-- Full Width Photo Viewer -->
+                    <div class="w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
+                        <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
                         
-                        <!-- Photo Container with Zoom -->
-                        <div class="photo-container w-100 h-100 d-flex align-items-center justify-content-center position-relative overflow-hidden" id="photoContainer">
-                            <img id="modalPhotoImage" src="" alt="" class="lightbox-image" style="max-width: 100%; max-height: 100%; object-fit: contain; cursor: grab;">
-                            
-                            <!-- Loading Spinner -->
-                            <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Loading...</span>
-                                </div>
+                        <!-- Loading Spinner -->
+                        <div class="position-absolute top-50 start-50 translate-middle" id="photoLoader">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
                             </div>
                         </div>
                         
@@ -870,58 +861,10 @@
                         </div>
                     </div>
                 </div>
-                
-                <!-- Thumbnail Strip -->
-                <div class="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-90 p-2" id="thumbnailStrip">
-                    <div class="d-flex gap-2 justify-content-center overflow-auto" id="thumbnailContainer">
-                        <!-- Thumbnails will be populated here -->
-                    </div>
-                </div>
             </div>
         </div>
     </div>
 
-    <!-- Fixed Photo Metadata Panel (Outside Modal) -->
-    <div class="text-white d-none photo-metadata-hidden" id="photoMetadata">
-        <div class="photo-metadata-enhanced">
-            <div class="photo-info-section">
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="fas fa-hashtag me-1"></i>
-                        Bib Number
-                    </div>
-                    <div class="info-value">
-                        <!-- Static display for detected photos -->
-                        <div id="photoBibNumberContainer" class="d-flex align-items-center gap-2">
-                            <div id="photoBibNumber">123</div>
-                            <button class="btn btn-sm d-none" 
-                                    id="editBibBtn" 
-                                    type="button" 
-                                    title="Edit bib number">
-                                <i class="fas fa-edit me-1"></i>
-                                Edit
-                            </button>
-                        </div>
-                        
-                        <!-- Enhanced Inline labeling for unknown/editing photos -->
-                        <div id="inlineLabelContainer" class="d-none">
-                            <!-- Content will be dynamically populated by JavaScript -->
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="info-item">
-                    <div class="info-label">
-                        <i class="fas fa-bullseye me-1"></i>
-                        Confidence
-                    </div>
-                    <div class="info-value confidence-display">
-                        <div class="confidence-badge-enhanced" id="photoConfidenceDetail">95.2%</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Gallery Modal -->
     <div class="modal fade" id="galleryModal" tabindex="-1" aria-labelledby="galleryModalLabel" aria-hidden="true">

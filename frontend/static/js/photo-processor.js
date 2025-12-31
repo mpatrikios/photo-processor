@@ -36,7 +36,6 @@ class PhotoProcessor {
         const storedToken = localStorage.getItem('auth_token');
         this.authToken = storedToken || null;
         this.isAuthenticated = !!storedToken;
-        this.isEditMode = false; // For inline labeling
         this.zoomLevel = 1;
         this.panX = 0;
         this.panY = 0;
@@ -2257,43 +2256,12 @@ class PhotoProcessor {
         });
         modal.show();
 
-        // Show the fixed metadata panel
-        this.showFixedMetadataPanel();
 
         // Initialize keyboard navigation
         this.initializeLightboxKeyboard();
     }
 
-    showFixedMetadataPanel() {
-        const metadataPanel = document.getElementById('photoMetadata');
-        if (metadataPanel) {
-            
-            // Remove any hiding classes and show the panel
-            metadataPanel.classList.remove('d-none', 'photo-metadata-hidden');
-            
-            // Explicitly ensure pointer events are enabled
-            metadataPanel.style.pointerEvents = 'auto';
-            
-            // Add body class for CSS targeting (replaces :has() selector)
-            document.body.classList.add('metadata-panel-visible');
-            document.body.classList.remove('metadata-panel-hidden');
-            
-        } else {
-            console.error('photoMetadata panel not found!');
-        }
-    }
 
-    hideFixedMetadataPanel() {
-        const metadataPanel = document.getElementById('photoMetadata');
-        if (metadataPanel) {
-            // Add the hiding class for smooth animation
-            metadataPanel.classList.add('photo-metadata-hidden');
-            
-            // Add body class for CSS targeting (replaces :has() selector)
-            document.body.classList.add('metadata-panel-hidden');
-            document.body.classList.remove('metadata-panel-visible');
-        }
-    }
 
     setupModalEventListeners() {
         const modalElement = document.getElementById('photoModal');
@@ -2326,11 +2294,11 @@ class PhotoProcessor {
     }
 
     handleModalShown() {
-        this.showFixedMetadataPanel();
+        // Modal is now shown - sidebar is already visible
     }
 
     handleModalHidden() {
-        this.hideFixedMetadataPanel();
+        // Modal is now hidden - sidebar is hidden with modal
     }
 
     initializeLightbox() {
@@ -2339,9 +2307,7 @@ class PhotoProcessor {
         // Add Bootstrap modal event listeners for fixed metadata panel
         this.setupModalEventListeners();
 
-        // Navigation buttons
-        document.getElementById('prevPhotoBtn').onclick = () => this.previousPhoto();
-        document.getElementById('nextPhotoBtn').onclick = () => this.nextPhoto();
+        // Navigation via keyboard only
 
         // Zoom controls
         document.getElementById('zoomInBtn').onclick = () => this.zoomIn();
@@ -2354,14 +2320,7 @@ class PhotoProcessor {
         // Download button
         document.getElementById('downloadPhotoBtn').onclick = () => this.downloadCurrentPhoto();
 
-        // Initialize inline labeling
-        this.initializeInlineLabeling();
 
-        // Initialize edit button
-        document.getElementById('editBibBtn').onclick = () => this.enableEditMode();
-
-        // Initialize thumbnails
-        this.createThumbnailStrip();
 
         // Initialize zoom functionality
         this.initializeZoom();
@@ -2392,20 +2351,26 @@ class PhotoProcessor {
         modalImage.alt = photo.filename;
 
         // Update metadata
-        document.getElementById('photoModalLabel').textContent = `${photo.groupBibNumber === 'unknown' ? 'Unknown Bib' : `Bib #${photo.groupBibNumber}`}`;
+        document.getElementById('photoModalLabel').textContent = `${photo.groupBibNumber === 'unknown' ? 'Photo' : `Bib #${photo.groupBibNumber}`}`;
         document.getElementById('photoPosition').textContent = `${index + 1} of ${this.allPhotosFlat.length}`;
         
         // Update category badge
         const categoryBadge = document.getElementById('photoCategory');
+        const confidenceBadge = document.getElementById('photoConfidence');
         const isUnknown = photo.groupBibNumber === 'unknown' || 
                          !photo.detection_result || 
                          photo.detection_result.bib_number === 'unknown';
         if (isUnknown) {
-            categoryBadge.textContent = 'Unknown';
-            categoryBadge.className = 'badge bg-warning text-dark';
+            // Hide badges for unknown photos to avoid "Unknown N/A" clutter
+            if (categoryBadge) categoryBadge.style.display = 'none';
+            if (confidenceBadge) confidenceBadge.style.display = 'none';
         } else {
-            categoryBadge.textContent = 'Detected';
-            categoryBadge.className = 'badge bg-info';
+            if (categoryBadge) {
+                categoryBadge.style.display = '';
+                categoryBadge.textContent = 'Detected';
+                categoryBadge.className = 'badge bg-info';
+            }
+            if (confidenceBadge) confidenceBadge.style.display = '';
         }
         
         // Update filename if element exists (may be hidden for clean UI)
@@ -2414,461 +2379,28 @@ class PhotoProcessor {
             filenameElement.textContent = photo.filename;
         }
         
-        document.getElementById('photoBibNumber').textContent = photo.groupBibNumber === 'unknown' ? 'Unknown' : photo.groupBibNumber;
 
         // Update confidence
         if (photo.detection_result) {
             const confidence = Math.round((photo.detection_result.confidence / 1.5) * 100);
             document.getElementById('photoConfidence').textContent = `${confidence}%`;
-            document.getElementById('photoConfidenceDetail').textContent = `${confidence}%`;
 
             // Update confidence badge color
             const badge = document.getElementById('photoConfidence');
             badge.className = 'badge ' + this.getConfidenceBadgeClass(photo.detection_result.confidence);
         } else {
             document.getElementById('photoConfidence').textContent = 'N/A';
-            document.getElementById('photoConfidenceDetail').textContent = 'Not detected';
             document.getElementById('photoConfidence').className = 'badge bg-secondary';
         }
 
-        // Update navigation buttons
-        document.getElementById('prevPhotoBtn').disabled = index === 0;
-        document.getElementById('nextPhotoBtn').disabled = index === this.allPhotosFlat.length - 1;
+        // Navigation handled via keyboard only
 
-        // Show/hide inline labeling for unknown photos
-        this.updateInlineLabeling(photo);
 
-        // Update thumbnail selection
-        this.updateThumbnailSelection();
 
         // Reset zoom
         this.resetZoom();
     }
 
-    initializeInlineLabeling() {
-
-        const input = document.getElementById('inlineBibInput');
-
-
-        if (!input) {
-            return;
-        }
-
-        // Ensure input is always enabled and clickable before setting up events
-        input.disabled = false;
-        input.style.pointerEvents = 'auto';
-        input.style.cursor = 'text';
-
-        // Remove any existing event listeners to prevent duplicates
-        const newInput = input.cloneNode(true);
-        input.parentNode.replaceChild(newInput, input);
-        const freshInput = document.getElementById('inlineBibInput');
-        
-        // Ensure cloned input maintains clickable state and priority focus
-        freshInput.disabled = false;
-        freshInput.style.pointerEvents = 'auto';
-        freshInput.style.cursor = 'text';
-        freshInput.tabIndex = 1; // Higher priority than modal elements
-
-        // Input keyboard events
-        freshInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this.saveInlineLabel();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                this.cancelInlineLabel();
-            }
-        });
-
-        // Allow numbers and "unknown" - use input event for validation
-        freshInput.addEventListener('input', (e) => {
-            const value = e.target.value;
-            // Allow "unknown" (case insensitive) or pure numbers
-            if (value.toLowerCase() === 'unknown' || value.toLowerCase().startsWith('unkn')) {
-                // Allow typing "unknown"
-                return;
-            } else {
-                // For other values, only allow numbers
-                const numericValue = value.replace(/[^0-9]/g, '');
-                if (value !== numericValue) {
-                    e.target.value = numericValue;
-                }
-            }
-        });
-
-        // Allow typing "unknown" and numbers on keypress
-        freshInput.addEventListener('keypress', (e) => {
-            const char = String.fromCharCode(e.which);
-            const currentValue = e.target.value.toLowerCase();
-            
-            // Allow control keys
-            if (e.ctrlKey || e.metaKey || e.which === 8 || e.which === 0) {
-                return;
-            }
-            
-            // If typing "unknown", allow relevant letters
-            if (currentValue.startsWith('unkn') || 'unknown'.startsWith(currentValue + char.toLowerCase())) {
-                return;
-            }
-            
-            // Otherwise, only allow numbers
-            if (!/[0-9]/.test(char)) {
-                e.preventDefault();
-            }
-        });
-
-        // Simple click handler - focus management no longer needed
-        freshInput.addEventListener('click', (e) => {
-            freshInput.focus();
-        });
-
-        // Input event handlers
-        freshInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                this.closeLightbox();
-            }
-        });
-        
-        // Removed infinite loop focus fix that was causing console spam
-
-        // Inline labeling initialized
-    }
-
-    updateInlineLabeling(photo) {
-        const staticContainer = document.getElementById('photoBibNumberContainer');
-        const staticDisplay = document.getElementById('photoBibNumber');
-        const editBtn = document.getElementById('editBibBtn'); 
-        const inlineContainer = document.getElementById('inlineLabelContainer');
-
-        if (!staticContainer || !staticDisplay || !editBtn || !inlineContainer) {
-            console.error('Missing DOM elements for inline labeling');
-            return;
-        }
-
-
-        // Always show the enhanced inline labeling interface for ALL photos
-        // This ensures consistent UI between unknown and labeled photos
-        staticContainer.classList.add('d-none');
-        inlineContainer.classList.remove('d-none');
-        this.setupEnhancedInlineLabeling(photo);
-    }
-
-    setupEnhancedInlineLabeling(photo) {
-        const inlineContainer = document.getElementById('inlineLabelContainer');
-        
-        // Determine the current bib number for pre-filling (prioritize effective bib number)
-        let currentBibNumber = '';
-        
-        // Priority 1: Use groupBibNumber (effective bib number including manual labels)
-        if (photo.groupBibNumber && photo.groupBibNumber !== 'unknown') {
-            currentBibNumber = photo.groupBibNumber;
-        }
-        // Priority 2: Use detected bib number
-        else if (photo.detection_result && photo.detection_result.bib_number && photo.detection_result.bib_number !== 'unknown') {
-            currentBibNumber = photo.detection_result.bib_number;
-        } 
-        // Priority 3: Use current lightbox group as fallback
-        else if (this.currentLightboxGroup && this.currentLightboxGroup.bib_number !== 'unknown') {
-            currentBibNumber = this.currentLightboxGroup.bib_number;
-        }
-        
-        // Create compact horizontal labeling interface        
-        inlineContainer.innerHTML = `
-            <div class="inline-labeling-form">
-                <span class="labeling-icon"><i class="fas fa-tag"></i></span>
-                <span class="labeling-text">Label:</span>
-                <div class="d-flex gap-2">
-                    <input type="text" 
-                           class="form-control" 
-                           id="inlineBibInput" 
-                           placeholder="Bib #" 
-                           maxlength="6" 
-                           pattern="[0-9]{1,6}"
-                           autocomplete="off"
-                           spellcheck="false"
-                           value="${currentBibNumber}">
-                    <button type="button" 
-                            class="btn btn-outline-secondary btn-sm" 
-                            id="noBibVisibleBtn"
-                            title="Mark as no bib visible">
-                        <i class="fas fa-eye-slash"></i> No Bib
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        // Re-initialize event listeners for the new elements after DOM update
-        setTimeout(() => {
-            this.initializeInlineLabeling();
-            
-            // Set up "No Bib Visible" button event listener
-            const noBibBtn = document.getElementById('noBibVisibleBtn');
-            if (noBibBtn) {
-                noBibBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.saveInlineLabelAsNoBib();
-                });
-            }
-            
-            // Focus and select the input, ensuring it's enabled and clickable
-            const input = document.getElementById('inlineBibInput');
-            if (input) {
-                input.disabled = false;
-                input.style.pointerEvents = 'auto';
-                input.style.cursor = 'text';
-                
-                // Input is ready for user interaction
-                
-                // Force focus and select
-                input.focus();
-                if (currentBibNumber) {
-                    input.select();
-                }
-                // Input setup complete
-                
-                // Input is ready for interaction
-            }
-        }, 50);
-    }
-
-    enableEditMode() {
-        
-        if (!this.currentLightboxGroup || this.currentPhotoIndex < 0) return;
-
-        const photo = this.currentLightboxGroup.photos[this.currentPhotoIndex];
-
-        // Switch to edit mode
-        this.isEditMode = true;
-        
-        // Trigger the UI update using the existing updateInlineLabeling function
-        // The setupEnhancedInlineLabeling function will handle pre-filling and focus
-        this.updateInlineLabeling(photo);
-    }
-
-    async saveInlineLabel() {
-        const input = document.getElementById('inlineBibInput');
-        if (!input) {
-            console.error('Inline bib input not found');
-            return;
-        }
-
-        const bibNumber = input.value.trim();
-
-        if (!bibNumber || !this.validateBibNumber(bibNumber)) {
-            this.showError('Please enter a valid bib number (1-6 digits, 1-99999)');
-            input.focus();
-            return;
-        }
-
-        if (!this.allPhotosFlat || this.currentPhotoIndex < 0 || this.currentPhotoIndex >= this.allPhotosFlat.length) {
-            this.showError('No photo selected for labeling');
-            return;
-        }
-
-        const photo = this.allPhotosFlat[this.currentPhotoIndex];
-
-        // Store the original photo state before making changes
-        const wasEditingDetectedPhoto = this.isEditMode;
-        const wasUnknownPhoto = photo.groupBibNumber === 'unknown' || 
-                               !photo.detection_result || 
-                               photo.detection_result.bib_number === 'unknown';
-
-        try {
-            // Show loading state in input but keep it enabled to maintain clickability
-            input.style.opacity = '0.6';
-            input.value = 'Saving...';
-
-
-            // Save the label with timeout protection
-            await Promise.race([
-                this.labelPhoto(photo.id, bibNumber),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 10000))
-            ]);
-
-            // Show success
-            this.showSuccess(`Photo labeled as Bib #${bibNumber}`);
-
-            // Refresh data with timeout protection
-            await Promise.race([
-                this.refreshAfterLabeling(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 8000))
-            ]);
-
-            // Smart navigation based on original photo state, not current isEditMode
-            if (wasEditingDetectedPhoto) {
-                // For editing detected photos: stay in current photo, just refresh display
-                this.isEditMode = false;
-                const staticContainer = document.getElementById('photoBibNumberContainer');
-                const inlineContainer = document.getElementById('inlineLabelContainer');
-                if (staticContainer && inlineContainer) {
-                    staticContainer.classList.remove('d-none');
-                    inlineContainer.classList.add('d-none');
-                }
-            } else if (wasUnknownPhoto) {
-                // For unknown photos: advance to next unknown for rapid labeling
-                this.advanceToNextUnknownPhoto();
-            } else {
-                // Fallback: stay on current photo
-            }
-            
-            // CRITICAL: Restore input field state after successful completion
-            // This was missing, causing the "Saving..." text to remain stuck
-            input.disabled = false;
-            input.style.opacity = '1';
-            input.style.pointerEvents = 'auto';
-            
-            // Clear the input for unknown photos (ready for next), or restore for detected photos
-            if (wasUnknownPhoto && !wasEditingDetectedPhoto) {
-                input.value = ''; // Clear for next unknown photo
-                input.focus(); // Keep focus for rapid labeling
-            } else {
-                input.value = bibNumber; // Show the saved value for detected photos
-                input.blur(); // Remove focus since we're done editing
-            }
-            
-
-        } catch (error) {
-            console.error('Failed to label photo:', error);
-            
-            // Handle timeout vs other errors differently
-            let errorMessage;
-            if (error.message === 'Save timeout') {
-                errorMessage = 'Save operation timed out. Please try again.';
-            } else if (error.message === 'Refresh timeout') {
-                errorMessage = 'Save completed but refresh timed out. Photo may still be labeled correctly.';
-            } else {
-                errorMessage = `Failed to label photo: ${error.message}`;
-            }
-            
-            this.showError(errorMessage);
-            
-            // CRITICAL: Always restore input field state on any error
-            // This ensures the input never remains stuck in "Saving..." state
-            input.disabled = false;
-            input.style.opacity = '1';
-            input.value = bibNumber; // Restore the user's input
-            input.style.pointerEvents = 'auto';
-            input.focus();
-            
-        }
-    }
-
-    async saveInlineLabelAsNoBib() {
-        const input = document.getElementById('inlineBibInput');
-        if (!input) {
-            console.error('Inline bib input not found');
-            return;
-        }
-
-        if (!this.allPhotosFlat || this.currentPhotoIndex < 0 || this.currentPhotoIndex >= this.allPhotosFlat.length) {
-            this.showError('No photo selected for labeling');
-            return;
-        }
-
-        const photo = this.allPhotosFlat[this.currentPhotoIndex];
-        const bibNumber = 'unknown'; // Special value for "no bib visible"
-
-        // Store the original photo state before making changes
-        const wasEditingDetectedPhoto = this.isEditMode;
-        const wasUnknownPhoto = photo.groupBibNumber === 'unknown' || 
-                               !photo.detection_result || 
-                               photo.detection_result.bib_number === 'unknown';
-
-        try {
-            // Show loading state in input
-            input.style.opacity = '0.6';
-            input.value = 'No bib visible...';
-
-
-            // Save the label with timeout protection
-            await Promise.race([
-                this.labelPhoto(photo.id, bibNumber),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Save timeout')), 10000))
-            ]);
-
-            // Show success
-            this.showSuccess('Photo marked as "no bib visible"');
-
-            // Refresh data with timeout protection
-            await Promise.race([
-                this.refreshAfterLabeling(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 8000))
-            ]);
-
-            // Smart navigation based on original photo state
-            if (wasEditingDetectedPhoto) {
-                // For editing detected photos: stay in current photo, just refresh display
-                this.isEditMode = false;
-                const staticContainer = document.getElementById('photoBibNumberContainer');
-                const inlineContainer = document.getElementById('inlineLabelContainer');
-                if (staticContainer && inlineContainer) {
-                    staticContainer.classList.remove('d-none');
-                    inlineContainer.classList.add('d-none');
-                }
-            } else if (wasUnknownPhoto) {
-                // For unknown photos: advance to next unknown for rapid labeling
-                this.advanceToNextUnknownPhoto();
-            } else {
-                // Fallback: stay on current photo
-            }
-            
-            // Restore input field state after successful completion
-            input.disabled = false;
-            input.style.opacity = '1';
-            input.style.pointerEvents = 'auto';
-            
-            // Clear the input for unknown photos, or show "No Bib" for detected photos
-            if (wasUnknownPhoto && !wasEditingDetectedPhoto) {
-                input.value = ''; // Clear for next unknown photo
-                input.focus(); // Keep focus for rapid labeling
-            } else {
-                input.value = 'No Bib'; // Show the saved state for detected photos
-                input.blur(); // Remove focus since we're done editing
-            }
-            
-
-        } catch (error) {
-            console.error('Failed to mark photo as no bib visible:', error);
-            
-            // Handle timeout vs other errors differently
-            let errorMessage;
-            if (error.message === 'Save timeout') {
-                errorMessage = 'Save operation timed out. Please try again.';
-            } else if (error.message === 'Refresh timeout') {
-                errorMessage = 'Save completed but refresh timed out. Photo may still be labeled correctly.';
-            } else {
-                errorMessage = `Failed to mark photo: ${error.message}`;
-            }
-            
-            this.showError(errorMessage);
-            
-            // Always restore input field state on any error
-            input.disabled = false;
-            input.style.opacity = '1';
-            input.value = ''; // Clear the input on error
-            input.style.pointerEvents = 'auto';
-            input.focus();
-            
-        }
-    }
-
-    cancelInlineLabel() {
-        const input = document.getElementById('inlineBibInput');
-        const staticContainer = document.getElementById('photoBibNumberContainer');
-        const inlineContainer = document.getElementById('inlineLabelContainer');
-
-        input.value = '';
-        input.blur();
-
-        // If we were in edit mode, go back to static display
-        if (this.isEditMode) {
-            this.isEditMode = false;
-            staticContainer.classList.remove('d-none');
-            inlineContainer.classList.add('d-none');
-        }
-        // For unknown photos, keep the inline input visible
-    }
 
     advanceToNextUnknownPhoto() {
         if (!this.allPhotosFlat) return;
@@ -2892,47 +2424,6 @@ class PhotoProcessor {
         }, 1500);
     }
 
-    createThumbnailStrip() {
-        const container = document.getElementById('thumbnailContainer');
-        container.innerHTML = '';
-
-        // Show thumbnails for all photos, but highlight current group
-        const currentPhoto = this.allPhotosFlat[this.currentPhotoIndex];
-        const currentGroupPhotos = this.allPhotosFlat.filter(photo => photo.groupBibNumber === currentPhoto.groupBibNumber);
-
-        currentGroupPhotos.forEach((photo, localIndex) => {
-            const globalIndex = this.allPhotosFlat.findIndex(p => p.id === photo.id);
-            
-            const thumbnailDiv = document.createElement('div');
-            thumbnailDiv.className = 'thumbnail-item';
-            thumbnailDiv.onclick = () => this.showPhotoInLightbox(globalIndex);
-
-            const img = document.createElement('img');
-            img.src = this.getImageUrl(photo.id);
-            img.alt = photo.filename;
-
-            thumbnailDiv.appendChild(img);
-            container.appendChild(thumbnailDiv);
-        });
-    }
-
-    updateThumbnailSelection() {
-        const thumbnails = document.querySelectorAll('.thumbnail-item');
-        const currentPhoto = this.allPhotosFlat[this.currentPhotoIndex];
-        
-        thumbnails.forEach((thumb) => {
-            thumb.classList.remove('active');
-        });
-        
-        // Find and highlight the current photo's thumbnail
-        const currentPhotoThumbnails = Array.from(thumbnails);
-        const currentGroupPhotos = this.allPhotosFlat.filter(photo => photo.groupBibNumber === currentPhoto.groupBibNumber);
-        const localIndex = currentGroupPhotos.findIndex(photo => photo.id === currentPhoto.id);
-        
-        if (currentPhotoThumbnails[localIndex]) {
-            currentPhotoThumbnails[localIndex].classList.add('active');
-        }
-    }
 
     previousPhoto() {
         if (this.currentPhotoIndex > 0) {
@@ -3087,8 +2578,7 @@ class PhotoProcessor {
         // Check if we're in an input field
         const isInputFocused = document.activeElement && 
             (document.activeElement.tagName === 'INPUT' || 
-             document.activeElement.tagName === 'TEXTAREA' ||
-             document.activeElement.id === 'inlineBibInput');
+             document.activeElement.tagName === 'TEXTAREA');
 
         // For input fields: allow arrow keys for navigation, but block other keys that interfere with typing
         if (isInputFocused) {
