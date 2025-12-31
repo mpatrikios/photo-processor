@@ -14,8 +14,8 @@
     <!-- Custom CSS - Modular Structure -->
     <link rel="stylesheet" href="static/css/core.css">
     <link rel="stylesheet" href="static/css/components.css">
-    <link rel="stylesheet" href="static/css/global.css">
     <link rel="stylesheet" href="static/css/photo-viewer.css">
+    <link rel="stylesheet" href="static/css/global.css">
     
     <!-- Browser Image Compression -->
     <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.min.js"></script>
@@ -726,15 +726,15 @@
                         <!-- Photo Groups -->
                         <div id="photo-groups" class="row"></div>
                         
+                        <!-- Hidden Export Groups (needed by JavaScript) -->
+                        <div id="export-groups" style="display: none;"></div>
 
                         <!-- Simple Export Controls -->
                         <div class="text-center mt-4">
                             <div class="d-flex justify-content-center gap-3 mb-4">
-                                <button id="download-all-btn" class="btn btn-success btn-lg btn-progress">
-                                    <span class="btn-content">
-                                        <i class="fas fa-download me-2"></i>
-                                        Download All Photos as ZIP
-                                    </span>
+                                <button id="download-all-btn" class="btn btn-success btn-lg">
+                                    <i class="fas fa-download me-2"></i>
+                                    Download All Photos as ZIP
                                 </button>
                                 <button id="upload-more-btn" class="btn btn-outline-primary btn-lg">
                                     <i class="fas fa-plus me-2"></i>
@@ -746,6 +746,12 @@
                                 </button>
                             </div>
                             
+                            <!-- Export Progress -->
+                            <div class="progress mb-3" id="exportProgress" style="display: none; max-width: 400px; margin: 0 auto;">
+                                <div class="progress-bar" role="progressbar" style="width: 0%">
+                                    <small>Preparing export...</small>
+                                </div>
+                            </div>
                             
                             <p class="text-muted">
                                 <small>Photos will be organized by bib number in separate folders</small>
