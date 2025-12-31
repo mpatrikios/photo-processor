@@ -28,11 +28,11 @@ class PhotoProcessor {
         // Session restoration tracking to prevent duplicate notifications
         this.hasRestoredSession = false;
         this.restorationInProgress = false;
+
         
         // Unified progress tracking
         this.unifiedProgress = null;
         
-        // Initialize authentication from localStorage
         const storedToken = localStorage.getItem('auth_token');
         this.authToken = storedToken || null;
         this.isAuthenticated = !!storedToken;
@@ -46,7 +46,6 @@ class PhotoProcessor {
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
 
-        // Initialize authentication and UI
         this.initializeApp();
     }
 
@@ -62,7 +61,6 @@ class PhotoProcessor {
         this.isAuthenticated = true;
         this.authToken = token;
         
-        // Update StateManager auth state immediately
         if (window.stateManager) {
             const userInfo = localStorage.getItem('user_info');
             try {
@@ -115,7 +113,6 @@ class PhotoProcessor {
                 this.isAuthenticated = false;
                 this.authToken = null;
                 
-                // Clear StateManager auth state
                 if (window.stateManager) {
                     window.stateManager.set('auth.isAuthenticated', false);
                     window.stateManager.set('auth.token', null);
@@ -152,7 +149,6 @@ class PhotoProcessor {
         window.addEventListener('beforeunload', this.beforeUnloadHandler);
         
         this.isActivelyProcessing = true;
-        console.log('Processing warning activated');
     }
 
     hideProcessingWarning() {
@@ -164,17 +160,14 @@ class PhotoProcessor {
         }
         
         this.isActivelyProcessing = false;
-        console.log('Processing warning deactivated');
     }
 
     async checkAndRestoreRecentJob() {
         // Prevent concurrent restoration attempts and duplicate notifications
         if (this.hasRestoredSession || this.restorationInProgress) {
-            console.log('Session restoration already handled/in progress, skipping');
             return;
         }
         
-        // Set flag immediately to block concurrent calls
         this.restorationInProgress = true;
         
         try {
@@ -183,7 +176,6 @@ class PhotoProcessor {
             const currentJobStatus = window.stateManager?.get('processing.currentJobStatus');
             
             if (currentJobId && currentJobStatus && currentJobStatus !== 'completed') {
-                console.log(`Found active job to resume: ${currentJobId} (status: ${currentJobStatus})`);
                 
                 // Try to resume the active job
                 try {
@@ -196,7 +188,6 @@ class PhotoProcessor {
                         this.currentJobId = currentJobId;
                         
                         if (jobStatus.status === 'completed') {
-                            console.log('Active job was completed while offline, fetching results');
                             // Job completed while we were offline, get results
                             const resultsResponse = await fetch(`${this.apiBase}/process/results/${currentJobId}`, {
                                 headers: { 'Authorization': `Bearer ${this.authToken}` }
@@ -211,11 +202,9 @@ class PhotoProcessor {
                                 return;
                             }
                         } else if (jobStatus.status === 'processing' || jobStatus.status === 'pending') {
-                            console.log('Resuming active processing job');
                             this.showProcessingSection();
                             this.showProcessingWarning(); // Activate reload protection
                             
-                            // Show a brief message that job was resumed
                             const progressText = document.getElementById('progress-text');
                             if (progressText) {
                                 progressText.innerHTML = '<i class="fas fa-play text-success me-2"></i>Resuming processing job...';
@@ -224,12 +213,11 @@ class PhotoProcessor {
                                 }, 1000);
                             }
                             
-                            this.pollProcessingStatus();
+                            this.pollProcessingStatusWithUnifiedProgress();
                             // Mark session as handled to prevent duplicate restoration attempts
                             this.hasRestoredSession = true;
                             return;
                         } else if (jobStatus.status === 'failed') {
-                            console.log('Active job failed, marking as failed');
                             window.stateManager.markJobCompleted(currentJobId, 'failed');
                         }
                     } else {
@@ -243,9 +231,7 @@ class PhotoProcessor {
                 }
             }
             
-            // Check if StateManager has a recent completed job
             if (!window.stateManager || !window.stateManager.hasRecentCompletedJob()) {
-                console.log('No recent completed job found in localStorage');
                 this.hasRestoredSession = true; // Mark as handled even if nothing to restore
                 return;
             }
@@ -253,7 +239,6 @@ class PhotoProcessor {
             const lastJobId = window.stateManager.get('processing.lastCompletedJobId');
             const lastCompleted = window.stateManager.get('processing.lastCompletedAt');
             
-            console.log(`Found recent completed job: ${lastJobId} completed at ${lastCompleted}`);
             
             // Fetch the job results from the server
             const response = await fetch(`${this.apiBase}/process/results/${lastJobId}`, {
@@ -264,14 +249,11 @@ class PhotoProcessor {
             
             if (response.ok) {
                 const results = await response.json();
-                console.log('Successfully restored job results:', results);
                 
-                // Update current state
                 this.currentJobId = lastJobId;
                 window.stateManager.set('processing.currentJobId', lastJobId);
                 window.stateManager.set('photos.groupedPhotos', results);
                 
-                // Show results section instead of upload section
                 this.groupedPhotos = this.convertGroupedPhotosObjectToArray(results);
                 this.showResultsSection();
                 
@@ -285,7 +267,6 @@ class PhotoProcessor {
             
         } catch (error) {
             console.error('Error restoring recent job:', error);
-            // Clear invalid state
             if (window.stateManager) {
                 window.stateManager.clearCompletedJob();
             }
@@ -299,7 +280,6 @@ class PhotoProcessor {
         document.getElementById('login-section').classList.add('d-none');
         document.getElementById('main-content').classList.remove('d-none');
         
-        // Load user quota when showing main content
         this.loadUserQuota();
     }
 
@@ -318,7 +298,6 @@ class PhotoProcessor {
         const password = document.getElementById('password').value;
         const submitBtn = e.target.querySelector('button[type="submit"]');
 
-        // Show loading state
         const originalText = submitBtn.innerHTML;
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
@@ -378,7 +357,6 @@ class PhotoProcessor {
                             window.stateManager.state.auth.token = token;
                         }
                     } catch (error) {
-                        console.log('StateManager not available or not properly initialized:', error);
                     }
                 }
             } else {
@@ -449,7 +427,6 @@ class PhotoProcessor {
         // Upload button
         uploadBtn.addEventListener('click', this.uploadFiles.bind(this));
 
-        // Clear files and add more buttons
         document.getElementById('clear-files-btn').addEventListener('click', this.clearAllFiles.bind(this));
         document.getElementById('add-more-btn').addEventListener('click', () => fileInput.click());
 
@@ -536,7 +513,6 @@ class PhotoProcessor {
     }
 
     updateSelectionUI() {
-        // Update checkboxes in export groups
         document.querySelectorAll('.export-checkbox input[type="checkbox"]').forEach(checkbox => {
             checkbox.checked = this.selectedGroups.includes(checkbox.value);
             const label = checkbox.closest('.export-checkbox');
@@ -547,12 +523,10 @@ class PhotoProcessor {
             }
         });
 
-        // Update selection count
         const count = this.selectedGroups.length;
         document.getElementById('selectionCount').textContent = `${count} group${count !== 1 ? 's' : ''} selected`;
         document.getElementById('exportBtnCount').textContent = count;
 
-        // Update select all checkbox
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
         const allSelected = groupsToShow.length > 0 && this.selectedGroups.length === groupsToShow.length;
         document.getElementById('selectAllGroups').checked = allSelected;
@@ -725,7 +699,6 @@ class PhotoProcessor {
     }
 
     setFilter(filter) {
-        // Update button states
         document.querySelectorAll('.filter-btn').forEach(btn => {
             if (btn.id === `filter${filter.charAt(0).toUpperCase() + filter.slice(1)}` || 
                 (filter === 'all' && btn.id === 'filterAll')) {
@@ -750,7 +723,6 @@ class PhotoProcessor {
         this.currentSort = sortType;
         this.applyFilters();
 
-        // Update dropdown button text
         const sortLabels = {
             'bib-asc': 'Bib A-Z',
             'bib-desc': 'Bib Z-A',
@@ -861,7 +833,6 @@ class PhotoProcessor {
         const photoGroupsDiv = document.getElementById('photo-groups');
         const groupsToShow = this.filteredGroups.length > 0 ? this.filteredGroups : this.groupedPhotos;
 
-        console.log('Displaying groups:', groupsToShow);
 
         if (groupsToShow.length === 0) {
             photoGroupsDiv.innerHTML = `
@@ -949,7 +920,6 @@ class PhotoProcessor {
         // Clear any previous completed job state when starting new upload
         if (window.stateManager) {
             window.stateManager.clearCompletedJob();
-            console.log('Cleared previous job state for new upload');
         }
         
         const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -966,7 +936,6 @@ class PhotoProcessor {
                 invalidFiles.push(`${file.name} - too large (${this.formatFileSize(file.size)})`);
             } else {
                 validFiles.push(file);
-                console.log(`Added ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB (raw)`);
             }
         });
 
@@ -1130,25 +1099,19 @@ class PhotoProcessor {
     // Get current user quota
     async loadUserQuota() {
         try {
-            console.log('🔄 Loading user quota...');
-            console.log('🔐 Current authToken:', this.authToken ? `${this.authToken.substring(0, 20)}...` : 'NULL');
             
             // Check localStorage token as well
             const storedToken = localStorage.getItem('auth_token');
-            console.log('🔐 Stored token:', storedToken ? `${storedToken.substring(0, 20)}...` : 'NULL');
             
             const headers = this.getAuthHeaders();
-            console.log('🔐 Request headers:', headers);
             
             const response = await fetch(`${this.apiBase}/users/me/quota`, {
                 headers: headers,
                 credentials: 'include'
             });
 
-            console.log('📊 Quota response status:', response.status);
             if (response.ok) {
                 const data = await response.json();
-                console.log('✅ Quota data received:', data);
                 this.updateQuotaDisplay(data.quota);
                 return data.quota;
             } else {
@@ -1223,7 +1186,6 @@ class PhotoProcessor {
         }
 
         try {
-            console.log(`📦 Starting unified upload process for ${this.selectedFiles.length} photos...`);
             
             // Initialize unified progress manager
             this.unifiedProgress = new UnifiedProgressManager();
@@ -1245,7 +1207,6 @@ class PhotoProcessor {
             });
             const allPhotoIds = await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
             
-            console.log(`✅ All batches uploaded successfully. Total photos: ${allPhotoIds.length}`);
             
             // Track successful upload
             if (window.analyticsDashboard) {
@@ -1305,10 +1266,8 @@ class PhotoProcessor {
                     initialQuality: 0.95
                 };
                 
-                console.log(`Optimizing ${file.name}: ${(file.size / 1024 / 1024).toFixed(1)}MB → 3072px max accuracy`);
                 finalFile = await imageCompression(file, options);
                 finalFile = new File([finalFile], file.name, { type: finalFile.type });
-                console.log(`Optimized to: ${(finalFile.size / 1024 / 1024).toFixed(1)}MB (3072px, Q95 for OCR)`);
             }
             
             processedFiles.push(finalFile);
@@ -1332,7 +1291,6 @@ class PhotoProcessor {
             batches.push(files.slice(i, i + BATCH_SIZE));
         }
         
-        console.log(`📦 Split ${files.length} photos into ${batches.length} batches of ${BATCH_SIZE} photos each`);
         
         for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
             const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
@@ -1404,7 +1362,6 @@ class PhotoProcessor {
                 }
 
                 const statusData = await response.json();
-                console.log('📊 Processing Status:', statusData);
 
                 // Update unified progress in processing phase (50-100%)
                 if (statusData.progress !== undefined) {
@@ -1452,53 +1409,7 @@ class PhotoProcessor {
         }
     }
 
-    // Upload files in small batches to handle thousands of photos
-    async uploadInBatches(files) {
-        const BATCH_SIZE = 5; // Photos per batch (keeps under 30MB limit)
-        const batches = [];
-        const allPhotoIds = [];
-        
-        // Split files into batches
-        for (let i = 0; i < files.length; i += BATCH_SIZE) {
-            batches.push(files.slice(i, i + BATCH_SIZE));
-        }
-        
-        console.log(`📦 Split ${files.length} photos into ${batches.length} batches of ${BATCH_SIZE} photos each`);
-        
-        // Upload batches in parallel (3 concurrent) for much faster uploads
-        const CONCURRENT_BATCHES = 3;
-        const uploadBtn = document.getElementById('upload-btn');
-        
-        for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
-            const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
-            const batchNumbers = concurrentBatches.map((_, idx) => i + idx + 1);
-            
-            try {
-                
-                // Update progress in UI
-                uploadBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Uploading ${concurrentBatches.length} batches concurrently...`;
-                
-                // Upload all batches in this group concurrently
-                const batchPromises = concurrentBatches.map((batch, idx) => 
-                    this.uploadBatch(batch, batchNumbers[idx], batches.length)
-                );
-                
-                const batchResults = await Promise.all(batchPromises);
-                
-                // Flatten all results from concurrent batches
-                for (const batchPhotoIds of batchResults) {
-                    allPhotoIds.push(...batchPhotoIds);
-                }
-                
-                
-            } catch (error) {
-                console.error(`❌ Concurrent batch group (${batchNumbers[0]}-${batchNumbers[batchNumbers.length - 1]}) failed:`, error);
-                throw new Error(`Concurrent batch upload failed: ${error.message}`);
-            }
-        }
-        
-        return allPhotoIds;
-    }
+    // REMOVED: uploadInBatches() method - replaced by uploadInBatchesWithUnifiedProgress()
 
     // NEW: Direct upload to GCS (bypasses server bottleneck)
     // NEW: Direct upload to GCS (bypasses server bottleneck)
@@ -1594,88 +1505,9 @@ class PhotoProcessor {
         }
     }
 
-    // Processing
-    async startProcessing(photoIds) {
-        try {
-            const response = await fetch(`${this.apiBase}/process/start`, {
-                method: 'POST',
-                headers: this.getAuthHeaders(true),
-                credentials: 'include',
-                body: JSON.stringify(photoIds)
-            });
+    // REMOVED: startProcessing() method - replaced by startProcessingWithUnifiedProgress()
 
-            if (!response.ok) {
-                throw new Error(`Processing failed: ${response.statusText}`);
-            }
-
-            const job = await response.json();
-            this.currentJobId = job.job_id;
-            
-            // Immediately save job ID and status to localStorage for reload recovery
-            if (window.stateManager) {
-                window.stateManager.set('processing.currentJobId', this.currentJobId);
-                window.stateManager.set('processing.currentJobStatus', 'processing');
-                console.log(`Active job ${this.currentJobId} saved to localStorage for reload recovery`);
-            }
-            
-            this.pollProcessingStatus();
-
-        } catch (error) {
-            console.error('Processing error:', error);
-            this.showError('Processing failed. Please try again.');
-        }
-    }
-
-    async pollProcessingStatus() {
-        if (!this.currentJobId) return;
-
-        try {
-            const response = await fetch(`${this.apiBase}/process/status/${this.currentJobId}`, {
-                headers: this.getAuthHeaders(true),
-                credentials: 'include'
-            });
-            
-            if (response.status === 404) {
-                // Job not found - likely server restarted and lost job data
-                console.warn(`Job ${this.currentJobId} not found (404). Server may have restarted.`);
-                this.showError('Processing job was lost due to server restart. Please upload your photos again.');
-                this.resetApp();
-                return;
-            }
-            
-            if (!response.ok) throw new Error(`Status check failed: ${response.statusText}`);
-
-            const job = await response.json();
-            this.updateProgress(job);
-
-            if (job.status === 'completed') {
-                // Update progress to show completion
-                const progressText = document.getElementById('progress-text');
-                if (progressText) {
-                    progressText.textContent = 'Processing complete! Loading results...';
-                }
-                // Add a small delay to ensure backend results are ready
-                setTimeout(() => this.fetchResults(), 500);
-            } else if (job.status === 'failed') {
-                this.showError('Processing failed. Please try again.');
-                this.resetApp();
-            } else {
-                setTimeout(() => this.pollProcessingStatus(), 500);
-            }
-
-        } catch (error) {
-            console.error('Status check error:', error);
-            // Don't retry indefinitely - stop after certain conditions
-            if (error.message.includes('404') || error.message.includes('not found')) {
-                console.warn('Stopping polling due to job not found');
-                this.showError('Processing job not found. Please upload your photos again.');
-                this.resetApp();
-            } else {
-                // Continue polling for other errors, but with longer delay
-                setTimeout(() => this.pollProcessingStatus(), 2000);
-            }
-        }
-    }
+    // REMOVED: pollProcessingStatus() method - replaced by pollProcessingStatusWithUnifiedProgress()
 
     updateProgress(job) {
         const progressBar = document.getElementById('progress-bar');
@@ -1718,7 +1550,6 @@ class PhotoProcessor {
                 
                 // If results aren't ready yet and we haven't retried too many times, try again
                 if (response.status === 400 && retryCount < 3) {
-                    console.log(`Results not ready yet, retrying in 1 second... (attempt ${retryCount + 1})`);
                     // Update progress text to show retry
                     const progressText = document.getElementById('progress-text');
                     if (progressText) {
@@ -1731,7 +1562,6 @@ class PhotoProcessor {
             }
 
             const groupedPhotosObj = await response.json();
-            console.log('Grouped photos received:', groupedPhotosObj);
             
             // Convert Object format to Array format for compatibility with existing code
             this.groupedPhotos = this.convertGroupedPhotosObjectToArray(groupedPhotosObj);
@@ -1756,7 +1586,6 @@ class PhotoProcessor {
             // Save job completion state to localStorage for persistence
             if (window.stateManager && this.currentJobId) {
                 window.stateManager.markJobCompleted(this.currentJobId, 'completed');
-                console.log(`Job ${this.currentJobId} completion state saved to localStorage`);
             }
             
             // Hide processing warning since job is now completed
@@ -1769,7 +1598,6 @@ class PhotoProcessor {
 
             // If this is the first attempt, try once more after a delay
             if (retryCount === 0) {
-                console.log('Retrying results fetch after 2 seconds...');
                 // Update progress text to show retry
                 const progressText = document.getElementById('progress-text');
                 if (progressText) {
@@ -1799,7 +1627,6 @@ class PhotoProcessor {
                 
                 // If results aren't ready yet and we haven't retried too many times, try again
                 if (response.status === 400 && retryCount < 3) {
-                    console.log(`Results not ready yet, retrying in 1 second... (attempt ${retryCount + 1})`);
                     setTimeout(() => this.fetchAndMergeResults(retryCount + 1), 1000);
                     return;
                 }
@@ -1807,7 +1634,6 @@ class PhotoProcessor {
             }
 
             const newGroupedPhotosObj = await response.json();
-            console.log('New grouped photos received for merging:', newGroupedPhotosObj);
             
             // Convert Object format to Array format for compatibility with existing code
             const newGroupedPhotos = this.convertGroupedPhotosObjectToArray(newGroupedPhotosObj);
@@ -1818,7 +1644,6 @@ class PhotoProcessor {
             // Save job completion state to localStorage for persistence
             if (window.stateManager && this.currentJobId) {
                 window.stateManager.markJobCompleted(this.currentJobId, 'completed');
-                console.log(`Job ${this.currentJobId} completion state saved to localStorage`);
             }
 
         } catch (error) {
@@ -1826,7 +1651,6 @@ class PhotoProcessor {
 
             // If this is the first attempt, try once more after a delay
             if (retryCount === 0) {
-                console.log('Retrying results fetch after 2 seconds...');
                 setTimeout(() => this.fetchAndMergeResults(1), 2000);
             } else {
                 this.showError('Failed to fetch additional results. Please try again.');
@@ -2116,7 +1940,6 @@ class PhotoProcessor {
             window.stateManager.clearCompletedJob();
             window.stateManager.set('processing.currentJobId', null);
             window.stateManager.set('processing.currentJobStatus', null);
-            console.log('Cleared all job state - starting fresh');
         }
         
         // Hide any processing warnings
@@ -2324,7 +2147,6 @@ class PhotoProcessor {
             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadMoreModal'));
             modal.hide();
 
-            console.log(`📦 Starting unified upload more process for ${this.modalSelectedFiles.length} photos...`);
             
             // Use existing unified progress flow
             this.selectedFiles = this.modalSelectedFiles;
@@ -2417,8 +2239,6 @@ class PhotoProcessor {
             });
         });
         
-        console.log('🔍 DEBUG: Built allPhotosFlat array with', this.allPhotosFlat.length, 'photos');
-        console.log('🔍 DEBUG: Groups in sorted order:', sortedGroups.map(g => `${g.bib_number} (${g.photos.length} photos)`));
 
         // Find the current photo index in the flat list
         this.currentPhotoIndex = this.allPhotosFlat.findIndex(photo => photo.id === photoId);
@@ -2428,7 +2248,6 @@ class PhotoProcessor {
             return;
         }
 
-        console.log('Opening photo modal for:', photoId, 'Group:', groupBibNumber);
         
         this.initializeLightbox();
         this.showPhotoInLightbox(this.currentPhotoIndex);
@@ -2446,10 +2265,8 @@ class PhotoProcessor {
     }
 
     showFixedMetadataPanel() {
-        console.log('Showing fixed metadata panel');
         const metadataPanel = document.getElementById('photoMetadata');
         if (metadataPanel) {
-            console.log('Panel element found, current classes:', metadataPanel.className);
             
             // Remove any hiding classes and show the panel
             metadataPanel.classList.remove('d-none', 'photo-metadata-hidden');
@@ -2461,15 +2278,12 @@ class PhotoProcessor {
             document.body.classList.add('metadata-panel-visible');
             document.body.classList.remove('metadata-panel-hidden');
             
-            console.log('Panel shown, final classes:', metadataPanel.className);
-            console.log('Panel pointer events:', metadataPanel.style.pointerEvents);
         } else {
             console.error('photoMetadata panel not found!');
         }
     }
 
     hideFixedMetadataPanel() {
-        console.log('Hiding fixed metadata panel');
         const metadataPanel = document.getElementById('photoMetadata');
         if (metadataPanel) {
             // Add the hiding class for smooth animation
@@ -2506,19 +2320,16 @@ class PhotoProcessor {
         if (modalElement) {
             const strayElements = modalElement.querySelectorAll('[id*="photoMetadata"], .photoMetadata');
             strayElements.forEach(element => {
-                console.log('Removing stray photoMetadata element from modal:', element);
                 element.remove();
             });
         }
     }
 
     handleModalShown() {
-        console.log('Photo modal shown, ensuring metadata panel is visible');
         this.showFixedMetadataPanel();
     }
 
     handleModalHidden() {
-        console.log('Photo modal hidden, hiding metadata panel');
         this.hideFixedMetadataPanel();
     }
 
@@ -2563,13 +2374,11 @@ class PhotoProcessor {
 
     showPhotoInLightbox(index) {
         if (!this.allPhotosFlat || index < 0 || index >= this.allPhotosFlat.length) {
-            console.log('🔍 DEBUG: showPhotoInLightbox failed - invalid index:', index, 'array length:', this.allPhotosFlat?.length);
             return;
         }
 
         this.currentPhotoIndex = index;
         const photo = this.allPhotosFlat[index];
-        console.log('🔍 DEBUG: Showing photo', index + 1, 'of', this.allPhotosFlat.length, '- Group:', photo.groupBibNumber, 'ID:', photo.id);
 
         // Show loading spinner
         document.getElementById('photoLoader').style.display = 'block';
@@ -2637,14 +2446,11 @@ class PhotoProcessor {
     }
 
     initializeInlineLabeling() {
-        console.log('initializeInlineLabeling called');
 
         const input = document.getElementById('inlineBibInput');
 
-        console.log('Inline labeling input found:', !!input, 'disabled:', input?.disabled);
 
         if (!input) {
-            console.log('Inline labeling input not found yet - will be initialized when input is created');
             return;
         }
 
@@ -2873,7 +2679,6 @@ class PhotoProcessor {
             input.style.opacity = '0.6';
             input.value = 'Saving...';
 
-            console.log(`Attempting to label photo ${photo.id} as bib #${bibNumber}`);
 
             // Save the label with timeout protection
             await Promise.race([
@@ -2900,14 +2705,11 @@ class PhotoProcessor {
                     staticContainer.classList.remove('d-none');
                     inlineContainer.classList.add('d-none');
                 }
-                console.log('Staying on current photo after editing detected photo');
             } else if (wasUnknownPhoto) {
                 // For unknown photos: advance to next unknown for rapid labeling
-                console.log('Advancing to next unknown photo after labeling');
                 this.advanceToNextUnknownPhoto();
             } else {
                 // Fallback: stay on current photo
-                console.log('Staying on current photo (fallback case)');
             }
             
             // CRITICAL: Restore input field state after successful completion
@@ -2925,7 +2727,6 @@ class PhotoProcessor {
                 input.blur(); // Remove focus since we're done editing
             }
             
-            console.log('Input field restored after successful save');
 
         } catch (error) {
             console.error('Failed to label photo:', error);
@@ -2950,7 +2751,6 @@ class PhotoProcessor {
             input.style.pointerEvents = 'auto';
             input.focus();
             
-            console.log('Input field fully restored after error:', error.message);
         }
     }
 
@@ -2980,7 +2780,6 @@ class PhotoProcessor {
             input.style.opacity = '0.6';
             input.value = 'No bib visible...';
 
-            console.log(`Marking photo ${photo.id} as no bib visible`);
 
             // Save the label with timeout protection
             await Promise.race([
@@ -3007,14 +2806,11 @@ class PhotoProcessor {
                     staticContainer.classList.remove('d-none');
                     inlineContainer.classList.add('d-none');
                 }
-                console.log('Staying on current photo after editing detected photo');
             } else if (wasUnknownPhoto) {
                 // For unknown photos: advance to next unknown for rapid labeling
-                console.log('Advancing to next unknown photo after marking as no bib visible');
                 this.advanceToNextUnknownPhoto();
             } else {
                 // Fallback: stay on current photo
-                console.log('Staying on current photo (fallback case)');
             }
             
             // Restore input field state after successful completion
@@ -3031,7 +2827,6 @@ class PhotoProcessor {
                 input.blur(); // Remove focus since we're done editing
             }
             
-            console.log('Input field restored after successful no bib save');
 
         } catch (error) {
             console.error('Failed to mark photo as no bib visible:', error);
@@ -3055,7 +2850,6 @@ class PhotoProcessor {
             input.style.pointerEvents = 'auto';
             input.focus();
             
-            console.log('Input field fully restored after error:', error.message);
         }
     }
 
@@ -3141,20 +2935,16 @@ class PhotoProcessor {
     }
 
     previousPhoto() {
-        console.log('🔍 DEBUG: previousPhoto called, current index:', this.currentPhotoIndex, 'total photos:', this.allPhotosFlat?.length);
         if (this.currentPhotoIndex > 0) {
             this.showPhotoInLightbox(this.currentPhotoIndex - 1);
         } else {
-            console.log('🔍 DEBUG: Already at first photo');
         }
     }
 
     nextPhoto() {
-        console.log('🔍 DEBUG: nextPhoto called, current index:', this.currentPhotoIndex, 'total photos:', this.allPhotosFlat?.length);
         if (this.currentPhotoIndex < this.allPhotosFlat.length - 1) {
             this.showPhotoInLightbox(this.currentPhotoIndex + 1);
         } else {
-            console.log('🔍 DEBUG: Already at last photo');
         }
     }
 
@@ -3908,7 +3698,7 @@ class UnifiedProgressManager {
         const phase = this.phases[this.currentPhase];
         const overallProgress = this.calculateOverallProgress();
 
-        const titleElement = document.getElementById('journey-status');
+        const titleElement = document.getElementById('progress-phase-title');
         const percentageElement = document.getElementById('progress-percentage');
         const progressBar = document.getElementById('unified-progress-bar');
 
