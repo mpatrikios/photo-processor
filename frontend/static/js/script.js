@@ -560,23 +560,98 @@ async function handleCreateAccount(event) {
     }
 }
 
-function showNotification(message, type = 'info') {
-    const alertClass = type === 'error' ? 'alert-danger' : type === 'success' ? 'alert-success' : 'alert-info';
-    const iconClass = type === 'error' ? 'fa-exclamation-triangle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+/**
+ * Modern glassmorphism toast notification system
+ * @param {string} message - The message to display
+ * @param {string} type - Type of notification: 'success', 'error', 'info', 'warning'
+ * @param {number} duration - Auto-dismiss duration in milliseconds (default: 4000)
+ */
+function showNotification(message, type = 'info', duration = 4000) {
+    // Get or create the alert container
+    let container = document.getElementById('alert-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'alert-container';
+        document.body.appendChild(container);
+    }
 
-    const notification = document.createElement('div');
-    notification.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    notification.innerHTML = `
-        <i class="fas ${iconClass} me-2"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    // Icon mapping for different toast types
+    const iconMap = {
+        success: 'fa-check-circle',
+        error: 'fa-exclamation-triangle', 
+        info: 'fa-info-circle',
+        warning: 'fa-exclamation-triangle'
+    };
+
+    // Color mapping for icon colors
+    const iconColorMap = {
+        success: '#10b981',
+        error: '#ef4444',
+        info: '#3b82f6', 
+        warning: '#f59e0b'
+    };
+
+    // Create the toast element
+    const toast = document.createElement('div');
+    toast.className = `modern-toast ${type}`;
+    
+    // Create unique ID for this toast
+    const toastId = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    toast.id = toastId;
+
+    // Create toast content
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas ${iconMap[type]} toast-icon" style="color: ${iconColorMap[type]};"></i>
+            <span class="toast-message">${message}</span>
+        </div>
+        <button class="toast-close" onclick="dismissToast('${toastId}')" aria-label="Close">
+            <i class="fas fa-times"></i>
+        </button>
+        <div class="toast-progress"></div>
     `;
 
-    document.body.appendChild(notification);
+    // Add to container (newest on top)
+    container.insertBefore(toast, container.firstChild);
+
+    // Auto-dismiss after specified duration
     setTimeout(() => {
-        if (notification.parentNode) notification.remove();
-    }, 4000);
+        dismissToast(toastId);
+    }, duration);
+
+    return toastId;
+}
+
+/**
+ * Dismiss a specific toast with smooth animation
+ * @param {string} toastId - ID of the toast to dismiss
+ */
+function dismissToast(toastId) {
+    const toast = document.getElementById(toastId);
+    if (!toast) return;
+
+    // Add fade-out animation
+    toast.classList.add('fade-out');
+    
+    // Remove from DOM after animation completes
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 300); // Match animation duration
+}
+
+/**
+ * Clear all toasts
+ */
+function clearAllToasts() {
+    const container = document.getElementById('alert-container');
+    if (container) {
+        const toasts = container.querySelectorAll('.modern-toast');
+        toasts.forEach(toast => {
+            dismissToast(toast.id);
+        });
+    }
 }
 
 function checkAuthOnLoad() {
@@ -727,11 +802,11 @@ async function updateCustomModalContent(quotaData, statsData) {
                 <div class="modern-stats-grid">
                     <div class="modern-stat-item">
                         <div class="modern-stat-value" style="color: #28a745;">${stats.total_photos_uploaded || 0}</div>
-                        <div class="modern-stat-label">Total Uploads</div>
+                        <div class="modern-stat-label">All-Time Uploads</div>
                     </div>
                     <div class="modern-stat-item">
                         <div class="modern-stat-value" style="color: #17a2b8;">${stats.total_processing_jobs || 0}</div>
-                        <div class="modern-stat-label">Jobs Processed</div>
+                        <div class="modern-stat-label">All-Time Jobs</div>
                     </div>
                 </div>
             </div>
@@ -839,7 +914,7 @@ async function updateCustomProfile() {
             throw new Error('Failed to update');
         }
     } catch (error) {
-        alert('Error updating profile');
+        showNotification('Error updating profile', 'error');
     }
 }
 
@@ -907,7 +982,7 @@ async function changeEmail() {
     const passwordInput = document.getElementById('emailChangePassword');
     
     if (!newEmailInput.value || !passwordInput.value) {
-        alert('Please fill in all fields');
+        showNotification('Please fill in all fields', 'warning');
         return;
     }
     
@@ -928,15 +1003,15 @@ async function changeEmail() {
         });
         
         if (response.ok) {
-            alert('Email updated successfully!');
+            showNotification('Email updated successfully!', 'success');
             document.getElementById('customProfileModal').remove();
             showProfileModal(); // Reload modal with updated data
         } else {
             const error = await response.json();
-            alert(error.detail || 'Error updating email');
+            showNotification(error.detail || 'Error updating email', 'error');
         }
     } catch (error) {
-        alert('Error updating email');
+        showNotification('Error updating email', 'error');
     }
 }
 
@@ -971,17 +1046,17 @@ async function changePassword() {
     const confirmInput = document.getElementById('confirmPassword');
     
     if (!currentInput.value || !newInput.value || !confirmInput.value) {
-        alert('Please fill in all fields');
+        showNotification('Please fill in all fields', 'warning');
         return;
     }
     
     if (newInput.value !== confirmInput.value) {
-        alert('New passwords do not match');
+        showNotification('New passwords do not match', 'warning');
         return;
     }
     
     if (newInput.value.length < 8) {
-        alert('New password must be at least 8 characters long');
+        showNotification('New password must be at least 8 characters long', 'warning');
         return;
     }
     
@@ -1004,14 +1079,14 @@ async function changePassword() {
         });
         
         if (response.ok) {
-            alert('Password updated successfully!');
+            showNotification('Password updated successfully!', 'success');
             document.getElementById('customProfileModal').remove();
         } else {
             const error = await response.json();
-            alert(error.detail || 'Error updating password');
+            showNotification(error.detail || 'Error updating password', 'error');
         }
     } catch (error) {
-        alert('Error updating password');
+        showNotification('Error updating password', 'error');
     }
 }
 
@@ -1033,10 +1108,10 @@ async function logoutAllSessions() {
         if (response.ok) {
             logout(); // Use existing logout function
         } else {
-            alert('Error signing out from all devices');
+            showNotification('Error signing out from all devices', 'error');
         }
     } catch (error) {
-        alert('Error signing out from all devices');
+        showNotification('Error signing out from all devices', 'error');
     }
 }
 
@@ -1057,10 +1132,10 @@ async function openBillingPortal() {
             const { url } = await response.json();
             window.open(url, '_blank');
         } else {
-            alert('Error opening billing portal');
+            showNotification('Error opening billing portal', 'error');
         }
     } catch (error) {
-        alert('Error opening billing portal');
+        showNotification('Error opening billing portal', 'error');
     }
 }
 
