@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # Stripe Configuration
     stripe_secret_key: Optional[str] = Field(default=None)
     stripe_webhook_secret: Optional[str] = Field(default=None)
+    stripe_publishable_key: Optional[str] = Field(default=None)
 
     # Database
     database_url: str = Field(default="sqlite:///./tag_photos.db")
@@ -83,9 +84,6 @@ class Settings(BaseSettings):
     aws_s3_bucket: Optional[str] = Field(default=None)
     aws_region: str = Field(default="us-east-1")
 
-    # Payment Processing
-    stripe_secret_key: Optional[str] = Field(default=None, description="Stripe secret key")
-    stripe_webhook_secret: Optional[str] = Field(default=None, description="Stripe webhook secret")
 
     # Monitoring
     sentry_dsn: Optional[str] = Field(default=None)

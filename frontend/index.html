@@ -260,7 +260,7 @@
                                         <small class="text-muted">First 3 days</small>
                                     </div>
                                     <ul class="list-unstyled">
-                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>1,000 photos/month</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>50 photos (3 days)</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Basic sorting</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>10MB max file size</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Standard support</li>
@@ -285,13 +285,13 @@
                                         <small class="text-muted">per month</small>
                                     </div>
                                     <ul class="list-unstyled">
-                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>10,000 photos/month</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>1,000 photos/month</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Basic sorting</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>25MB max file size</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Priority support</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>CSV export</li>
                                     </ul>
-                                    <button class="btn btn-primary w-100 mt-3" onclick="handleUpgrade('basic')">
+                                    <button class="btn btn-primary w-100 mt-3" onclick="handleUpgrade('Basic')">
                                         Upgrade to Basic
                                     </button>
                                 </div>
@@ -304,18 +304,19 @@
                                 <div class="card-body p-4 text-center">
                                     <div class="mb-3">
                                         <h3 class="fw-bold">Pro</h3>
-                                        <div class="display-6 fw-bold text-danger">$19.99</div>
+                                        <div class="display-6 fw-bold text-danger">$29.99</div>
                                         <small class="text-muted">per month</small>
                                     </div>
                                     <ul class="list-unstyled">
-                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>30,000 photos/month</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>5,000 photos/month</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Advanced sorting</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>50MB max file size</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Priority support</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>CSV export</li>
                                         <li class="mb-2"><i class="fas fa-check text-success me-2"></i>RAW file support</li>
+                                        <li class="mb-2"><i class="fas fa-check text-success me-2"></i>AI features</li>
                                     </ul>
-                                    <button class="btn btn-danger w-100 mt-3" onclick="handleUpgrade('pro')">
+                                    <button class="btn btn-danger w-100 mt-3" onclick="handleUpgrade('Pro')">
                                         Upgrade to Pro
                                     </button>
                                 </div>
@@ -1220,6 +1221,11 @@
     <script src="static/js/state-manager.js"></script>
     <script src="static/js/batch-operations.js"></script>
     <script src="static/js/analytics-dashboard.js"></script>
+    
+    <!-- Modular Payment & Tier Components -->
+    <script src="components/pricing-card.js"></script>
+    <script src="components/payment-form.js"></script>
+    <script src="components/tier-display.js"></script>
     
     <!-- Main JavaScript -->
     <script src="/static/js/photo-processor.js"></script>
