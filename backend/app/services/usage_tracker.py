@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.processing import ProcessingStatus
 from app.models.usage import ActionType, ProcessingJob, UsageLog, UserQuota
 from app.models.user import User
-from app.tier_config import get_upload_limit_by_tier, get_tier_info
+from app.services.tier_service import TierService
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ class UsageTracker:
             user_tier = user.current_tier 
 
         # 2. Determine the limit based on the user's tier
-        tier_limit = get_upload_limit_by_tier(user_tier)
+        tier_limit = TierService.get_upload_limit(user_tier)
         
         # 3. Fetch the quota object
         quota = db.query(UserQuota).filter(UserQuota.user_id == user_id).first()

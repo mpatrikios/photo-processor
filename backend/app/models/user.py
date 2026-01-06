@@ -35,7 +35,7 @@ class User(Base):
     total_exports = Column(Integer, default=0, nullable=False)
     
     # Subscription tracking
-    current_tier = Column(String(50), default="Trial", nullable=False) # 'Trial', 'Basic', 'Pro', 'Enterprise'
+    current_tier = Column(String(50), default="Trial", nullable=False) # 'Trial', 'Basic', 'Pro'
     tier_expiry_date = Column(DateTime(timezone=True), nullable=True) # When paid tier or trial expires
     uploads_this_period = Column(Integer, default=0, nullable=False) # Usage counter for the current period (resets monthly/when tier changes)
 
