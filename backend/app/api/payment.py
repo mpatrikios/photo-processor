@@ -7,10 +7,11 @@ import logging
 # Import the Stripe service function we created
 from app.services.stripe_service import create_checkout_session, handle_webhook_event
 # Import security components (assuming payment requires authentication)
-from app.core.security import get_current_active_user
+from app.api.auth import get_current_user
 from app.models.user import User
 from database import get_db
 from sqlalchemy.orm import Session
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +29,15 @@ class CheckoutSessionRequest(BaseModel):
 async def handle_create_checkout_session(
     request_data: CheckoutSessionRequest,
     # Requires an authenticated and active user to initiate payment
-    current_user: User = Depends(get_current_active_user) 
+    current_user: User = Depends(get_current_user) 
 ):
     """
     Creates a Stripe Checkout Session and returns the session URL for redirect.
     """
     
-    # Handle both dict (old security) and User object (new auth) formats
-    if isinstance(current_user, dict):
-        user_id = current_user.get("username", "unknown")  # Old security uses username as ID
-        user_email = current_user.get("email", "unknown")
-    else:
-        user_id = current_user.id
-        user_email = current_user.email
+    # Extract user information from User object
+    user_id = current_user.id
+    user_email = current_user.email
     
     logger.info(
         f"Attempting to create Checkout Session for User ID {user_id}, "
@@ -65,6 +62,16 @@ async def handle_create_checkout_session(
         
     # Return the session URL to redirect to
     return {"sessionUrl": session_url}
+
+@router.get("/config", response_model=dict, status_code=200)
+async def get_payment_config():
+    """
+    Returns public Stripe configuration for frontend.
+    No authentication required - only returns public keys.
+    """
+    return {
+        "stripe_publishable_key": settings.stripe_publishable_key
+    }
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):

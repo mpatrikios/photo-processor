@@ -7,28 +7,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# --- TIER DEFINITIONS ---
-# Defines the limits and trial parameters for each tier.
-TIER_LIMITS = {
+TIER_CONFIGS = {
     "Trial": {
-        "max_uploads": 50,  # A reasonable limit for a trial
+        "max_uploads": 50,
         "duration_days": 3,
-        "is_paid": False
+        "price_cents": 0,
+        "is_paid": False,
+        "max_file_size_mb": 10,
+        "features": ["basic_sorting", "standard_support"]
     },
     "Basic": {
         "max_uploads": 1000,
-        "duration_days": 30, # Monthly billing cycle assumed
-        "is_paid": True
+        "duration_days": 30,
+        "price_cents": 999,
+        "is_paid": True,
+        "max_file_size_mb": 25,
+        "features": ["basic_sorting", "priority_support", "export_csv"]
     },
     "Pro": {
         "max_uploads": 5000,
         "duration_days": 30,
-        "is_paid": True
-    },
-    "Enterprise": {
-        "max_uploads": 9999999, # Effectively unlimited
-        "duration_days": 365,
-        "is_paid": True
+        "price_cents": 2999,
+        "is_paid": True,
+        "max_file_size_mb": 50,
+        "features": ["advanced_sorting", "priority_support", "export_csv", "raw_support", "ai_features"]
     }
 }
 
@@ -38,7 +40,7 @@ class TierService:
     @staticmethod
     def get_tier_info(tier_name: str) -> dict:
         """Returns the specific limits and properties for a given tier."""
-        return TIER_LIMITS.get(tier_name, TIER_LIMITS["Trial"])
+        return TIER_CONFIGS.get(tier_name, TIER_CONFIGS["Trial"])
 
     @staticmethod
     def get_upload_limit(tier_name: str) -> int:
@@ -51,18 +53,18 @@ class TierService:
         
         # Trial/Paid tier has no expiry date set (e.g., perpetual)
         if user.tier_expiry_date is None:
-            # Check if the user is in a basic tier or higher (paid tier)
-            if user.current_tier in ["Basic", "Pro", "Enterprise"]:
+            # Check if the user is in a paid tier
+            if user.current_tier in ["Basic", "Pro"]:
                 return True
             
             # Check for a new user who just started their trial
             if user.current_tier == "Trial":
                 # Check 3-day limit from creation date
-                trial_duration = TIER_LIMITS["Trial"]["duration_days"]
+                trial_duration = TIER_CONFIGS["Trial"]["duration_days"]
                 trial_ends_at = user.created_at + timedelta(days=trial_duration)
                 return datetime.now(timezone.utc) < trial_ends_at
             
-            return False # Should not happen, but defaults to false
+            return False
             
         # Check against an explicit expiry date
         expiry_date = user.tier_expiry_date.replace(tzinfo=timezone.utc) if user.tier_expiry_date.tzinfo is None else user.tier_expiry_date
@@ -78,11 +80,6 @@ class TierService:
             return False
 
         current_limit = TierService.get_upload_limit(user.current_tier)
-        
-        # Enterprise or high limit tiers usually don't need strict enforcement
-        if current_limit > 100000:
-            return True
-
         allowed = user.uploads_this_period < current_limit
         if not allowed:
             logger.warning(
@@ -90,6 +87,45 @@ class TierService:
                 f"{user.uploads_this_period} / {current_limit}"
             )
         return allowed
+
+    @staticmethod
+    def get_user_tier(db: Session, user_id: int) -> dict:
+        """
+        Gets comprehensive tier information for a specific user.
+        Returns tier config combined with user-specific data.
+        """
+        # Get user from database
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            # Return default/trial tier for non-existent users
+            tier_config = TierService.get_tier_info("Trial")
+            return {
+                "tier_name": "Trial",
+                "monthly_photo_limit": tier_config["max_uploads"],
+                "features": tier_config["features"],
+                "duration_days": tier_config["duration_days"],
+                "price_cents": tier_config["price_cents"],
+                "is_paid": tier_config["is_paid"],
+                "tier_expiry_date": None,
+                "is_active": False
+            }
+        
+        # Get tier configuration for user's current tier
+        tier_config = TierService.get_tier_info(user.current_tier)
+        
+        # Check if tier is active
+        is_active = TierService.is_tier_active(user)
+        
+        return {
+            "tier_name": user.current_tier,
+            "monthly_photo_limit": tier_config["max_uploads"],
+            "features": tier_config["features"],
+            "duration_days": tier_config["duration_days"],
+            "price_cents": tier_config["price_cents"],
+            "is_paid": tier_config["is_paid"],
+            "tier_expiry_date": user.tier_expiry_date.isoformat() if user.tier_expiry_date else None,
+            "is_active": is_active
+        }
 
     @staticmethod
     def increment_upload_count(db: Session, user: User, count: int = 1) -> None:
@@ -101,6 +137,13 @@ class TierService:
         db.add(user)
         # Commit will be handled by the caller's transaction (e.g., the upload route)
 
+
+def get_tier_info(tier_name: str) -> dict:
+    """
+    Standalone function for external modules (e.g., stripe_service.py).
+    Returns tier configuration including pricing and features.
+    """
+    return TierService.get_tier_info(tier_name)
 
 # Instantiate the service for easy import
 tier_service = TierService()

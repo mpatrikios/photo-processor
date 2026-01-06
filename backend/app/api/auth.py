@@ -36,8 +36,10 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     token: str
+    refresh_token: str
     user: dict
     message: str
+    expires_in: int
 
 
 class UserResponse(BaseModel):
@@ -123,18 +125,20 @@ async def register(
             full_name=request.full_name,
         )
 
-        # Generate token and create session
-        token = auth_service.create_access_token(user.id)
+        # Generate token pair and create session
+        token_data = auth_service.create_token_pair(user.id)
         ip_address, user_agent = get_client_info(http_request)
 
         auth_service.create_user_session(
-            db=db, user=user, token=token, ip_address=ip_address, user_agent=user_agent
+            db=db, user=user, token=token_data["access_token"], ip_address=ip_address, user_agent=user_agent
         )
 
         return LoginResponse(
-            token=token,
+            token=token_data["access_token"],
+            refresh_token=token_data["refresh_token"], 
             user=user.to_dict(),
             message=f"Account created successfully! Welcome, {user.full_name}!",
+            expires_in=token_data["expires_in"]
         )
 
     except HTTPException:
@@ -159,16 +163,58 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
 
-    # Generate token and create session
-    token = auth_service.create_access_token(user.id)
+    # Generate token pair and create session
+    token_data = auth_service.create_token_pair(user.id)
     ip_address, user_agent = get_client_info(http_request)
 
     auth_service.create_user_session(
-        db=db, user=user, token=token, ip_address=ip_address, user_agent=user_agent
+        db=db, user=user, token=token_data["access_token"], ip_address=ip_address, user_agent=user_agent
     )
 
     return LoginResponse(
-        token=token, user=user.to_dict(), message=f"Welcome back, {user.full_name}!"
+        token=token_data["access_token"],
+        refresh_token=token_data["refresh_token"],
+        user=user.to_dict(), 
+        message=f"Welcome back, {user.full_name}!",
+        expires_in=token_data["expires_in"]
+    )
+
+
+@router.post("/refresh", response_model=LoginResponse)
+async def refresh_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Refresh access token using refresh token."""
+    
+    refresh_token = credentials.credentials
+    token_data = auth_service.verify_token(refresh_token)
+    
+    if not token_data or token_data.get("token_type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_id = token_data["user_id"]
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+        )
+    
+    # Generate new token pair
+    new_token_data = auth_service.create_token_pair(user.id)
+    
+    return LoginResponse(
+        token=new_token_data["access_token"],
+        refresh_token=new_token_data["refresh_token"],
+        user=user.to_dict(),
+        message="Token refreshed successfully",
+        expires_in=new_token_data["expires_in"]
     )
 
 

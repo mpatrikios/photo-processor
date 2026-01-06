@@ -393,14 +393,12 @@ async function handleSignIn(event) {
             
             // Store tokens properly using StateManager
             if (window.stateManager) {
-                window.stateManager.set('auth.token', result.token);
-                window.stateManager.set('auth.user', result.user);
-                window.stateManager.set('auth.isAuthenticated', true);
-                
-                // Store refresh token if provided
-                if (result.refresh_token) {
-                    window.stateManager.set('auth.refreshToken', result.refresh_token);
-                }
+                window.stateManager.login({
+                    access_token: result.token,
+                    refresh_token: result.refresh_token,
+                    user: result.user,
+                    expires_in: result.expires_in
+                });
                 
                 window.stateManager.saveToStorage();
             } else {
@@ -504,14 +502,12 @@ async function handleCreateAccount(event) {
             
             // Store tokens properly using StateManager
             if (window.stateManager) {
-                window.stateManager.set('auth.token', result.token);
-                window.stateManager.set('auth.user', result.user);
-                window.stateManager.set('auth.isAuthenticated', true);
-                
-                // Store refresh token if provided
-                if (result.refresh_token) {
-                    window.stateManager.set('auth.refreshToken', result.refresh_token);
-                }
+                window.stateManager.login({
+                    access_token: result.token,
+                    refresh_token: result.refresh_token,
+                    user: result.user,
+                    expires_in: result.expires_in
+                });
                 
                 window.stateManager.saveToStorage();
             } else {
@@ -1167,57 +1163,42 @@ if (typeof logout !== 'undefined') window.logout = logout;
 // STRIPE CHECKOUT FUNCTIONS
 // ==========================================
 
+// Global payment form instance
+let paymentForm = null;
+
+
 /**
- * Handle upgrade button clicks
+ * Initialize payment form with modular component
+ */
+function initializePaymentForm() {
+    if (!paymentForm && typeof PaymentForm !== 'undefined') {
+        const apiBaseUrl = PaymentForm.getApiBaseUrl();
+        paymentForm = new PaymentForm(apiBaseUrl);
+    }
+}
+
+/**
+ * Handle upgrade button clicks using modular PaymentForm
  */
 async function handleUpgrade(tierName) {
-    // Check if user is authenticated
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-        // Store the intended action for after login
-        localStorage.setItem('pending_action', 'upgrade');
-        localStorage.setItem('pending_tier', tierName);
-        showSignInModal();
-        return;
+    if (!paymentForm) {
+        initializePaymentForm();
     }
 
-    console.log('Starting upgrade for tier:', tierName);
-    console.log('Using token:', token ? 'Token present' : 'No token');
-
     try {
-        // Use the correct API base URL
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
-
-        const response = await fetch(`${apiBase}/payment/create-checkout-session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                tier_name: tierName,
-                success_url: `${window.location.origin}/#payment-success&session_id={CHECKOUT_SESSION_ID}`,
-                cancel_url: `${window.location.origin}/#payment-cancelled`
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Server response:', response.status, errorData);
-            throw new Error(`Failed to create checkout session: ${errorData.detail || response.statusText}`);
-        }
-
-        const { sessionUrl } = await response.json();
-        
-        // Redirect to Stripe Checkout
-        window.location.href = sessionUrl;
-        
+        await paymentForm.createCheckoutSession(tierName);
     } catch (error) {
-        console.error('Checkout error:', error);
-        showNotification('Sorry, there was an error processing your request. Please try again.', 'error');
+        if (error.message === 'AUTHENTICATION_REQUIRED') {
+            paymentForm.handleAuthenticationRequired();
+        } else {
+            console.error('Payment error:', error);
+            // Use existing PhotoProcessor notification system
+            if (window.photoProcessor) {
+                window.photoProcessor.showError('Sorry, there was an error processing your request. Please try again.');
+            } else {
+                alert('Sorry, there was an error processing your request. Please try again.');
+            }
+        }
     }
 }
 
@@ -1379,7 +1360,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. Initialize seamless navbar scroll behavior
     initializeSeamlessNavbar();
 
-    // 6. Check Auth & Handle Initial Route
+    // 6. Initialize Payment Components
+    initializePaymentForm();
+    
+    // 7. Check Auth & Handle Initial Route
     // We call this LAST to ensure PhotoProcessor is ready for the router
     if (typeof checkAuthOnLoad === 'function') {
         checkAuthOnLoad();

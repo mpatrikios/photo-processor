@@ -4,7 +4,7 @@ import json
 from sqlalchemy.orm import Session
 from app.models.user import User
 from datetime import datetime, timedelta, timezone # 
-from app.tier_config import get_tier_info 
+from app.services.tier_service import get_tier_info 
 import logging
 
 # Configure logger
