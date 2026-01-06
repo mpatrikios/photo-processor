@@ -5,7 +5,6 @@
 class AnalyticsDashboard {
     constructor(stateManager) {
         this.state = stateManager;
-        this.refreshInterval = null;
         this.isVisible = false;
         
         this.initializeDashboard();
@@ -61,16 +60,9 @@ class AnalyticsDashboard {
                                 Analytics Dashboard
                             </h5>
                             <div class="d-flex align-items-center">
-                                <button type="button" class="btn btn-outline-secondary btn-sm me-3" onclick="window.location.hash='results'">
+                                <button type="button" class="btn btn-outline-secondary btn-sm me-3" data-bs-dismiss="modal" onclick="window.location.hash='results'">
                                     <i class="fas fa-arrow-left me-1"></i> Back to App
                                 </button>
-                                <div class="form-check form-switch me-3">
-                                    <input class="form-check-input" type="checkbox" id="auto-refresh-toggle" checked>
-                                    <label class="form-check-label" for="auto-refresh-toggle">
-                                        Auto Refresh (30s)
-                                    </label>
-                                </div>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" onclick="window.location.hash='results'"></button>
                             </div>
                         </div>
                         <div class="modal-body">
@@ -140,14 +132,7 @@ class AnalyticsDashboard {
      * Bind event listeners
      */
     bindEvents() {
-        // Auto-refresh toggle
-        document.getElementById('auto-refresh-toggle')?.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                this.startAutoRefresh();
-            } else {
-                this.stopAutoRefresh();
-            }
-        });
+        // Auto-refresh toggle (removed - no longer auto-refreshing)
         
         // Tab switching
         document.querySelectorAll('#dashboard-tabs .nav-link').forEach(tab => {
@@ -170,12 +155,10 @@ class AnalyticsDashboard {
         modal?.addEventListener('shown.bs.modal', () => {
             this.isVisible = true;
             this.loadAllData();
-            this.startAutoRefresh();
         });
         
         modal?.addEventListener('hidden.bs.modal', () => {
             this.isVisible = false;
-            this.stopAutoRefresh();
         });
     }
     
@@ -187,37 +170,6 @@ class AnalyticsDashboard {
         modal.show();
     }
     
-    /**
-     * Start auto-refresh
-     */
-    startAutoRefresh() {
-        // Disable auto-refresh if StateManager is not properly initialized
-        if (!this.state || !this.state.request) {
-            console.warn('Auto-refresh disabled: StateManager not properly initialized');
-            return;
-        }
-        
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-        }
-        
-        this.refreshInterval = setInterval(() => {
-            if (this.isVisible) {
-                console.log('Auto-refreshing analytics dashboard...');
-                this.refreshCurrentPanel();
-            }
-        }, 30000); // 30 seconds
-    }
-    
-    /**
-     * Stop auto-refresh
-     */
-    stopAutoRefresh() {
-        if (this.refreshInterval) {
-            clearInterval(this.refreshInterval);
-            this.refreshInterval = null;
-        }
-    }
     
     /**
      * Refresh current active panel
