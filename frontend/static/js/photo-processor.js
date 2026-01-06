@@ -235,7 +235,6 @@ class PhotoProcessor {
             }
 
             const lastJobId = window.stateManager.get('processing.lastCompletedJobId');
-            const lastCompleted = window.stateManager.get('processing.lastCompletedAt');
             
             
             // Fetch the job results from the server
