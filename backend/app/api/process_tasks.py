@@ -163,7 +163,7 @@ async def start_processing_with_tasks(
         return job
     
     # Group photos into batches of 1 for testing Elite OCR system
-    BATCH_SIZE = 1
+    BATCH_SIZE = 3
     photo_batches = []
     for i in range(0, len(photo_ids), BATCH_SIZE):
         batch = photo_ids[i:i + BATCH_SIZE]
@@ -517,8 +517,54 @@ async def get_processing_status(job_id: str, current_user: User = Depends(get_cu
     
     job_data = jobs.get(job_id)
     if not job_data:
-        logger.warning(f"❌ Job not found in memory: {job_id[:8]}...")
-        raise HTTPException(status_code=404, detail="Job not found")
+        logger.warning(f"❌ Job not found in memory: {job_id[:8]}..., checking database")
+        
+        # Database fallback: Try to reconstruct job from database
+        from app.models.usage import ProcessingJob as ProcessingJobDB
+        from app.models.processing import PhotoDB, ProcessingStatus as DBProcessingStatus
+        
+        db_job = db.query(ProcessingJobDB).filter(
+            ProcessingJobDB.job_id == job_id,
+            ProcessingJobDB.user_id == current_user.id
+        ).first()
+        
+        if not db_job:
+            logger.warning(f"❌ Job {job_id[:8]}... not found in database either")
+            raise HTTPException(status_code=404, detail="Job not found")
+        
+        # Calculate current progress from database
+        total_photos = db.query(PhotoDB).filter(PhotoDB.processing_job_id == db_job.id).count()
+        completed_photos = db.query(PhotoDB).filter(
+            PhotoDB.processing_job_id == db_job.id,
+            PhotoDB.processing_status == DBProcessingStatus.COMPLETED
+        ).count()
+        
+        progress = int((completed_photos / total_photos) * 100) if total_photos else 0
+        
+        # Map database status to processing status safely
+        status_map = {
+            "completed": ProcessingStatus.COMPLETED,
+            "failed": ProcessingStatus.FAILED,
+            "processing": ProcessingStatus.PROCESSING,
+        }
+        current_status = status_map.get(db_job.status, ProcessingStatus.PROCESSING)
+        if progress >= 100 and current_status == ProcessingStatus.PROCESSING:
+            current_status = ProcessingStatus.COMPLETED
+        
+        # Reconstruct job object and add to memory
+        job = ProcessingJob(
+            job_id=db_job.job_id,
+            photo_ids=[],  # Not needed for status tracking
+            status=current_status,
+            total_photos=total_photos,
+            progress=progress,
+            completed_photos=completed_photos,
+        )
+        
+        job_data = {"job": job, "user_id": db_job.user_id}
+        jobs[job_id] = job_data
+        
+        logger.info(f"✅ Reconstructed job {job_id[:8]}... from database: {current_status.value} {progress}%")
     
     # SECURITY: Verify job belongs to current user
     if job_data["user_id"] != current_user.id:
@@ -755,24 +801,51 @@ def sync_jobs_from_database():
     """Load active jobs from DB into memory on startup."""
     db = SessionLocal()
     try:
+        from app.models.processing import PhotoDB, ProcessingStatus as DBProcessingStatus
+
         active_jobs = db.query(ProcessingJobDB).filter(
             ProcessingJobDB.status.in_(["pending", "processing"])
         ).all()
+
+        status_map = {
+            "completed": ProcessingStatus.COMPLETED,
+            "failed": ProcessingStatus.FAILED,
+            "processing": ProcessingStatus.PROCESSING,
+            "pending": ProcessingStatus.PENDING,
+        }
+
         for db_job in active_jobs:
-            # Reconstruct the ProcessingJob object
+            completed_photos = db.query(PhotoDB).filter(
+                PhotoDB.processing_job_id == db_job.id,
+                PhotoDB.processing_status == DBProcessingStatus.COMPLETED
+            ).count()
+
+            # Recompute progress if needed
+            total_photos = db_job.total_photos or 0
+            progress = db_job.progress or 0
+            if total_photos:
+                progress = int((completed_photos / total_photos) * 100)
+            else:
+                progress = 0
+
+            current_status = status_map.get(db_job.status, ProcessingStatus.PROCESSING)
+            if progress >= 100 and current_status == ProcessingStatus.PROCESSING:
+                current_status = ProcessingStatus.COMPLETED
+
             job = ProcessingJob(
                 job_id=db_job.job_id,
-                photo_ids=[], # We don't necessarily need the IDs for status tracking
-                status=ProcessingStatus(db_job.status),
-                total_photos=db_job.total_photos,
-                progress=db_job.progress
+                photo_ids=[],  # not needed for status tracking
+                status=current_status,
+                total_photos=total_photos,
+                progress=progress,
+                completed_photos=completed_photos,
             )
             jobs[db_job.job_id] = {"job": job, "user_id": db_job.user_id}
+
         logger.info(f"🔄 Synced {len(active_jobs)} active jobs from database")
     finally:
         db.close()
 
 def cleanup_old_jobs():
     """Optional: Clear very old jobs from memory."""
-    # (Implementation can be simple or empty for now)
     pass
