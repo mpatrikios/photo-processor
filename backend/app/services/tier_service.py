@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 TIER_CONFIGS = {
     "Trial": {
-        "max_uploads": 100,  # Updated from 50 to 100 photos
+        "max_uploads": 100,  # Maximum uploads during trial period
         "duration_days": 3,
         "price_cents": 0,
         "is_paid": False,

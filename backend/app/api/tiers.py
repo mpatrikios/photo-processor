@@ -44,7 +44,6 @@ def transform_features(tier_name: str, config: dict) -> list:
     
     # Transform backend feature codes to display strings
     feature_map = {
-        "basic_sorting": "Basic sorting",
         "advanced_sorting": {"text": "Advanced sorting (coming soon!)", "style": "color: #6c757d; font-style: italic;"},
         "standard_support": "Standard support", 
         "priority_support": "Priority support",

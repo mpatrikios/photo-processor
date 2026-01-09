@@ -648,7 +648,7 @@ export class StateManager {
         this.state.tiers.error = null;
         
         try {
-            const tierData = this.state.tiers.loadingPromise;
+            const tierData = await this.state.tiers.loadingPromise;
             return tierData;
         } finally {
             this.state.tiers.isLoading = false;
