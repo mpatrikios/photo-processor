@@ -128,9 +128,7 @@ function handlePaymentCancelled() {
     window.location.hash = '#dashboard';
 }
 
-// Auto-check payment status on load
-document.addEventListener('DOMContentLoaded', checkPaymentStatusFromUrl);
-window.addEventListener('hashchange', checkPaymentStatusFromUrl);
+// Payment status checking is handled by script.js to avoid conflicts
 
 // Export for module use
 if (typeof module !== 'undefined' && module.exports) {

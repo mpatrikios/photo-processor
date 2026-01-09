@@ -62,17 +62,22 @@ async def submit_feedback(request: FeedbackRequest):
         }
 
     except KeyError as key_err:
-        # Catching specific errors allows you to give better feedback
+        # This should only occur if feedback_entry creation failed internally
         logger.error(
-            "Data integrity error: Missing required field: %s in feedback payload",
+            "Internal error: Missing key %s in feedback_entry during response creation",
             key_err,
         )
-        raise HTTPException(status_code=422, detail="Incomplete feedback data")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-    except Exception as e:
+    except OSError as os_err:
+        # File system errors (permissions, disk space, etc.)
+        logger.exception("File system error during feedback submission: %s", os_err)
+        raise HTTPException(status_code=500, detail="Unable to save feedback")
+
+    except Exception:
         # Catch-all for unexpected issues (Database down, etc.)
         # We log the stack trace but return a generic message to the user for security
-        logger.exception("Unexpected error during feedback submission") 
+        logger.exception("Unexpected error during feedback submission process") 
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/list")

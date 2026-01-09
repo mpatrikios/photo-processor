@@ -727,7 +727,5 @@ export class StateManager {
     }
 }
 
-// Export global instance
-if (typeof window !== 'undefined') {
-    window.stateManager = new StateManager();
-}
+// StateManager will be instantiated by script.js
+// This ensures proper initialization order and prevents duplicate instances

@@ -639,6 +639,9 @@ function dismissToast(toastId) {
     }, 300); // Match animation duration
 }
 
+// Expose dismissToast globally for onclick handlers
+window.dismissToast = dismissToast;
+
 /**
  * Clear all toasts
  */
@@ -763,6 +766,29 @@ async function loadCustomProfileData() {
 // Store current user subscription data globally for access in other functions
 let currentUserSubscription = null;
 
+/**
+ * Humanize feature names for display
+ * @param {string} featureName - Feature code from backend
+ * @returns {string} Human-readable feature name
+ */
+function humanizeFeature(featureName) {
+    const featureMap = {
+        'basic_sorting': 'Basic Sorting',
+        'priority_support': 'Priority Support', 
+        'export_csv': 'CSV Export',
+        'advanced_sorting': 'Advanced Sorting',
+        'raw_file_support': 'RAW File Support',
+        'ai_features': 'AI Features',
+        'batch_operations': 'Batch Operations',
+        'custom_fields': 'Custom Fields',
+        'api_access': 'API Access',
+        'white_label': 'White Label',
+        'unlimited_storage': 'Unlimited Storage'
+    };
+    
+    return featureMap[featureName] || featureName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
 async function updateCustomModalContent(quotaData, statsData) {
     const contentDiv = document.getElementById('customModalContent');
     if (!contentDiv) return;
@@ -798,7 +824,7 @@ async function updateCustomModalContent(quotaData, statsData) {
             </div>
             
             <div id="quotaContent">
-                <div class="modern-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}">
+                <div class="glass-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="padding: 24px;">
                     <h5>Monthly Photo Quota</h5>
                     <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month}/${quota.monthly_photo_limit}</div>
                     <div class="modern-progress">
@@ -924,6 +950,8 @@ function handleModalClicks(e) {
     if (e.target.hasAttribute('data-upgrade-plan')) {
         e.preventDefault();
         showUpgradeModal();
+        // Re-establish event delegation after modal content changes
+        setupModalEventDelegation();
         return;
     }
     
@@ -935,14 +963,17 @@ function handleModalClicks(e) {
         if (modalContent) {
             modalContent.classList.remove('modal-wide');
         }
-        loadCustomProfileData();
+        loadCustomProfileData().then(() => {
+            // Re-establish event delegation after profile content reloads
+            setupModalEventDelegation();
+        });
         return;
     }
     
     // Upgrade tier buttons (from upgrade modal)
-    if (e.target.hasAttribute('data-upgrade-tier')) {
+    if (e.target.hasAttribute('data-tier')) {
         e.preventDefault();
-        const tierName = e.target.dataset.upgradeTier;
+        const tierName = e.target.dataset.tier;
         if (tierName) {
             handleUpgrade(tierName);
         }
@@ -1176,27 +1207,6 @@ async function logoutAllSessions() {
 }
 
 // Subscription Functions
-
-/**
- * Convert database feature names to user-friendly display text
- */
-function humanizeFeature(featureName) {
-    const featureMap = {
-        'basic_sorting': 'Basic Sorting',
-        'priority_support': 'Priority Support', 
-        'export_csv': 'CSV Export',
-        'advanced_sorting': 'Advanced Sorting',
-        'raw_file_support': 'RAW File Support',
-        'ai_features': 'AI Features',
-        'batch_operations': 'Batch Operations',
-        'custom_fields': 'Custom Fields',
-        'api_access': 'API Access',
-        'white_label': 'White Label',
-        'unlimited_storage': 'Unlimited Storage'
-    };
-    
-    return featureMap[featureName] || featureName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-}
 
 async function openBillingPortal() {
     try {
@@ -1493,7 +1503,7 @@ window.submitFeedback = submitFeedback;
 
 // ==========================================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM Content Loaded');
 
     // 1. Initialize Router FIRST (required by PhotoProcessor)
@@ -1509,16 +1519,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Initialize StateManager 
         window.stateManager = new StateManager();
         console.log('StateManager initialized successfully');
+        
+        // Initialize Landing Page Pricing after StateManager is ready
+        await initLandingPagePricing();
     } catch (error) {
         console.error('Failed to initialize PhotoProcessor:', error);
         window.photoProcessor = {
             isAuthenticated: false,
             initializeApp: () => console.log('PhotoProcessor init failed')
         };
+        
+        // Still try to initialize pricing with fallback behavior
+        try {
+            await initLandingPagePricing();
+        } catch (pricingError) {
+            console.warn('Failed to initialize landing page pricing:', pricingError);
+        }
     }
-
-    // 2. Initialize Landing Page Pricing
-    initLandingPagePricing();
 
     // 3. Bind Auth Forms
     const signInForm = document.getElementById('signInForm');
