@@ -3,22 +3,30 @@
  * Follows CLAUDE.md modularity principles: single-purpose, reusable
  */
 
-const TIER_PLANS = {
-    'Trial': { name: 'Trial', price: 0.00, limit: '50 Photos (3 days)', features: ['Basic sorting', 'Standard support'] },
-    'Basic': { name: 'Basic', price: 9.99, limit: '1,000 Photos/Month', features: ['Basic sorting', 'Priority support', 'CSV export'] },
-    'Pro': { name: 'Pro', price: 29.99, limit: '5,000 Photos/Month', features: ['Advanced sorting', 'Priority support', 'CSV export', 'RAW support', 'AI features'] }
-};
 
 class PricingCard {
-    constructor(container, tier, currentTier, onSelectTier) {
+    constructor(container, tier, currentTier, options = {}) {
         this.container = container;
         this.tier = tier;
         this.currentTier = currentTier;
-        this.onSelectTier = onSelectTier;
+        
+        // Options for different layouts/contexts
+        this.options = {
+            layout: options.layout || 'modal', // 'modal' or 'landing'
+            showPopularBadge: options.showPopularBadge !== false, // default true
+            useBootstrapGrid: options.useBootstrapGrid || false,
+            ...options
+        };
     }
 
     render() {
-        const tierInfo = TIER_PLANS[this.tier];
+        // Get tier info from StateManager (API data) or fallback to local config
+        let tierInfo = null;
+        
+        if (window.stateManager) {
+            tierInfo = window.stateManager.getTier(this.tier);
+        }
+        
         if (!tierInfo) {
             console.error(`Unknown tier: ${this.tier}`);
             return;
@@ -26,59 +34,90 @@ class PricingCard {
 
         const isCurrentTier = this.tier === this.currentTier;
         const isTrial = this.tier === 'Trial';
+        const isPro = this.tier === 'Pro';
         
+        if (this.options.layout === 'landing') {
+            this.renderLandingCard(tierInfo, isCurrentTier, isTrial, isPro);
+        } else {
+            this.renderModalCard(tierInfo, isCurrentTier, isTrial, isPro);
+        }
+
+    }
+    
+    renderModalCard(tierInfo, isCurrentTier, isTrial, isPro) {
         this.container.innerHTML = `
-            <div class="pricing-card ${isCurrentTier ? 'current' : ''} ${isTrial ? 'trial' : ''}">
-                <div class="pricing-card-header">
-                    <h3 class="tier-name">${tierInfo.name}</h3>
-                    ${isCurrentTier ? '<span class="current-badge">Current Plan</span>' : ''}
+            <div class="subscription-card-clean ${isCurrentTier ? 'current-tier' : ''}" style="margin-bottom: 0; ${isPro ? 'border: 2px solid var(--color-accent-primary);' : ''}">
+                ${isPro && this.options.showPopularBadge ? '<div style="background: var(--color-accent-primary); color: white; text-align: center; padding: 8px; margin: -28px -28px 20px -28px; border-radius: 20px 20px 0 0; font-size: 0.85rem; font-weight: 600;">MOST POPULAR</div>' : ''}
+                
+                <div class="plan-name" style="color: ${isPro ? 'var(--color-accent-primary)' : '#212529'};">
+                    ${tierInfo.name}
+                </div>
+                <div class="plan-limit" style="font-size: 1.5rem; font-weight: 700; color: ${isPro ? 'var(--color-accent-primary)' : '#495057'}; margin-bottom: 20px;">
+                    $${tierInfo.price.toFixed(2)}
                 </div>
                 
-                <div class="pricing-card-price">
-                    <span class="price">$${tierInfo.price.toFixed(2)}</span>
-                    ${!isTrial ? '<span class="period">/month</span>' : '<span class="period">free</span>'}
-                </div>
-                
-                <div class="pricing-card-limit">
-                    <p class="limit">${tierInfo.limit}</p>
-                </div>
-                
-                <ul class="pricing-card-features">
-                    ${tierInfo.features.map(feature => `<li>${feature}</li>`).join('')}
+                <ul class="feature-list">
+                    ${tierInfo.features.map(feature => `
+                        <li class="feature-item">
+                            <div class="feature-icon">✓</div>
+                            ${typeof feature === 'object' ? `<span style="${feature.style}">${feature.text}</span>` : feature}
+                        </li>
+                    `).join('')}
                 </ul>
                 
-                <div class="pricing-card-footer">
-                    ${this.renderButton(isCurrentTier, isTrial)}
-                </div>
+                ${isCurrentTier ? `
+                    <div class="tier-action-element tier-current-badge">
+                        Current Plan
+                    </div>
+                ` : `
+                    <button class="tier-action-element tier-choose-button" data-tier="${this.tier}">
+                        Choose ${this.tier}
+                    </button>
+                `}
             </div>
         `;
-
-        this.bindEvents();
     }
-
-    renderButton(isCurrentTier, isTrial) {
-        if (isCurrentTier) {
-            return '<button class="pricing-btn current" disabled>Current Plan</button>';
-        }
+    
+    renderLandingCard(tierInfo, isCurrentTier, isTrial, isPro) {
+        const gridWrapper = this.options.useBootstrapGrid ? 
+            `<div class="col-lg-4 col-md-6 mb-4">` : '';
+        const gridWrapperEnd = this.options.useBootstrapGrid ? `</div>` : '';
         
-        if (isTrial) {
-            return '<button class="pricing-btn trial" disabled>Free Trial</button>';
-        }
-        
-        return `<button class="pricing-btn upgrade" data-tier="${this.tier}">Upgrade to ${this.tier}</button>`;
+        this.container.innerHTML = `
+            ${gridWrapper}
+                <div class="card h-100 ${isPro && this.options.showPopularBadge ? 'border-primary' : 'border-0'} shadow">
+                    ${isPro && this.options.showPopularBadge ? 
+                        '<div class="card-header text-center bg-primary text-white"><small class="fw-bold">MOST POPULAR</small></div>' 
+                        : ''}
+                    <div class="card-body p-4 text-center">
+                        <div class="mb-3">
+                            <h3 class="fw-bold">${tierInfo.name}</h3>
+                            <div class="display-6 fw-bold ${isPro ? 'text-danger' : 'text-primary'}">$${tierInfo.price.toFixed(2)}</div>
+                            <small class="text-muted">${isTrial ? 'free' : 'per month'}</small>
+                        </div>
+                        <ul class="list-unstyled">
+                            ${tierInfo.features.map(feature => 
+                                `<li class="mb-2"><i class="fas fa-check text-success me-2"></i>${typeof feature === 'object' ? `<span style="${feature.style}">${feature.text}</span>` : feature}</li>`
+                            ).join('')}
+                        </ul>
+                        
+                        ${isCurrentTier ? `
+                            <div class="tier-action-element tier-current-badge mt-3">
+                                Current Plan
+                            </div>
+                        ` : `
+                            <button class="btn ${isPro ? 'btn-danger' : 'btn-primary'} w-100 mt-3 tier-choose-button" data-tier="${this.tier}">
+                                Choose ${this.tier}
+                            </button>
+                        `}
+                    </div>
+                </div>
+            ${gridWrapperEnd}
+        `;
     }
 
-    bindEvents() {
-        const button = this.container.querySelector('.pricing-btn.upgrade');
-        if (button && this.onSelectTier) {
-            button.addEventListener('click', () => {
-                this.onSelectTier(this.tier);
-            });
-        }
-    }
+
 }
 
-// Export for module use
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PricingCard, TIER_PLANS };
-}
+// ES6 module exports
+export { PricingCard };

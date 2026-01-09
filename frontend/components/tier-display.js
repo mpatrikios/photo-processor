@@ -3,13 +3,14 @@
  * Displays tier limits, usage, and upgrade options
  */
 
+
 class TierDisplay {
     constructor(container, userData) {
         this.container = container;
         this.userData = userData;
     }
 
-    render() {
+    async render() {
         if (!this.userData) {
             this.container.innerHTML = '<div class="tier-display-loading">Loading tier information...</div>';
             return;
@@ -19,7 +20,22 @@ class TierDisplay {
         const uploadsThisPeriod = this.userData.uploads_this_period || 0;
         const tierExpiry = this.userData.tier_expiry_date;
         
-        const tierConfig = this.getTierConfig(currentTier);
+        // Get tier config from StateManager (API data)
+        let tierConfig = null;
+        if (window.stateManager) {
+            try {
+                await window.stateManager.loadTiers();
+                tierConfig = window.stateManager.getTier(currentTier);
+            } catch (error) {
+                console.error('Failed to load tier config:', error);
+            }
+        }
+        
+        if (!tierConfig) {
+            this.container.innerHTML = '<div class="tier-display-error">Unable to load tier information</div>';
+            return;
+        }
+        
         const usagePercentage = (uploadsThisPeriod / tierConfig.maxUploads) * 100;
         const isExpiringSoon = this.isExpiringSoon(tierExpiry);
 
@@ -59,14 +75,6 @@ class TierDisplay {
         this.bindEvents();
     }
 
-    getTierConfig(tierName) {
-        const configs = {
-            'Trial': { maxUploads: 50, features: ['Basic sorting', 'Standard support'] },
-            'Basic': { maxUploads: 1000, features: ['Basic sorting', 'Priority support', 'CSV export'] },
-            'Pro': { maxUploads: 5000, features: ['Advanced sorting', 'Priority support', 'CSV export', 'RAW support', 'AI features'] }
-        };
-        return configs[tierName] || configs['Trial'];
-    }
 
     renderTierBadge(tier) {
         const badgeClass = tier.toLowerCase();
@@ -118,9 +126,9 @@ class TierDisplay {
         }
     }
 
-    update(userData) {
+    async update(userData) {
         this.userData = userData;
-        this.render();
+        await this.render();
     }
 }
 
