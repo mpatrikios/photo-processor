@@ -1,18 +1,15 @@
 import json
+import logging
 import os
 from datetime import datetime
-import logging
 
 from fastapi import APIRouter, HTTPException
 
 from app.models.schemas import FeedbackRequest
 from app.services.email_service import email_service
-router = APIRouter()
 
-# Configure logger
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 FEEDBACK_DIR = "feedback"
 
@@ -56,8 +53,8 @@ async def submit_feedback(request: FeedbackRequest):
         # Send email notification (async, don't wait for it)
         try:
             await email_service.send_feedback_notification(feedback_entry)
-        except Exception as e:
-            logger.exception(f"❌ Email notification error for feedback {feedback_entry['id']}: {str(e)}")
+        except Exception:
+            logger.exception("Email notification error for feedback %s", feedback_entry['id'])
 
         return {
             "message": "Thank you for your feedback! We appreciate your input.",
@@ -104,8 +101,8 @@ async def list_feedback():
                         "status": feedback_data.get("status", "new"),
                     }
                     feedback_list.append(summary)
-            except Exception as e:
-                logger.exception(f"Error reading feedback file {filename}: {e}")
+            except Exception:
+                logger.exception("Error reading feedback file %s", filename)
                 continue
 
         return {"feedback": feedback_list, "count": len(feedback_list)}

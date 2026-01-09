@@ -23,7 +23,8 @@ export class StateManager {
                 configs: null,
                 lastFetched: null,
                 isLoading: false,
-                error: null
+                error: null,
+                loadingPromise: null  // Track in-flight requests
             },
             
             // API Configuration
@@ -642,14 +643,26 @@ export class StateManager {
             return this.state.tiers.configs;
         }
         
-        // Don't fetch if already loading
-        if (this.state.tiers.isLoading) {
-            return this.state.tiers.configs;
+        // If already loading, return the same promise so all callers wait for the same request
+        if (this.state.tiers.isLoading && this.state.tiers.loadingPromise) {
+            return this.state.tiers.loadingPromise;
         }
         
+        // Create and store the loading promise
+        this.state.tiers.loadingPromise = this._fetchTiers(now);
         this.state.tiers.isLoading = true;
         this.state.tiers.error = null;
         
+        try {
+            const tierData = this.state.tiers.loadingPromise;
+            return tierData;
+        } finally {
+            this.state.tiers.isLoading = false;
+            this.state.tiers.loadingPromise = null;
+        }
+    }
+    
+    async _fetchTiers(timestamp) {
         try {
             const apiBase = CONFIG.API_BASE_URL;
             const response = await fetch(`${apiBase}/tiers/`);
@@ -662,13 +675,13 @@ export class StateManager {
             
             // Update state
             this.state.tiers.configs = tierData;
-            this.state.tiers.lastFetched = now;
+            this.state.tiers.lastFetched = timestamp;
             this.state.tiers.error = null;
             
             // Cache in localStorage for fast startup
             try {
                 localStorage.setItem('tier_configs', JSON.stringify(tierData));
-                localStorage.setItem('tier_configs_timestamp', now.toISOString());
+                localStorage.setItem('tier_configs_timestamp', timestamp.toISOString());
             } catch (e) {
                 console.warn('Failed to cache tiers in localStorage:', e);
             }
@@ -693,8 +706,6 @@ export class StateManager {
             }
             
             throw error;
-        } finally {
-            this.state.tiers.isLoading = false;
         }
     }
     

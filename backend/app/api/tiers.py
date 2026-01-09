@@ -1,7 +1,9 @@
+import logging
 from fastapi import APIRouter
 from app.services.tier_service import TIER_CONFIGS
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/")
@@ -55,5 +57,12 @@ def transform_features(tier_name: str, config: dict) -> list:
     for feature_code in backend_features:
         if feature_code in feature_map:
             features.append(feature_map[feature_code])
+        else:
+            # Log warning for unmapped feature
+            logger.warning("Unmapped feature code '%s' in tier '%s'", feature_code, tier_name)
+            
+            # Fallback: convert snake_case to Title Case
+            fallback_name = feature_code.replace("_", " ").title()
+            features.append(fallback_name)
     
     return features

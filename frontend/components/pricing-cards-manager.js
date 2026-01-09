@@ -98,8 +98,8 @@ export async function showUpgradeModal() {
     if (!contentDiv) return;
     
     try {
-        // Load tier data from backend API
-        const tierConfigs = await window.stateManager.loadTiers();
+        // Load tier data from backend API (ensures data is cached)
+        await window.stateManager.loadTiers();
         
         // Expand modal width for pricing cards
         const modalContent = document.querySelector('.modern-modal-content');
