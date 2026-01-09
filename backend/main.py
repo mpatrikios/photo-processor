@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
-from app.api import analytics, auth, batch, download, feedback, process_tasks, upload, users, payment, direct_upload
+from app.api import analytics, auth, batch, download, feedback, process_tasks, tiers, upload, users, payment, direct_upload
 from app.core.config import settings
 from app.core.errors import register_error_handlers
 from app.core.security_middleware import SecurityHeaders, custom_rate_limit_handler, limiter
@@ -265,6 +265,7 @@ app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 app.include_router(batch.router, prefix="/api/batch", tags=["batch"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(payment.router, prefix="/api/payment", tags=["payment"])
+app.include_router(tiers.router, prefix="/api/tiers", tags=["tiers"])
 app.include_router(direct_upload.router, prefix="/api/direct-upload", tags=["direct-upload"])
 
 # Secure file access with user isolation

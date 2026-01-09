@@ -1,14 +1,9 @@
-class PhotoProcessor {
+import CONFIG from './config.js';
+
+export class PhotoProcessor {
     constructor() {
-        // In development, frontend runs on 5173 and backend on 8000
-        // In production, frontend (Firebase) connects to Cloud Run backend
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        if (isDevelopment) {
-            this.apiBase = window.location.protocol + '//' + window.location.hostname + ':8000/api';
-        } else {
-            // Production: Connect to Cloud Run backend
-            this.apiBase = 'https://tagsort-api-486078451066.us-central1.run.app/api';
-        }
+        // Use centralized API configuration
+        this.apiBase = CONFIG.API_BASE_URL;
         this.selectedFiles = [];
         this.currentJobId = null;
         this.groupedPhotos = [];
@@ -43,8 +38,6 @@ class PhotoProcessor {
 
         this.initializeEventListeners();
         this.initializeSearchAndFilters();
-
-        this.initializeApp();
     }
 
     // Authentication Methods
@@ -2843,101 +2836,6 @@ class PhotoProcessor {
         }
     }
 
-    showFeedbackModal() {
-        // Track feedback modal open
-        if (window.analyticsDashboard) {
-            window.analyticsDashboard.trackEngagement('modal_open', 'feedback_modal');
-        }
-        
-        // Reset form
-        document.getElementById('feedbackForm').reset();
-        document.getElementById('charCount').textContent = '0';
-
-        // Auto-fill system information
-        const systemInfo = this.getSystemInfo();
-        document.getElementById('systemInfo').textContent = systemInfo;
-
-        // Set up character counter
-        const description = document.getElementById('feedbackDescription');
-        const charCount = document.getElementById('charCount');
-
-        description.addEventListener('input', function() {
-            charCount.textContent = this.value.length;
-        });
-
-        // Set up form submission
-        document.getElementById('submitFeedbackBtn').onclick = this.submitFeedback.bind(this);
-
-        const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
-        modal.show();
-    }
-
-    getSystemInfo() {
-        const nav = navigator;
-        const screen = window.screen;
-
-        return `Browser: ${nav.userAgent} | Screen: ${screen.width}x${screen.height} | Language: ${nav.language} | Platform: ${nav.platform}`;
-    }
-
-    async submitFeedback() {
-        const form = document.getElementById('feedbackForm');
-        const submitBtn = document.getElementById('submitFeedbackBtn');
-
-        // Validate form
-        if (!form.checkValidity()) {
-            form.classList.add('was-validated');
-            return;
-        }
-
-        const feedbackData = {
-            type: document.getElementById('feedbackType').value,
-            title: document.getElementById('feedbackTitle').value.trim(),
-            description: document.getElementById('feedbackDescription').value.trim(),
-            email: document.getElementById('feedbackEmail').value.trim() || null,
-            system_info: this.getSystemInfo()
-        };
-
-        try {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
-
-            const response = await fetch(`${this.apiBase}/feedback/submit`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(feedbackData)
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.detail || 'Failed to submit feedback');
-            }
-
-            const result = await response.json();
-
-            // Track successful feedback submission
-            if (window.analyticsDashboard) {
-                window.analyticsDashboard.trackEngagement('success_action', 'feedback_submitted', {
-                    feedback_type: feedbackData.type,
-                    feedback_category: feedbackData.type
-                });
-            }
-
-            // Close modal and show success
-            const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
-            modal.hide();
-
-            this.showSuccess('Thank you for your feedback! We appreciate your input and will review it soon.');
-
-        } catch (error) {
-            console.error('Feedback submission error:', error);
-            this.showError(`Failed to submit feedback: ${error.message}`);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Feedback';
-        }
-    }
 
     // Unknown Photos Page Methods
     showUnknownPhotosPage() {

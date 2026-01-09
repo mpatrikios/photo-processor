@@ -1,5 +1,12 @@
 // TagSort - Main JavaScript
 
+import CONFIG from './config.js';
+import { PaymentForm } from '../../components/payment-form.js';
+import { initLandingPagePricing, showUpgradeModal } from '../../components/pricing-cards-manager.js';
+import { PhotoProcessor } from './photo-processor.js';
+import { StateManager } from './state-manager.js';
+
+
 // Global functions for modal and authentication handling
 function showSignInModal() {
     // Track engagement
@@ -295,12 +302,9 @@ class AppRouter {
     }
 }
 
-// Initialize router
-const appRouter = new AppRouter();
-window.appRouter = appRouter;
+// Router will be initialized in DOMContentLoaded
 
-// Make critical functions globally accessible IMMEDIATELY for onclick handlers
-// This ensures they work even if PhotoProcessor initialization fails later
+// Keep only essential global functions for backwards compatibility
 window.showSignInModal = showSignInModal;
 window.showCreateAccountModal = showCreateAccountModal;
 window.switchToCreateAccount = switchToCreateAccount;
@@ -369,10 +373,7 @@ async function handleSignIn(event) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing In...';
 
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
         
         const response = await fetch(`${apiBase}/auth/login`, {
             method: 'POST',
@@ -480,10 +481,7 @@ async function handleCreateAccount(event) {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Account...';
 
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
             
         const response = await fetch(`${apiBase}/auth/register`, {
             method: 'POST',
@@ -641,6 +639,9 @@ function dismissToast(toastId) {
     }, 300); // Match animation duration
 }
 
+// Expose dismissToast globally for onclick handlers
+window.dismissToast = dismissToast;
+
 /**
  * Clear all toasts
  */
@@ -714,6 +715,10 @@ async function showProfileModal() {
     // Load Data
     try {
         await loadCustomProfileData();
+        
+        // Add event delegation at container level (survives innerHTML changes)
+        setupModalEventDelegation();
+        
     } catch (error) {
         console.error('Error loading profile:', error);
         const contentDiv = document.getElementById('customModalContent');
@@ -733,10 +738,13 @@ async function showProfileModal() {
 }
 
 async function loadCustomProfileData() {
-    const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-    const apiBase = isDevelopment ? 
-        `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-        'https://tagsort-api-486078451066.us-central1.run.app/api';
+    // Reset modal width when loading profile data
+    const modalContent = document.querySelector('.modern-modal-content');
+    if (modalContent) {
+        modalContent.classList.remove('modal-wide');
+    }
+    
+    const apiBase = CONFIG.API_BASE_URL;
         
     const headers = { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` };
 
@@ -755,6 +763,32 @@ async function loadCustomProfileData() {
     );
 }
 
+// Store current user subscription data globally for access in other functions
+let currentUserSubscription = null;
+
+/**
+ * Humanize feature names for display
+ * @param {string} featureName - Feature code from backend
+ * @returns {string} Human-readable feature name
+ */
+function humanizeFeature(featureName) {
+    const featureMap = {
+        'basic_sorting': 'Basic Sorting',
+        'priority_support': 'Priority Support', 
+        'export_csv': 'CSV Export',
+        'advanced_sorting': 'Advanced Sorting',
+        'raw_file_support': 'RAW File Support',
+        'ai_features': 'AI Features',
+        'batch_operations': 'Batch Operations',
+        'custom_fields': 'Custom Fields',
+        'api_access': 'API Access',
+        'white_label': 'White Label',
+        'unlimited_storage': 'Unlimited Storage'
+    };
+    
+    return featureMap[featureName] || featureName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
 async function updateCustomModalContent(quotaData, statsData) {
     const contentDiv = document.getElementById('customModalContent');
     if (!contentDiv) return;
@@ -765,10 +799,7 @@ async function updateCustomModalContent(quotaData, statsData) {
     // Load subscription data
     let subscriptionData = null;
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
         
         const response = await fetch(`${apiBase}/users/me/subscription`, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
@@ -777,6 +808,8 @@ async function updateCustomModalContent(quotaData, statsData) {
         if (response.ok) {
             const result = await response.json();
             subscriptionData = result.subscription;
+            // Store globally for access in showUpgradeModal
+            currentUserSubscription = subscriptionData;
         }
     } catch (error) {
         console.error('Error loading subscription data:', error);
@@ -785,13 +818,13 @@ async function updateCustomModalContent(quotaData, statsData) {
     contentDiv.innerHTML = `
         <div>
             <div class="modern-tab-nav">
-                <button onclick="showCustomTab('quota')" id="quotaTab" class="modern-tab-button active">Quota</button>
-                <button onclick="showCustomTab('account')" id="accountTab" class="modern-tab-button">Account</button>
-                <button onclick="showCustomTab('subscription')" id="subscriptionTab" class="modern-tab-button">Subscription</button>
+                <button data-tab="quota" id="quotaTab" class="modern-tab-button active">Quota</button>
+                <button data-tab="account" id="accountTab" class="modern-tab-button">Account</button>
+                <button data-tab="subscription" id="subscriptionTab" class="modern-tab-button">Subscription</button>
             </div>
             
             <div id="quotaContent">
-                <div class="modern-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}">
+                <div class="glass-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="padding: 24px;">
                     <h5>Monthly Photo Quota</h5>
                     <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month}/${quota.monthly_photo_limit}</div>
                     <div class="modern-progress">
@@ -837,24 +870,31 @@ async function updateCustomModalContent(quotaData, statsData) {
             
             <div id="subscriptionContent" style="display: none;">
                 ${subscriptionData ? `
-                    <div class="modern-card ${subscriptionData.is_premium ? 'gradient-primary' : ''}">
-                        <h5>${subscriptionData.tier_name.charAt(0).toUpperCase() + subscriptionData.tier_name.slice(1)} Plan</h5>
-                        <div style="font-size: 1.25rem; margin-bottom: 12px;">${subscriptionData.monthly_photo_limit} photos/month</div>
+                    <div class="subscription-card-clean">
+                        <div class="plan-label">Current Plan</div>
+                        <div class="plan-name">${subscriptionData.tier_name.charAt(0).toUpperCase() + subscriptionData.tier_name.slice(1)}</div>
+                        <div class="plan-limit">${subscriptionData.monthly_photo_limit.toLocaleString()} photos / month</div>
                         ${subscriptionData.features && subscriptionData.features.length > 0 ? `
-                            <ul style="margin-bottom: 16px;">
-                                ${subscriptionData.features.map(feature => `<li>${feature}</li>`).join('')}
+                            <ul class="feature-list">
+                                ${subscriptionData.features.map(feature => `
+                                    <li class="feature-item">
+                                        <div class="feature-icon">✓</div>
+                                        ${humanizeFeature(feature)}
+                                    </li>
+                                `).join('')}
                             </ul>
+                        ` : ''}
+                        ${!subscriptionData.has_stripe_subscription ? `
+                            <button class="upgrade-button" data-upgrade-plan>
+                                Change Plan
+                            </button>
                         ` : ''}
                     </div>
                     ${subscriptionData.has_stripe_subscription ? `
                         <div style="text-align: center; margin-top: 16px;">
-                            <button onclick="openBillingPortal()" class="modern-btn modern-btn-outline">Manage Billing</button>
+                            <button class="modern-btn modern-btn-outline" data-billing-portal>Manage Billing</button>
                         </div>
-                    ` : `
-                        <div style="text-align: center; margin-top: 16px;">
-                            <button onclick="window.location.hash=''; location.reload()" class="modern-btn modern-btn-primary">Upgrade Plan</button>
-                        </div>
-                    `}
+                    ` : ''}
                 ` : `
                     <div class="modern-loading">
                         <div class="modern-loading-text">Loading subscription information...</div>
@@ -880,15 +920,75 @@ function showCustomTab(tabName) {
     });
 }
 
+function setupModalEventDelegation() {
+    const modalContainer = document.getElementById('customModalContent');
+    if (!modalContainer) return;
+    
+    // Remove any existing listeners to avoid duplicates
+    modalContainer.removeEventListener('click', handleModalClicks);
+    
+    // Add single delegated event listener that handles all clicks
+    modalContainer.addEventListener('click', handleModalClicks);
+}
+
+function handleModalClicks(e) {
+    // Tab navigation
+    if (e.target.dataset.tab) {
+        e.preventDefault();
+        showCustomTab(e.target.dataset.tab);
+        return;
+    }
+    
+    // Billing portal button
+    if (e.target.hasAttribute('data-billing-portal')) {
+        e.preventDefault();
+        openBillingPortal();
+        return;
+    }
+    
+    // Upgrade plan button  
+    if (e.target.hasAttribute('data-upgrade-plan')) {
+        e.preventDefault();
+        showUpgradeModal();
+        // Re-establish event delegation after modal content changes
+        setupModalEventDelegation();
+        return;
+    }
+    
+    // Back to profile button
+    if (e.target.hasAttribute('data-back-to-profile')) {
+        e.preventDefault();
+        // Reset modal width and reload the original profile modal content
+        const modalContent = document.querySelector('.modern-modal-content');
+        if (modalContent) {
+            modalContent.classList.remove('modal-wide');
+        }
+        loadCustomProfileData().then(() => {
+            // Re-establish event delegation after profile content reloads
+            setupModalEventDelegation();
+        });
+        return;
+    }
+    
+    // Upgrade tier buttons (from upgrade modal)
+    if (e.target.hasAttribute('data-tier')) {
+        e.preventDefault();
+        const tierName = e.target.dataset.tier;
+        if (tierName) {
+            handleUpgrade(tierName);
+        }
+        return;
+    }
+}
+
+
+
 async function updateCustomProfile() {
     const fullNameInput = document.getElementById('customFullName');
     if (!fullNameInput) return;
     
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
             
         const formData = new FormData();
         formData.append('full_name', fullNameInput.value);
@@ -987,10 +1087,7 @@ async function changeEmail() {
     }
     
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
             
         const formData = new FormData();
         formData.append('new_email', newEmailInput.value);
@@ -1061,10 +1158,7 @@ async function changePassword() {
     }
     
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
             
         const response = await fetch(`${apiBase}/auth/password/change`, {
             method: 'POST',
@@ -1095,10 +1189,7 @@ async function logoutAllSessions() {
     if (!confirm('This will sign you out from all devices. Continue?')) return;
     
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
             
         const response = await fetch(`${apiBase}/auth/logout-all`, {
             method: 'POST',
@@ -1116,12 +1207,10 @@ async function logoutAllSessions() {
 }
 
 // Subscription Functions
+
 async function openBillingPortal() {
     try {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        const apiBase = isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        const apiBase = CONFIG.API_BASE_URL;
             
         const response = await fetch(`${apiBase}/payment/customer-portal`, {
             method: 'POST',
@@ -1143,21 +1232,10 @@ async function openBillingPortal() {
 function showChangePasswordModal() { showChangePasswordForm(); }
 function editProfile() { showProfileModal(); }
 
-// Expose to window for HTML onClick events
+// Keep essential profile functions for modal interactions
 window.showProfileModal = showProfileModal;
 window.showCustomTab = showCustomTab;
-window.updateCustomProfile = updateCustomProfile;
-window.showChangePasswordModal = showChangePasswordModal;
-window.editProfile = editProfile;
-window.showChangeEmailForm = showChangeEmailForm;
-window.cancelEmailChange = cancelEmailChange;
-window.changeEmail = changeEmail;
-window.showChangePasswordForm = showChangePasswordForm;
-window.cancelPasswordChange = cancelPasswordChange;
-window.changePassword = changePassword;
-window.logoutAllSessions = logoutAllSessions;
-window.openBillingPortal = openBillingPortal;
-if (typeof logout !== 'undefined') window.logout = logout;
+window.showUpgradeModal = showUpgradeModal;
 
 // ==========================================
 // STRIPE CHECKOUT FUNCTIONS
@@ -1171,9 +1249,8 @@ let paymentForm = null;
  * Initialize payment form with modular component
  */
 function initializePaymentForm() {
-    if (!paymentForm && typeof PaymentForm !== 'undefined') {
-        const apiBaseUrl = PaymentForm.getApiBaseUrl();
-        paymentForm = new PaymentForm(apiBaseUrl);
+    if (!paymentForm) {
+        paymentForm = new PaymentForm(CONFIG.API_BASE_URL);
     }
 }
 
@@ -1260,8 +1337,8 @@ function handlePaymentCancelled() {
     }
 }
 
-// Make functions globally available
-window.handleUpgrade = handleUpgrade;
+// Payment functions are now handled via event delegation
+// Keeping for backwards compatibility only
 window.handlePaymentSuccess = handlePaymentSuccess;
 window.handlePaymentCancelled = handlePaymentCancelled;
 
@@ -1308,37 +1385,156 @@ function initializeSeamlessNavbar() {
     handleScroll();
 }
 
-// Make function globally available
-window.initializeSeamlessNavbar = initializeSeamlessNavbar;
+// Navbar initialization handled internally
 
 
 // ==========================================
 // 4. APP INITIALIZATION (DOM LOADED)
 // ==========================================
+// Global Feedback Functions (accessible to all users)
+// ==========================================
 
-document.addEventListener('DOMContentLoaded', () => {
+function showFeedbackModal() {
+    // Track feedback modal open
+    if (window.analyticsDashboard) {
+        window.analyticsDashboard.trackEngagement('modal_open', 'feedback_modal');
+    }
+    
+    // Reset form
+    document.getElementById('feedbackForm').reset();
+    document.getElementById('charCount').textContent = '0';
+    
+    // Auto-fill system information
+    const systemInfo = getSystemInfo();
+    document.getElementById('systemInfo').textContent = systemInfo;
+    
+    // Set up character counter
+    const description = document.getElementById('feedbackDescription');
+    const charCount = document.getElementById('charCount');
+    description.addEventListener('input', function() {
+        charCount.textContent = this.value.length;
+    });
+    
+    // Set up form submission
+    document.getElementById('submitFeedbackBtn').onclick = submitFeedback;
+    
+    const modal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+    modal.show();
+}
+
+function getSystemInfo() {
+    const nav = navigator;
+    const screen = window.screen;
+    return `Browser: ${nav.userAgent} | Screen: ${screen.width}x${screen.height} | Language: ${nav.language} | Platform: ${nav.platform}`;
+}
+
+async function submitFeedback() {
+    const form = document.getElementById('feedbackForm');
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    
+    // Validate form
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+    }
+    
+    const feedbackData = {
+        type: document.getElementById('feedbackType').value,
+        title: document.getElementById('feedbackTitle').value.trim(),
+        description: document.getElementById('feedbackDescription').value.trim(),
+        email: document.getElementById('feedbackEmail').value.trim() || null,
+        system_info: getSystemInfo()
+    };
+    
+    try {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+        
+        const response = await fetch(`${CONFIG.API_BASE_URL}/feedback/submit`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(feedbackData)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to submit feedback');
+        }
+        
+        // Track successful feedback submission
+        if (window.analyticsDashboard) {
+            window.analyticsDashboard.trackEngagement('success_action', 'feedback_submitted', {
+                feedback_type: feedbackData.type,
+                feedback_category: feedbackData.type
+            });
+        }
+        
+        // Close modal and show success
+        const modal = bootstrap.Modal.getInstance(document.getElementById('feedbackModal'));
+        modal.hide();
+        
+        // Show success notification
+        if (window.stateManager) {
+            window.stateManager.addNotification('Thank you for your feedback! We appreciate your input and will review it soon.', 'success');
+        } else {
+            alert('Thank you for your feedback! We appreciate your input and will review it soon.');
+        }
+        
+    } catch (error) {
+        console.error('Feedback submission error:', error);
+        
+        // Show error notification
+        if (window.stateManager) {
+            window.stateManager.addNotification(`Failed to submit feedback: ${error.message}`, 'error');
+        } else {
+            alert(`Failed to submit feedback: ${error.message}`);
+        }
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Feedback';
+    }
+}
+
+// Make functions globally accessible
+window.showFeedbackModal = showFeedbackModal;
+window.submitFeedback = submitFeedback;
+
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM Content Loaded');
 
-    // 1. Initialize PhotoProcessor Class
+    // 1. Initialize Router FIRST (required by PhotoProcessor)
+    const appRouter = new AppRouter();
+    window.appRouter = appRouter;
+    window.AppRouter = AppRouter;
+
+    // 2. Initialize Classes with ES6 modules
     try {
-        if (typeof PhotoProcessor !== 'undefined') {
-            window.photoProcessor = new PhotoProcessor();
-            console.log('PhotoProcessor initialized successfully');
-        } else {
-            console.error('PhotoProcessor class not found! Check script load order.');
-        }
+        window.photoProcessor = new PhotoProcessor();
+        console.log('PhotoProcessor initialized successfully');
+        
+        // Initialize StateManager 
+        window.stateManager = new StateManager();
+        console.log('StateManager initialized successfully');
+        
+        // Initialize Landing Page Pricing after StateManager is ready
+        await initLandingPagePricing();
     } catch (error) {
         console.error('Failed to initialize PhotoProcessor:', error);
         window.photoProcessor = {
             isAuthenticated: false,
             initializeApp: () => console.log('PhotoProcessor init failed')
         };
-    }
-
-    // 2. Initialize Pricing (if available)
-    if (typeof PricingPage !== 'undefined') {
-        const pricingPageApp = new PricingPage('app-container', 'Trial');
-        pricingPageApp.render();
+        
+        // Still try to initialize pricing with fallback behavior
+        try {
+            await initLandingPagePricing();
+        } catch (pricingError) {
+            console.warn('Failed to initialize landing page pricing:', pricingError);
+        }
     }
 
     // 3. Bind Auth Forms
@@ -1363,7 +1559,65 @@ document.addEventListener('DOMContentLoaded', () => {
     // 6. Initialize Payment Components
     initializePaymentForm();
     
-    // 7. Check Auth & Handle Initial Route
+    // 7. Add True Event Delegation for All Interactive Buttons
+    document.addEventListener('click', (event) => {
+        // Handle tier selection buttons (Basic/Pro/Trial)
+        const tierButton = event.target.closest('.tier-choose-button');
+        if (tierButton) {
+            const tier = tierButton.dataset.tier;
+            console.log(`Tier selected: ${tier}`);
+            
+            if (tier === 'Trial') {
+                showCreateAccountModal();
+            } else {
+                handleUpgrade(tier);
+            }
+            return;
+        }
+        
+        // Handle legacy upgrade buttons (if any remain)
+        const upgradeButton = event.target.closest('[data-upgrade-btn]');
+        if (upgradeButton) {
+            const tier = upgradeButton.dataset.tier;
+            if (tier) {
+                handleUpgrade(tier);
+            }
+            return;
+        }
+        
+        // Handle feedback navigation links
+        const feedbackLink = event.target.closest('a[href="#feedback"]');
+        if (feedbackLink) {
+            event.preventDefault();
+            showFeedbackModal();
+            return;
+        }
+    });
+    
+    // 8. Add Event Delegation for Auth Buttons
+    document.querySelectorAll('[data-signin-btn]').forEach(btn => {
+        btn.addEventListener('click', showSignInModal);
+    });
+    
+    document.querySelectorAll('[data-signup-btn]').forEach(btn => {
+        btn.addEventListener('click', showCreateAccountModal);
+    });
+    
+    document.querySelectorAll('[data-landing-btn]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showLandingPage();
+        });
+    });
+    
+    // 9. Initialize PhotoProcessor App Logic
+    // Now that all dependencies are ready, initialize the app logic
+    if (window.photoProcessor && typeof window.photoProcessor.initializeApp === 'function') {
+        window.photoProcessor.initializeApp();
+        console.log('PhotoProcessor app logic initialized');
+    }
+
+    // 10. Check Auth & Handle Initial Route
     // We call this LAST to ensure PhotoProcessor is ready for the router
     if (typeof checkAuthOnLoad === 'function') {
         checkAuthOnLoad();

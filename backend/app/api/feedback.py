@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import datetime
 
@@ -8,6 +9,7 @@ from app.models.schemas import FeedbackRequest
 from app.services.email_service import email_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 FEEDBACK_DIR = "feedback"
 
@@ -48,31 +50,35 @@ async def submit_feedback(request: FeedbackRequest):
         with open(log_filepath, "a") as f:
             f.write(json.dumps(feedback_entry) + "\n")
 
-        print(f"✅ New feedback received: {request.type} - {request.title}")
-
         # Send email notification (async, don't wait for it)
         try:
-            email_sent = await email_service.send_feedback_notification(feedback_entry)
-            if email_sent:
-                print(f"📧 Email notification sent for feedback {feedback_entry['id']}")
-            else:
-                print(
-                    f"⚠️ Email notification failed for feedback {feedback_entry['id']}"
-                )
-        except Exception as e:
-            print(
-                f"❌ Email notification error for feedback {feedback_entry['id']}: {str(e)}"
-            )
+            await email_service.send_feedback_notification(feedback_entry)
+        except Exception:
+            logger.exception("Email notification error for feedback %s", feedback_entry['id'])
 
         return {
             "message": "Thank you for your feedback! We appreciate your input.",
             "feedback_id": feedback_entry["id"],
         }
 
-    except Exception as e:
-        print(f"❌ Failed to save feedback: {e}")
-        raise HTTPException(status_code=500, detail="Failed to submit feedback")
+    except KeyError as key_err:
+        # This should only occur if feedback_entry creation failed internally
+        logger.error(
+            "Internal error: Missing key %s in feedback_entry during response creation",
+            key_err,
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
+    except OSError as os_err:
+        # File system errors (permissions, disk space, etc.)
+        logger.exception("File system error during feedback submission: %s", os_err)
+        raise HTTPException(status_code=500, detail="Unable to save feedback")
+
+    except Exception:
+        # Catch-all for unexpected issues (Database down, etc.)
+        # We log the stack trace but return a generic message to the user for security
+        logger.exception("Unexpected error during feedback submission process") 
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/list")
 async def list_feedback():
@@ -103,8 +109,8 @@ async def list_feedback():
                         "status": feedback_data.get("status", "new"),
                     }
                     feedback_list.append(summary)
-            except Exception as e:
-                print(f"Error reading feedback file {filename}: {e}")
+            except Exception:
+                logger.exception("Error reading feedback file %s", filename)
                 continue
 
         return {"feedback": feedback_list, "count": len(feedback_list)}

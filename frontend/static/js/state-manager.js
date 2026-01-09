@@ -3,7 +3,9 @@
  * Replaces global variables with a structured state management system
  */
 
-class StateManager {
+import CONFIG from './config.js';
+
+export class StateManager {
     constructor() {
         // Initialize state
         this.state = {
@@ -16,9 +18,17 @@ class StateManager {
                 refreshToken: null
             },
             
+            // Tier Management
+            tiers: {
+                configs: null,
+                lastFetched: null,
+                isLoading: false,
+                error: null,
+                loadingPromise: null  // Track in-flight requests
+            },
+            
             // API Configuration
             api: {
-                baseUrl: this.getApiBaseUrl(),
                 requestTimeout: 120000, // Increased to 2 minutes for Gemini processing
                 retryAttempts: 3
             },
@@ -93,18 +103,6 @@ class StateManager {
         this.setupRequestInterceptor();
     }
     
-    /**
-     * Get API base URL based on environment
-     */
-    getApiBaseUrl() {
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        if (isDevelopment) {
-            return `${window.location.protocol}//${window.location.hostname}:8000/api`;
-        } else {
-            // Production: Connect to Cloud Run backend
-            return 'https://tagsort-api-486078451066.us-central1.run.app/api';
-        }
-    }
     
     /**
      * Subscribe to state changes
@@ -350,7 +348,7 @@ class StateManager {
             
             // Use original fetch to avoid interceptor recursion
             const fetchToUse = this.originalFetch || fetch;
-            const response = await fetchToUse(`${this.state.api.baseUrl}/auth/refresh`, {
+            const response = await fetchToUse(`${CONFIG.API_BASE_URL}/auth/refresh`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -529,7 +527,7 @@ class StateManager {
      * Make authenticated API request using the fetch interceptor
      */
     async request(method, endpoint, data = null) {
-        const url = `${this.state.api.baseUrl}${endpoint}`;
+        const url = `${CONFIG.API_BASE_URL}${endpoint}`;
         
         const options = {
             method: method.toUpperCase(),
@@ -624,6 +622,104 @@ class StateManager {
     }
     
     /**
+     * Tier Management Methods
+     */
+    
+    async loadTiers(force = false) {
+        // Check if we have cached data and it's fresh (less than 5 minutes old)
+        const fiveMinutes = 5 * 60 * 1000;
+        const now = new Date();
+        
+        if (!force && 
+            this.state.tiers.configs && 
+            this.state.tiers.lastFetched &&
+            (now - this.state.tiers.lastFetched) < fiveMinutes) {
+            return this.state.tiers.configs;
+        }
+        
+        // If already loading, return the same promise so all callers wait for the same request
+        if (this.state.tiers.isLoading && this.state.tiers.loadingPromise) {
+            return this.state.tiers.loadingPromise;
+        }
+        
+        // Create and store the loading promise
+        this.state.tiers.loadingPromise = this._fetchTiers(now);
+        this.state.tiers.isLoading = true;
+        this.state.tiers.error = null;
+        
+        try {
+            const tierData = await this.state.tiers.loadingPromise;
+            return tierData;
+        } finally {
+            this.state.tiers.isLoading = false;
+            this.state.tiers.loadingPromise = null;
+        }
+    }
+    
+    async _fetchTiers(timestamp) {
+        try {
+            const apiBase = CONFIG.API_BASE_URL;
+            const response = await fetch(`${apiBase}/tiers/`);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to load tiers: ${response.status} ${response.statusText}`);
+            }
+            
+            const tierData = await response.json();
+            
+            // Update state
+            this.state.tiers.configs = tierData;
+            this.state.tiers.lastFetched = timestamp;
+            this.state.tiers.error = null;
+            
+            // Cache in localStorage for fast startup
+            try {
+                localStorage.setItem('tier_configs', JSON.stringify(tierData));
+                localStorage.setItem('tier_configs_timestamp', timestamp.toISOString());
+            } catch (e) {
+                console.warn('Failed to cache tiers in localStorage:', e);
+            }
+            
+            return tierData;
+            
+        } catch (error) {
+            console.error('Error loading tiers:', error);
+            this.state.tiers.error = error.message;
+            
+            // Try to use cached data as fallback
+            try {
+                const cached = localStorage.getItem('tier_configs');
+                if (cached) {
+                    const tierData = JSON.parse(cached);
+                    this.state.tiers.configs = tierData;
+                    console.log('Using cached tier data as fallback');
+                    return tierData;
+                }
+            } catch (e) {
+                console.warn('Failed to load cached tiers:', e);
+            }
+            
+            throw error;
+        }
+    }
+    
+    getTiers() {
+        return this.state.tiers.configs;
+    }
+    
+    getTier(tierName) {
+        return this.state.tiers.configs?.[tierName] || null;
+    }
+    
+    isTiersLoading() {
+        return this.state.tiers.isLoading;
+    }
+    
+    getTiersError() {
+        return this.state.tiers.error;
+    }
+    
+    /**
      * Debug: Get full state
      */
     getFullState() {
@@ -631,7 +727,5 @@ class StateManager {
     }
 }
 
-// Export global instance
-if (typeof window !== 'undefined') {
-    window.stateManager = new StateManager();
-}
+// StateManager will be instantiated by script.js
+// This ensures proper initialization order and prevents duplicate instances

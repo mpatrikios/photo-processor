@@ -4,7 +4,9 @@
  * Follows CLAUDE.md security principles: environment-based configuration
  */
 
-class PaymentForm {
+import CONFIG from '../static/js/config.js';
+
+export class PaymentForm {
     constructor(apiBaseUrl) {
         this.apiBaseUrl = apiBaseUrl;
         this.isProcessing = false;
@@ -79,11 +81,7 @@ class PaymentForm {
     }
 
     static getApiBaseUrl() {
-        // Environment detection
-        const isDevelopment = window.location.port === '5173' || window.location.hostname === 'localhost';
-        return isDevelopment ? 
-            `${window.location.protocol}//${window.location.hostname}:8000/api` : 
-            'https://tagsort-api-486078451066.us-central1.run.app/api';
+        return CONFIG.API_BASE_URL;
     }
 }
 
@@ -130,9 +128,7 @@ function handlePaymentCancelled() {
     window.location.hash = '#dashboard';
 }
 
-// Auto-check payment status on load
-document.addEventListener('DOMContentLoaded', checkPaymentStatusFromUrl);
-window.addEventListener('hashchange', checkPaymentStatusFromUrl);
+// Payment status checking is handled by script.js to avoid conflicts
 
 // Export for module use
 if (typeof module !== 'undefined' && module.exports) {
