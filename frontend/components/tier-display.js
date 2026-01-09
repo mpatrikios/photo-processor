@@ -3,7 +3,6 @@
  * Displays tier limits, usage, and upgrade options
  */
 
-
 class TierDisplay {
     constructor(container, userData) {
         this.container = container;
