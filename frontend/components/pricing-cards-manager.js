@@ -19,7 +19,7 @@ export async function initLandingPagePricing(containerId = 'pricing-cards-contai
             console.log('PricingCard available:', typeof PricingCard);
             
             // Load tier data from backend API
-            const tierConfigs = await window.stateManager.loadTiers();
+            await window.stateManager.loadTiers();
             
             // Get current user tier if logged in (for authentication state)
             const currentTier = null; // Will be detected by PricingCard if user is logged in
