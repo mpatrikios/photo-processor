@@ -66,7 +66,7 @@ async def submit_feedback(request: FeedbackRequest):
 
     except KeyError as key_err:
         # Catching specific errors allows you to give better feedback
-        logger.error(f"Data integrity error: Missing key {key_err} in feedback payload")
+        logger.error(f"Data integrity error: Missing required field: {key_err} in feedback payload")
         raise HTTPException(status_code=422, detail="Incomplete feedback data")
 
     except Exception as e:
