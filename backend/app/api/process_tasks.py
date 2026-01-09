@@ -823,11 +823,9 @@ def sync_jobs_from_database():
 
             # Recompute progress if needed
             total_photos = db_job.total_photos or 0
-            progress = db_job.progress or 0
+            progress = 0
             if total_photos:
                 progress = int((completed_photos / total_photos) * 100)
-            else:
-                progress = 0
 
             current_status = status_map.get(db_job.status, ProcessingStatus.PROCESSING)
             if progress >= 100 and current_status == ProcessingStatus.PROCESSING:
