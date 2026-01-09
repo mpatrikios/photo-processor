@@ -103,12 +103,6 @@ export class StateManager {
         this.setupRequestInterceptor();
     }
     
-    /**
-     * Get API base URL based on environment
-     */
-    getApiBaseUrl() {
-        return CONFIG.API_BASE_URL;
-    }
     
     /**
      * Subscribe to state changes

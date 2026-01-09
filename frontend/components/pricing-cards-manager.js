@@ -13,10 +13,8 @@ export async function initLandingPagePricing(containerId = 'pricing-cards-contai
     try {
         // Check if we're on the landing page and container exists
         const pricingContainer = document.getElementById(containerId);
-        console.log('Pricing container found:', !!pricingContainer);
         
         if (pricingContainer) {
-            console.log('PricingCard available:', typeof PricingCard);
             
             // Load tier data from backend API
             await window.stateManager.loadTiers();
@@ -40,10 +38,6 @@ export async function initLandingPagePricing(containerId = 'pricing-cards-contai
                     const basicContainer = document.getElementById('landing-basic-card');
                     const proContainer = document.getElementById('landing-pro-card');
                     
-                    console.log('Trial container found:', !!trialContainer);
-                    console.log('Basic container found:', !!basicContainer);
-                    console.log('Pro container found:', !!proContainer);
-                    
                     if (trialContainer && basicContainer && proContainer) {
                         const trialCard = new PricingCard(
                             trialContainer,
@@ -66,14 +60,9 @@ export async function initLandingPagePricing(containerId = 'pricing-cards-contai
                             { layout: 'landing', useBootstrapGrid: false }
                         );
                         
-                        console.log('Rendering Trial card...');
                         trialCard.render();
-                        console.log('Rendering Basic card...');
                         basicCard.render();
-                        console.log('Rendering Pro card...');
                         proCard.render();
-                        
-                        console.log('Landing page pricing initialized successfully');
                     } else {
                         console.error('Card containers not found after DOM update');
                     }
@@ -81,8 +70,6 @@ export async function initLandingPagePricing(containerId = 'pricing-cards-contai
                     console.error('Error creating pricing cards:', innerError);
                 }
             }, 100);
-        } else {
-            console.log('Pricing container not found - likely not on landing page');
         }
     } catch (error) {
         console.error('Failed to initialize landing page pricing:', error);

@@ -57,7 +57,7 @@ class PricingCard {
                 </div>
                 
                 <ul class="feature-list">
-                    ${tierInfo.features.map(feature => `
+                    ${(tierInfo.features || []).map(feature => `
                         <li class="feature-item">
                             <div class="feature-icon">✓</div>
                             ${typeof feature === 'object' ? `<span style="${feature.style}">${feature.text}</span>` : feature}
@@ -96,7 +96,7 @@ class PricingCard {
                             <small class="text-muted">${isTrial ? 'free' : 'per month'}</small>
                         </div>
                         <ul class="list-unstyled">
-                            ${tierInfo.features.map(feature => 
+                            ${(tierInfo.features || []).map(feature => 
                                 `<li class="mb-2"><i class="fas fa-check text-success me-2"></i>${typeof feature === 'object' ? `<span style="${feature.style}">${feature.text}</span>` : feature}</li>`
                             ).join('')}
                         </ul>

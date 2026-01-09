@@ -784,7 +784,6 @@ async function updateCustomModalContent(quotaData, statsData) {
             subscriptionData = result.subscription;
             // Store globally for access in showUpgradeModal
             currentUserSubscription = subscriptionData;
-            console.log('Loaded subscription data:', subscriptionData); // Debug log
         }
     } catch (error) {
         console.error('Error loading subscription data:', error);
@@ -1241,8 +1240,7 @@ let paymentForm = null;
  */
 function initializePaymentForm() {
     if (!paymentForm) {
-        const apiBaseUrl = PaymentForm.getApiBaseUrl();
-        paymentForm = new PaymentForm(apiBaseUrl);
+        paymentForm = new PaymentForm(CONFIG.API_BASE_URL);
     }
 }
 

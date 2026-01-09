@@ -14,7 +14,7 @@ TIER_CONFIGS = {
         "price_cents": 0,
         "is_paid": False,
         "max_file_size_mb": 10,
-        "features": ["standard_support"]  # Simplified - removed basic_sorting
+        "features": ["standard_support"]
     },
     "Basic": {
         "max_uploads": 1000,
@@ -22,7 +22,7 @@ TIER_CONFIGS = {
         "price_cents": 999,  # $9.99
         "is_paid": True,
         "max_file_size_mb": 25,
-        "features": ["export_csv"]  # Simplified - removed basic_sorting
+        "features": ["export_csv"]
     },
     "Pro": {
         "max_uploads": 5000,
@@ -30,7 +30,7 @@ TIER_CONFIGS = {
         "price_cents": 2999,  # $29.99
         "is_paid": True,
         "max_file_size_mb": 50,
-        "features": ["priority_support", "export_csv", "advanced_sorting"]  # Simplified, advanced_sorting as coming soon
+        "features": ["priority_support", "export_csv", "advanced_sorting"]
     }
 }
 
