@@ -546,6 +546,7 @@ async def get_processing_status(job_id: str, current_user: User = Depends(get_cu
             "completed": ProcessingStatus.COMPLETED,
             "failed": ProcessingStatus.FAILED,
             "processing": ProcessingStatus.PROCESSING,
+            "pending": ProcessingStatus.PENDING,
         }
         current_status = status_map.get(db_job.status, ProcessingStatus.PROCESSING)
         if progress >= 100 and current_status == ProcessingStatus.PROCESSING:
