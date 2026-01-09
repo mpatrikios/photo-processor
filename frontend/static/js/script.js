@@ -1455,8 +1455,6 @@ async function submitFeedback() {
             throw new Error(error.detail || 'Failed to submit feedback');
         }
         
-        const result = await response.json();
-        
         // Track successful feedback submission
         if (window.analyticsDashboard) {
             window.analyticsDashboard.trackEngagement('success_action', 'feedback_submitted', {
