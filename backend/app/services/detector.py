@@ -249,6 +249,13 @@ Return JSON:
         successful_count = len([r for r in results.values() if r.bib_number not in ["unknown", "error"]])
         success_rate = (successful_count / len(photo_ids)) * 100 if photo_ids else 0
         
+        # DEBUG: Log detailed results before return
+        logger.info(f"🔍 DEBUG DETECTOR: results type={type(results)}, len={len(results)}")
+        if results:
+            logger.info(f"🔍 DEBUG DETECTOR: keys={list(results.keys())[:3]}")
+            for photo_id, result in list(results.items())[:2]:  # Log first 2 results
+                logger.info(f"🔍 DEBUG DETECTOR: {photo_id[:8]} -> bib='{result.bib_number}', conf={getattr(result, 'confidence', 'NO_CONF')}")
+        
         logger.info(f"🎯 CONCURRENT COMPLETE: {successful_count}/{len(photo_ids)} detected ({success_rate:.1f}% success) in {total_time:.2f}s")
         logger.info(f"📁 CACHE STATUS: {len(self._file_cache)} files cached in memory")
         

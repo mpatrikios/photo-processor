@@ -246,6 +246,13 @@ async def process_batch_photos_worker(request: Request):
             photo_ids, debug_mode=debug_mode, user_id=user_id
         )
         
+        # DEBUG: Log detailed results info
+        logger.info(f"🔍 DEBUG WORKER: batch_results type={type(batch_results)}, len={len(batch_results) if batch_results else 'None'}")
+        if batch_results:
+            logger.info(f"🔍 DEBUG WORKER: keys={list(batch_results.keys())[:3]}")
+            for photo_id, result in list(batch_results.items())[:2]:  # Log first 2 results
+                logger.info(f"🔍 DEBUG WORKER: {photo_id[:8]} -> bib='{result.bib_number}', conf={result.confidence}")
+        
         logger.info(f"🔄 BATCH WORKER COMPLETE: {batch_index}/{total_batches} received {len(batch_results)} results")
         
         if not batch_results:
