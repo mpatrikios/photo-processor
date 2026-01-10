@@ -162,8 +162,8 @@ async def start_processing_with_tasks(
         asyncio.create_task(process_photos_async_fallback(job_id, photo_ids, current_user.id, debug))
         return job
     
-    # Group photos into batches of 1 for testing Elite OCR system
-    BATCH_SIZE = 3
+    # Group photos into batches of 1 for one-call-per-photo processing
+    BATCH_SIZE = 1
     photo_batches = []
     for i in range(0, len(photo_ids), BATCH_SIZE):
         batch = photo_ids[i:i + BATCH_SIZE]
@@ -219,52 +219,12 @@ async def start_processing_with_tasks(
 
     return job
 
-
-# COMMENTED OUT: Force batch-only processing
-# @router.post("/worker")
-# async def process_single_photo_worker(request: Request):
-#     """
-#     Cloud Tasks Worker Endpoint
-#     Each request handles exactly ONE photo for maximum reliability.
-#     """
-#     # Create a fresh database session for this specific photo task
-#     db = SessionLocal()
-#     try:
-#         payload = await request.json()
-#         photo_id = payload.get("photo_id")
-#         job_id = payload.get("job_id")
-#         user_id = payload.get("user_id")
-#         debug_mode = payload.get("debug_mode", False)
-#         
-#         if not all([photo_id, job_id, user_id]):
-#             return {"status": "error", "message": "Missing required payload fields"}
-#         
-#         # 1. Run detection (Gemini)
-#         detection_result = await detector.process_photo(
-#             photo_id, debug_mode=debug_mode, user_id=user_id
-#         )
-#         
-#         # 2. Save result to DB (updates status to 'completed' for this photo)
-#         await save_detection_to_database(photo_id, user_id, detection_result, job_id)
-#         
-#         # 3. Update the overall Job Progress (calculates % based on completed photos)
-#         await update_job_progress(job_id, db)
-#         
-#         return {"status": "success", "photo_id": photo_id}
-#             
-#     except Exception as e:
-#         logger.error(f"🔥 Worker failed for photo {photo_id if 'photo_id' in locals() else 'unknown'}: {e}")
-#         # Raising 500 tells Cloud Tasks to RETRY this specific photo automatically
-#         raise HTTPException(status_code=500, detail=str(e))
-#     finally:
-#         db.close()
-
-
 @router.post("/batch-worker")
 async def process_batch_photos_worker(request: Request):
     """
-    Optimized Cloud Tasks Batch Worker Endpoint
-    Each request handles 3 photos in a single Gemini API call for 2-3x better performance.
+    Cloud Tasks Worker Endpoint for Single Photo Processing
+    Each request handles 1 photo with individual Gemini API calls for maximum accuracy.
+    Concurrency controlled by GEMINI_CONCURRENCY environment variable.
     """
     db = SessionLocal()
     try:
@@ -468,7 +428,10 @@ async def update_job_progress(job_id: str, db: Session):
             progress = int((completed_photos / total_photos) * 100)
             
             # Update in-memory job
-            job_data = jobs.get(job_id)
+            job_data = ensure_job_loaded(job_id, db)
+            if not job_data:
+                logger.warning(f"❌ Job not found in memory or DB: {job_id[:8]}...")
+                return
             if job_data:
                 old_progress = job_data["job"].progress
                 old_status = job_data["job"].status
@@ -500,234 +463,161 @@ async def update_job_progress(job_id: str, db: Session):
                         progress=progress,
                     )
                     logger.info(f"📈 PROGRESS UPDATE: {job_id[:8]}... {progress}% ({completed_photos}/{total_photos})")
-            else:
-                logger.warning(f"❌ Job not found in memory during progress update: {job_id[:8]}...")
-            
         db.commit()
         
     except Exception as e:
         logger.error(f"Error updating job progress for {job_id}: {e}")
 
 
-# Keep existing endpoints for compatibility
 @router.get("/status/{job_id}")
-async def get_processing_status(job_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get the current status of a processing job with real-time database check"""
+async def get_processing_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the current status of a processing job with real-time database check."""
     logger.info(f"🔍 STATUS REQUEST: {job_id[:8]}... from user {current_user.id}")
-    
-    job_data = jobs.get(job_id)
+
+    # Load from memory or reconstruct from DB
+    job_data = ensure_job_loaded(job_id, db, current_user.id)
     if not job_data:
-        logger.warning(f"❌ Job not found in memory: {job_id[:8]}..., checking database")
-        
-        # Database fallback: Try to reconstruct job from database
-        from app.models.usage import ProcessingJob as ProcessingJobDB
-        from app.models.processing import PhotoDB, ProcessingStatus as DBProcessingStatus
-        
-        db_job = db.query(ProcessingJobDB).filter(
-            ProcessingJobDB.job_id == job_id,
-            ProcessingJobDB.user_id == current_user.id
-        ).first()
-        
-        if not db_job:
-            logger.warning(f"❌ Job {job_id[:8]}... not found in database either")
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        # Calculate current progress from database
-        total_photos = db.query(PhotoDB).filter(PhotoDB.processing_job_id == db_job.id).count()
-        completed_photos = db.query(PhotoDB).filter(
-            PhotoDB.processing_job_id == db_job.id,
-            PhotoDB.processing_status == DBProcessingStatus.COMPLETED
-        ).count()
-        
-        progress = int((completed_photos / total_photos) * 100) if total_photos else 0
-        
-        # Map database status to processing status safely
-        status_map = {
-            "completed": ProcessingStatus.COMPLETED,
-            "failed": ProcessingStatus.FAILED,
-            "processing": ProcessingStatus.PROCESSING,
-            "pending": ProcessingStatus.PENDING,
-        }
-        current_status = status_map.get(db_job.status, ProcessingStatus.PROCESSING)
-        if progress >= 100 and current_status == ProcessingStatus.PROCESSING:
-            current_status = ProcessingStatus.COMPLETED
-        
-        # Reconstruct job object and add to memory
-        job = ProcessingJob(
-            job_id=db_job.job_id,
-            photo_ids=[],  # Not needed for status tracking
-            status=current_status,
-            total_photos=total_photos,
-            progress=progress,
-            completed_photos=completed_photos,
-        )
-        
-        job_data = {"job": job, "user_id": db_job.user_id}
-        jobs[job_id] = job_data
-        
-        logger.info(f"✅ Reconstructed job {job_id[:8]}... from database: {current_status.value} {progress}%")
-    
-    # SECURITY: Verify job belongs to current user
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Security: verify ownership
     if job_data["user_id"] != current_user.id:
         logger.warning(f"❌ Access denied to job {job_id[:8]}... for user {current_user.id}")
         raise HTTPException(status_code=403, detail="Access denied to job")
-    
-    # Log current in-memory state
+
     current_status = job_data["job"].status
     current_progress = job_data["job"].progress
     logger.info(f"📊 CURRENT STATE: {job_id[:8]}... status={current_status}, progress={current_progress}")
-    
-    # Real-time check: Update job status from database if still processing
+
+    # If still processing, refresh from DB
     if current_status == ProcessingStatus.PROCESSING:
         logger.info(f"🔄 Job still processing, checking database for updates: {job_id[:8]}...")
         try:
-            # Force update job progress from database
             await update_job_progress(job_id, db)
-            
-            # Check if status changed after update
             new_status = job_data["job"].status
             new_progress = job_data["job"].progress
             if new_status != current_status or new_progress != current_progress:
                 logger.info(f"📈 STATUS CHANGE: {job_id[:8]}... {current_status}→{new_status}, {current_progress}→{new_progress}")
             else:
                 logger.info(f"📊 NO CHANGE: {job_id[:8]}... still {current_status} at {current_progress}%")
-            
-            # Timeout protection: If job has been processing for more than 10 minutes, mark as failed
+
+            # Timeout protection (optional)
             from datetime import datetime, timedelta
-            if hasattr(job_data["job"], 'created_at'):
+            if hasattr(job_data["job"], "created_at"):
                 time_elapsed = datetime.utcnow() - job_data["job"].created_at
                 if time_elapsed > timedelta(minutes=10):
                     logger.warning(f"⏰ TIMEOUT: {job_id[:8]}... after {time_elapsed.total_seconds():.1f}s")
                     job_data["job"].status = ProcessingStatus.FAILED
                     job_data["job"].progress = 0
-                    
         except Exception as e:
             logger.error(f"❌ Failed to update job progress for {job_id[:8]}...: {e}")
     else:
         logger.info(f"✅ Job already completed: {job_id[:8]}... status={current_status}")
-    
-    # Ensure proper JSON serialization by converting to dict if it's a Pydantic model
+
+    # Serialize response
     job_response = job_data["job"]
-    if hasattr(job_response, 'dict'):
+    if hasattr(job_response, "dict"):
         job_response = job_response.dict()
-    
-    final_status = job_response.get('status', 'unknown')
-    final_progress = job_response.get('progress', 0)
+
+    final_status = job_response.get("status", "unknown")
+    final_progress = job_response.get("progress", 0)
     logger.info(f"📤 RESPONSE: {job_id[:8]}... returning status={final_status}, progress={final_progress}")
-    
+
     return job_response
 
 
-@router.get("/results/{job_id}")  
-async def get_processing_results(job_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Get the results of a completed processing job"""
-    try:
-        # Check if job exists and belongs to user
-        job_data = jobs.get(job_id)
-        if not job_data:
-            raise HTTPException(status_code=404, detail="Job not found")
-        
-        # Verify job belongs to current user
-        if job_data["user_id"] != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied to job")
-        
-        # Get all photos for this job from the database
-        from app.models.processing import PhotoDB
-        from app.models.usage import ProcessingJob as ProcessingJobDB
-        
-        # Get the INTEGER primary key for this job_id 
-        processing_job_record = db.query(ProcessingJobDB).filter(
-            ProcessingJobDB.job_id == job_id,
-            ProcessingJobDB.user_id == current_user.id
-        ).first()
-        
-        if not processing_job_record:
-            logger.warning(f"Processing job not found: {job_id}")
-            return {"unknown": []}
-            
-        processing_job_pk = processing_job_record.id
-        
-        photos = db.query(PhotoDB).filter(
-            PhotoDB.processing_job_id == processing_job_pk,
-            PhotoDB.user_id == current_user.id
-        ).all()
-        
-        if not photos:
-            logger.warning(f"No photos found for job {job_id}, user {current_user.id}")
-            return {"unknown": []}
-        
-        # Group photos by bib number
-        grouped_photos = {}
-        
-        for photo in photos:
-            # Get effective bib number (manual label takes precedence)
-            bib_number = photo.manual_label or photo.detected_number or 'unknown'
-            
-            # Initialize group if not exists
-            if bib_number not in grouped_photos:
-                grouped_photos[bib_number] = []
-            
-            # Frontend will generate image URL using getImageUrl() method with JWT token
-            photo_data = {
-                "id": photo.photo_id,  # Frontend uses this with getImageUrl() for secure access
-                "filename": photo.original_filename,
-                "detected_number": photo.detected_number,
-                "manual_label": photo.manual_label,
-                "confidence": photo.confidence,
-                "detection_method": photo.detection_method,
-                "file_size_mb": round(photo.file_size_bytes / (1024 * 1024), 2) if photo.file_size_bytes else 0,
-                "processing_status": photo.processing_status.value if photo.processing_status else "pending",
-                "created_at": photo.created_at.isoformat() if photo.created_at else None,
-                "processed_at": photo.processed_at.isoformat() if photo.processed_at else None
-            }
-            
-            # Add bounding box if available
-            if photo.bbox_x is not None and photo.bbox_y is not None:
-                photo_data["bbox"] = {
-                    "x": photo.bbox_x,
-                    "y": photo.bbox_y, 
-                    "width": photo.bbox_width,
-                    "height": photo.bbox_height
-                }
-            
-            grouped_photos[bib_number].append(photo_data)
-        
-        # Sort groups: numbered bibs first (sorted numerically), then unknown
-        sorted_grouped = {}
-        
-        # Add numbered bibs first, sorted numerically
-        numbered_bibs = []
-        for bib in grouped_photos.keys():
-            if bib != 'unknown':
-                try:
-                    # Try to convert to int for proper numeric sorting
-                    numbered_bibs.append((int(bib), bib))
-                except ValueError:
-                    # Non-numeric bib, add as string
-                    numbered_bibs.append((float('inf'), bib))
-        
-        # Sort by numeric value, then by string
-        numbered_bibs.sort(key=lambda x: (x[0], x[1]))
-        
-        # Add sorted numbered groups
-        for _, bib in numbered_bibs:
-            sorted_grouped[bib] = grouped_photos[bib]
-        
-        # Add unknown group last
-        if 'unknown' in grouped_photos:
-            sorted_grouped['unknown'] = grouped_photos['unknown']
-        
-        logger.info(f"✅ Retrieved {len(photos)} photos in {len(sorted_grouped)} groups for job {job_id}")
-        
-        return sorted_grouped
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        logger.error(f"❌ Failed to get results for job {job_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve results: {str(e)}")
+@router.get("/results/{job_id}")
+async def get_processing_results(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get the results of a completed processing job."""
+    # Load from memory or reconstruct from DB
+    job_data = ensure_job_loaded(job_id, db, current_user.id)
+    if not job_data:
+        raise HTTPException(status_code=404, detail="Job not found")
 
+    # Verify ownership
+    if job_data["user_id"] != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied to job")
+
+    # Get all photos for this job from the database
+    processing_job_record = (
+        db.query(ProcessingJobDB)
+        .filter(
+            ProcessingJobDB.job_id == job_id,
+            ProcessingJobDB.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not processing_job_record:
+        logger.warning(f"Processing job not found: {job_id}")
+        return {"unknown": []}
+
+    processing_job_pk = processing_job_record.id
+    photos = (
+        db.query(PhotoDB)
+        .filter(
+            PhotoDB.processing_job_id == processing_job_pk,
+            PhotoDB.user_id == current_user.id,
+        )
+        .all()
+    )
+    if not photos:
+        logger.warning(f"No photos found for job {job_id}, user {current_user.id}")
+        return {"unknown": []}
+
+    # Group photos by bib number
+    grouped_photos: Dict[str, List[Dict[str, Any]]] = {}
+    for photo in photos:
+        bib_number = photo.manual_label or photo.detected_number or "unknown"
+        grouped_photos.setdefault(bib_number, [])
+        photo_data = {
+            "id": photo.photo_id,
+            "filename": photo.original_filename,
+            "detected_number": photo.detected_number,
+            "manual_label": photo.manual_label,
+            "confidence": photo.confidence,
+            "detection_method": photo.detection_method,
+            "file_size_mb": round(photo.file_size_bytes / (1024 * 1024), 2)
+            if photo.file_size_bytes
+            else 0,
+            "processing_status": photo.processing_status.value
+            if photo.processing_status
+            else "pending",
+            "created_at": photo.created_at.isoformat() if photo.created_at else None,
+            "processed_at": photo.processed_at.isoformat() if photo.processed_at else None,
+        }
+        if photo.bbox_x is not None and photo.bbox_y is not None:
+            photo_data["bbox"] = {
+                "x": photo.bbox_x,
+                "y": photo.bbox_y,
+                "width": photo.bbox_width,
+                "height": photo.bbox_height,
+            }
+        grouped_photos[bib_number].append(photo_data)
+
+    # Sort numbered bibs first, then unknown
+    sorted_grouped: Dict[str, List[Dict[str, Any]]] = {}
+    numbered_bibs = []
+    for bib in grouped_photos:
+        if bib != "unknown":
+            try:
+                numbered_bibs.append((int(bib), bib))
+            except ValueError:
+                numbered_bibs.append((float("inf"), bib))
+    numbered_bibs.sort(key=lambda x: (x[0], x[1]))
+    for _, bib in numbered_bibs:
+        sorted_grouped[bib] = grouped_photos[bib]
+    if "unknown" in grouped_photos:
+        sorted_grouped["unknown"] = grouped_photos["unknown"]
+
+    logger.info(f"✅ Retrieved {len(photos)} photos in {len(sorted_grouped)} groups for job {job_id}")
+    return sorted_grouped
 
 async def process_photos_async_fallback(job_id: str, photo_ids: List[str], user_id: int, debug_mode: bool):
     """
@@ -848,3 +738,47 @@ def sync_jobs_from_database():
 def cleanup_old_jobs():
     """Optional: Clear very old jobs from memory."""
     pass
+
+def ensure_job_loaded(job_id: str, db: Session, user_id: int | None = None):
+    job_data = jobs.get(job_id)
+    if job_data:
+        return job_data
+    from app.models.usage import ProcessingJob as ProcessingJobDB
+    from app.models.processing import PhotoDB, ProcessingStatus as DBProcessingStatus
+
+    q = db.query(ProcessingJobDB).filter(ProcessingJobDB.job_id == job_id)
+    if user_id:
+        q = q.filter(ProcessingJobDB.user_id == user_id)
+    db_job = q.first()
+    if not db_job:
+        return None
+
+    total_photos = db_job.total_photos or 0
+    completed = db.query(PhotoDB).filter(
+        PhotoDB.processing_job_id == db_job.id,
+        PhotoDB.processing_status == DBProcessingStatus.COMPLETED,
+    ).count()
+    progress = int((completed / total_photos) * 100) if total_photos else 0
+
+    status_map = {
+        "completed": ProcessingStatus.COMPLETED,
+        "failed": ProcessingStatus.FAILED,
+        "processing": ProcessingStatus.PROCESSING,
+        "pending": ProcessingStatus.PENDING,
+    }
+    current_status = status_map.get(db_job.status, ProcessingStatus.PROCESSING)
+    if progress >= 100 and current_status == ProcessingStatus.PROCESSING:
+        current_status = ProcessingStatus.COMPLETED
+
+    job = ProcessingJob(
+        job_id=db_job.job_id,
+        photo_ids=[],
+        status=current_status,
+        total_photos=total_photos,
+        progress=progress,
+        completed_photos=completed,
+    )
+    job_data = {"job": job, "user_id": db_job.user_id}
+    jobs[job_id] = job_data
+    return job_data
+  
