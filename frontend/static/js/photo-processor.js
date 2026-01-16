@@ -1098,15 +1098,15 @@ export class PhotoProcessor {
             this.unifiedProgress.setPhase('compression', 0, { totalFiles: this.selectedFiles.length });
             const compressedFiles = await this.compressFilesWithUnifiedProgress(this.selectedFiles);
             
-            // Phase 2: Upload (25-50%)
+            // Phase 2: Upload + Progressive Processing (25-100%)
+            // Processing starts after first batch completes while uploads continue
             const totalBatches = Math.ceil(compressedFiles.length / 5);
-            this.unifiedProgress.setPhase('upload', 0, { 
-                totalFiles: compressedFiles.length, 
-                totalBatches: totalBatches 
+            this.unifiedProgress.setPhase('upload', 0, {
+                totalFiles: compressedFiles.length,
+                totalBatches: totalBatches
             });
-            const allPhotoIds = await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
-            
-            
+            await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
+
             // Track successful upload
             if (window.analyticsDashboard) {
                 window.analyticsDashboard.trackEngagement('success_action', 'photos_uploaded', {
@@ -1114,11 +1114,8 @@ export class PhotoProcessor {
                     upload_size_mb: this.selectedFiles.reduce((total, file) => total + file.size, 0) / (1024 * 1024)
                 });
             }
-            
-            // Phase 3: Processing (50-100%)
-            this.unifiedProgress.setPhase('processing', 0);
-            this.showProcessingWarning();
-            await this.startProcessingWithUnifiedProgress(allPhotoIds);
+            // Note: Processing phase and polling are handled by pollProcessingInBackground()
+            // which starts automatically after first batch in uploadInBatchesWithUnifiedProgress()
 
         } catch (error) {
             console.error('🔐 Upload error:', error);
@@ -1184,45 +1181,75 @@ export class PhotoProcessor {
         const CONCURRENT_BATCHES = 3;
         const batches = [];
         const allPhotoIds = [];
-        
+
         // Split files into batches
         for (let i = 0; i < files.length; i += BATCH_SIZE) {
             batches.push(files.slice(i, i + BATCH_SIZE));
         }
-        
-        
+
+        // Progressive processing: start processing after first batch, add subsequent batches
+        let jobId = null;
+
         for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
             const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
             const batchNumbers = concurrentBatches.map((_, idx) => i + idx + 1);
-            
+
             // Update progress with current batch info
-            this.unifiedProgress?.setPhase('upload', 
-                (i / batches.length) * 100, 
+            this.unifiedProgress?.setPhase('upload',
+                (i / batches.length) * 100,
                 { currentBatch: i + 1, totalBatches: batches.length }
             );
-            
-            const batchPromises = concurrentBatches.map((batch, idx) => 
-                this.uploadBatch(batch, batchNumbers[idx], batches.length)
+
+            const batchPromises = concurrentBatches.map((batch, idx) =>
+                this.uploadBatch(batch, batchNumbers[idx])
             );
-            
+
             const batchResults = await Promise.all(batchPromises);
-            batchResults.forEach(result => allPhotoIds.push(...result));
-            
+            const batchPhotoIds = batchResults.flat();
+            batchPhotoIds.forEach(id => allPhotoIds.push(id));
+
+            // Progressive processing: start job after first batch, add batches after
+            if (batchPhotoIds.length > 0) {
+                if (!jobId) {
+                    // First batch: start processing with expected_total
+                    const jobData = await this.startProgressiveProcessingJob(batchPhotoIds, files.length);
+                    jobId = jobData.job_id;
+                    this.currentJobId = jobId;
+
+                    // Store job for state management
+                    if (window.stateManager) {
+                        window.stateManager.set('processing.currentJobId', this.currentJobId);
+                        window.stateManager.set('processing.startTime', new Date().toISOString());
+                        window.stateManager.set('processing.totalPhotos', files.length);
+                    }
+
+                    // Start polling in background (don't await - processing runs while uploads continue)
+                    this.pollProcessingInBackground();
+                } else {
+                    // Subsequent batches: add to existing job
+                    await this.addBatchToJob(jobId, batchPhotoIds);
+                }
+            }
+
             // Update progress after completing these batches
             const completedBatches = Math.min(i + CONCURRENT_BATCHES, batches.length);
             this.unifiedProgress?.updatePhaseProgress((completedBatches / batches.length) * 100);
         }
-        
+
         return allPhotoIds;
     }
 
-    async startProcessingWithUnifiedProgress(allPhotoIds) {
-        // Start the processing job
+    // Progressive processing: Start job with expected_total for accurate progress
+    async startProgressiveProcessingJob(photoIds, expectedTotal) {
         const response = await fetch(`${this.apiBase}/process/start`, {
             method: 'POST',
             headers: this.getAuthHeaders(true),
             credentials: 'include',
-            body: JSON.stringify({ photo_ids: allPhotoIds, upload_started_at: this.uploadStartedAt })
+            body: JSON.stringify({
+                photo_ids: photoIds,
+                expected_total: expectedTotal,
+                upload_started_at: this.uploadStartedAt
+            })
         });
 
         if (!response.ok) {
@@ -1230,25 +1257,33 @@ export class PhotoProcessor {
             throw new Error(errorData.detail || 'Failed to start processing');
         }
 
-        const jobData = await response.json();
-        this.currentJobId = jobData.job_id;
-        
-        // Store the job ID for potential restoration
-        if (window.stateManager) {
-            window.stateManager.set('processing.currentJobId', this.currentJobId);
-            window.stateManager.set('processing.startTime', new Date().toISOString());
-            window.stateManager.set('processing.totalPhotos', allPhotoIds.length);
-        }
-
-        // Poll processing status with unified progress
-        await this.pollProcessingStatusWithUnifiedProgress();
+        return await response.json();
     }
 
-    async pollProcessingStatusWithUnifiedProgress() {
-        const startTime = Date.now();
-        const maxWaitTime = 600000; // 10 minutes max
-        
-        while (true) {
+    // Progressive processing: Add batch to existing job
+    async addBatchToJob(jobId, photoIds) {
+        const response = await fetch(`${this.apiBase}/process/add-batch`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(true),
+            credentials: 'include',
+            body: JSON.stringify({ job_id: jobId, photo_ids: photoIds })
+        });
+
+        if (!response.ok) {
+            console.error('Failed to add batch to job:', jobId);
+        }
+    }
+
+    // Progressive processing: Poll in background while uploads continue
+    pollProcessingInBackground() {
+        // Non-blocking poll - sets up polling loop but doesn't await completion
+        this.backgroundPollingActive = true;
+        let consecutiveErrors = 0;
+        const maxConsecutiveErrors = 10; // Allow transient failures during server restarts
+
+        const poll = async () => {
+            if (!this.backgroundPollingActive || !this.currentJobId) return;
+
             try {
                 const response = await fetch(`${this.apiBase}/process/status/${this.currentJobId}`, {
                     method: 'GET',
@@ -1257,30 +1292,42 @@ export class PhotoProcessor {
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to check processing status');
+                    consecutiveErrors++;
+                    console.warn(`Status check failed (${consecutiveErrors}/${maxConsecutiveErrors})`);
+                    if (consecutiveErrors >= maxConsecutiveErrors) {
+                        this.backgroundPollingActive = false;
+                        this.hideProcessingWarning();
+                        this.showUploadSection();
+                        this.showError('Lost connection to server. Please try again.');
+                        return;
+                    }
+                    // Continue polling - server may be restarting
+                    setTimeout(poll, 3000);
+                    return;
                 }
+
+                // Reset error count on success
+                consecutiveErrors = 0;
 
                 const statusData = await response.json();
 
-                // Update unified progress in processing phase (50-100%)
+                // Update progress in processing phase
                 if (statusData.progress !== undefined) {
                     this.unifiedProgress?.updatePhaseProgress(statusData.progress);
                 }
 
                 if (statusData.status === 'completed') {
+                    this.backgroundPollingActive = false;
                     this.unifiedProgress?.complete();
-                    
+
                     // Fetch and display results
                     if (this.isUploadMoreOperation) {
-                        // Upload more: merge new results with existing
                         await this.fetchAndMergeResults();
                         this.hideProcessingWarning();
-                        // Stay on results section, just refresh display
                         this.displayResults();
                         this.showSuccess('Additional photos processed and merged!');
-                        this.isUploadMoreOperation = false; // Reset flag
+                        this.isUploadMoreOperation = false;
                     } else {
-                        // Normal upload: show results section
                         await this.fetchResults();
                         this.hideProcessingWarning();
                         this.showResultsSection();
@@ -1289,30 +1336,40 @@ export class PhotoProcessor {
                 }
 
                 if (statusData.status === 'failed') {
-                    throw new Error(statusData.error || 'Processing failed');
+                    this.backgroundPollingActive = false;
+                    this.hideProcessingWarning();
+                    this.showUploadSection();
+                    this.showError(statusData.error || 'Processing failed');
+                    return;
                 }
 
-                // Check timeout
-                if (Date.now() - startTime > maxWaitTime) {
-                    throw new Error('Processing timeout - please try again');
-                }
-
-                // Wait before next poll
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Continue polling
+                setTimeout(poll, 2000);
             } catch (error) {
-                console.error('Processing status error:', error);
-                this.hideProcessingWarning();
-                this.showUploadSection();
-                throw error;
+                consecutiveErrors++;
+                console.error(`Background polling error (${consecutiveErrors}/${maxConsecutiveErrors}):`, error);
+                if (consecutiveErrors >= maxConsecutiveErrors) {
+                    this.backgroundPollingActive = false;
+                    this.hideProcessingWarning();
+                    this.showUploadSection();
+                    this.showError('Lost connection to server. Please try again.');
+                    return;
+                }
+                // Continue polling even on transient errors
+                setTimeout(poll, 3000);
             }
-        }
+        };
+
+        // Switch to processing phase when polling starts
+        this.unifiedProgress?.setPhase('processing', 0);
+        this.showProcessingWarning();
+
+        // Start first poll
+        poll();
     }
 
-    // REMOVED: uploadInBatches() method - replaced by uploadInBatchesWithUnifiedProgress()
-
-    // NEW: Direct upload to GCS (bypasses server bottleneck)
-    // NEW: Direct upload to GCS (bypasses server bottleneck)
-    async uploadBatch(batchFiles, batchNum, totalBatches) {
+    // Direct upload to GCS (bypasses server bottleneck)
+    async uploadBatch(batchFiles, batchNum) {
         
         try {
             // Step 1: Get signed URLs from our API
@@ -1403,10 +1460,6 @@ export class PhotoProcessor {
             throw error;
         }
     }
-
-    // REMOVED: startProcessing() method - replaced by startProcessingWithUnifiedProgress()
-
-    // REMOVED: pollProcessingStatus() method - replaced by pollProcessingStatusWithUnifiedProgress()
 
     updateProgress(job) {
         const progressBar = document.getElementById('progress-bar');
@@ -1998,16 +2051,13 @@ export class PhotoProcessor {
             this.unifiedProgress.setPhase('compression', 0, { totalFiles: this.selectedFiles.length });
             const compressedFiles = await this.compressFilesWithUnifiedProgress(this.selectedFiles);
             
-            // Phase 2: Upload (25-50%)
+            // Phase 2: Upload + Progressive Processing (25-100%)
+            // Processing starts after first batch completes while uploads continue
             const BATCH_SIZE = 5;
             const totalBatches = Math.ceil(compressedFiles.length / BATCH_SIZE);
             this.unifiedProgress.setPhase('upload', 0, { totalBatches: totalBatches });
-            const allPhotoIds = await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
-            
-            // Phase 3: Processing (50-100%)
-            this.unifiedProgress.setPhase('processing', 0);
-            this.showProcessingWarning();
-            await this.startProcessingWithUnifiedProgress(allPhotoIds);
+            await this.uploadInBatchesWithUnifiedProgress(compressedFiles);
+            // Note: Processing phase and polling are handled by pollProcessingInBackground()
 
         } catch (error) {
             console.error('Upload more error:', error);
