@@ -65,6 +65,7 @@ class UsageTracker:
         total_photos: int = 0,
         total_file_size_mb: Optional[float] = None,
         metadata: Optional[dict] = None,
+        started_at: Optional[datetime] = None,
     ) -> ProcessingJob:
         """
         Create a new processing job record.
@@ -75,6 +76,7 @@ class UsageTracker:
             total_photos=total_photos,
             total_file_size_mb=total_file_size_mb,
             job_metadata=json.dumps(metadata) if metadata else None,
+            started_at=started_at,  # Full user experience timing from button click
         )
 
         db.add(job)

@@ -440,7 +440,12 @@ class AnalyticsDashboard {
      * Update activity trends chart with Chart.js
      */
     updateActivityTrendsChart(trendsData) {
-        const ctx = document.getElementById('activity-trends-chart').getContext('2d');
+        const canvas = document.getElementById('activity-trends-chart');
+        if (!canvas) {
+            console.warn('Activity trends chart canvas not found');
+            return;
+        }
+        const ctx = canvas.getContext('2d');
         
         // Destroy existing chart if it exists
         if (this.charts.activityChart) {
@@ -540,7 +545,12 @@ class AnalyticsDashboard {
      * Update processing methods chart with Chart.js
      */
     updateProcessingMethodsChart(data) {
-        const ctx = document.getElementById('processing-methods-chart').getContext('2d');
+        const canvas = document.getElementById('processing-methods-chart');
+        if (!canvas) {
+            console.warn('Processing methods chart canvas not found');
+            return;
+        }
+        const ctx = canvas.getContext('2d');
         
         // Destroy existing chart if it exists
         if (this.charts.methodsChart) {

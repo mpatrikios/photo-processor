@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 
@@ -12,12 +13,11 @@ DATABASE_URL = settings.database_url
 # Configure engine based on database type
 if DATABASE_URL.startswith("postgresql://"):
     # PostgreSQL configuration (production)
+    # NullPool for Cloud Run: opens/closes connections per-request
+    # Prevents connection exhaustion in serverless environments
     engine = create_engine(
         DATABASE_URL,
-        pool_size=20,        # Handle concurrent image processing requests
-        max_overflow=30,     # Handle burst loads during batch uploads
-        pool_timeout=30,     # Connection timeout
-        pool_recycle=1800,   # Recycle connections every 30 minutes
+        poolclass=NullPool,
     )
 elif DATABASE_URL.startswith("sqlite://"):
     # SQLite configuration (development only)

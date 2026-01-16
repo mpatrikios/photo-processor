@@ -1083,7 +1083,9 @@ export class PhotoProcessor {
         }
 
         try {
-            
+            // Capture timestamp when user clicks upload button (for full experience timing)
+            this.uploadStartedAt = new Date().toISOString();
+
             // Initialize unified progress manager
             this.unifiedProgress = new UnifiedProgressManager();
             this.showUnifiedProgress();
@@ -1220,7 +1222,7 @@ export class PhotoProcessor {
             method: 'POST',
             headers: this.getAuthHeaders(true),
             credentials: 'include',
-            body: JSON.stringify(allPhotoIds)
+            body: JSON.stringify({ photo_ids: allPhotoIds, upload_started_at: this.uploadStartedAt })
         });
 
         if (!response.ok) {
@@ -1977,7 +1979,9 @@ export class PhotoProcessor {
             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadMoreModal'));
             modal.hide();
 
-            
+            // Capture timestamp when user clicks upload button (for full experience timing)
+            this.uploadStartedAt = new Date().toISOString();
+
             // Use existing unified progress flow
             this.selectedFiles = this.modalSelectedFiles;
             this.unifiedProgress = new UnifiedProgressManager();
