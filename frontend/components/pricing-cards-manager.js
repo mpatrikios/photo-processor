@@ -230,9 +230,13 @@ export async function showUpgradeModal() {
         // Get current user tier from subscription data
         let currentTier = 'Free'; // Default fallback
         if (window.currentUserSubscription && window.currentUserSubscription.tier_name) {
-            // Convert lowercase API response to title case to match tier names
+            // Convert lowercase API response to title case to match tier names, including multi-word tiers
             const tierName = window.currentUserSubscription.tier_name;
-            currentTier = tierName.charAt(0).toUpperCase() + tierName.slice(1);
+            currentTier = tierName
+                .split(' ')
+                .filter(Boolean)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
         }
 
         contentDiv.innerHTML = `
