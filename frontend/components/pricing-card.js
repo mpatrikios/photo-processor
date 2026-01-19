@@ -48,6 +48,7 @@ class PricingCard {
     renderModalCard(tierInfo, isCurrentTier, isFree, isPro, isEnterprise) {
         // Determine price display: "Contact Us" for Enterprise, normal price otherwise
         const priceDisplay = isEnterprise ? 'Contact Us' : `$${tierInfo.price.toFixed(2)}`;
+        const priceSubtext = isEnterprise ? 'for flexible plans' : (isFree ? 'free forever' : 'per month');
 
         this.container.innerHTML = `
             <div class="subscription-card-clean ${isCurrentTier ? 'current-tier' : ''}" style="margin-bottom: 0; ${isPro ? 'border: 2px solid var(--color-accent-primary);' : ''}">
@@ -56,9 +57,10 @@ class PricingCard {
                 <div class="plan-name" style="color: ${isPro ? 'var(--color-accent-primary)' : '#212529'};">
                     ${tierInfo.name}
                 </div>
-                <div class="plan-limit" style="font-size: 1.5rem; font-weight: 700; color: ${isPro ? 'var(--color-accent-primary)' : '#495057'}; margin-bottom: 20px;">
+                <div class="plan-limit" style="font-size: 1.5rem; font-weight: 700; color: ${isPro ? 'var(--color-accent-primary)' : '#495057'};">
                     ${priceDisplay}
                 </div>
+                <div style="font-size: 0.85rem; color: #6c757d; margin-bottom: 20px;">${priceSubtext}</div>
 
                 <ul class="feature-list">
                     ${(tierInfo.features || []).map(feature => `
@@ -125,8 +127,8 @@ class PricingCard {
     }
 
     /**
-     * Render feature text, supporting HTML for isHtml features with whitelist sanitization
-     * @param {string|object} feature - Feature string or object with text/style/isHtml
+     * Render feature text from structured data or plain string
+     * @param {string|object} feature - Feature string or structured object
      * @returns {string} HTML string for the feature
      */
     renderFeatureText(feature) {
@@ -134,9 +136,16 @@ class PricingCard {
             return this.escapeHtml(feature);
         }
         if (typeof feature === 'object') {
-            // For isHtml features, sanitize with whitelist (only <strong> allowed)
-            if (feature.isHtml) {
-                return this.sanitizeHtml(feature.text);
+            // Structured feature with value/unit (e.g., {value: 5000, unit: "Photos/Month", emphasis: true})
+            if (feature.value !== undefined && feature.unit) {
+                const formattedValue = typeof feature.value === 'number'
+                    ? feature.value.toLocaleString()
+                    : this.escapeHtml(String(feature.value));
+                const unit = this.escapeHtml(feature.unit);
+                if (feature.emphasis) {
+                    return `<strong>${formattedValue}</strong> ${unit}`;
+                }
+                return `${formattedValue} ${unit}`;
             }
             // For styled features (like "coming soon"), escape text but apply style
             if (feature.style) {
@@ -145,36 +154,6 @@ class PricingCard {
             return this.escapeHtml(feature.text || '');
         }
         return '';
-    }
-
-    /**
-     * Sanitize HTML with whitelist approach - only allows <strong> tags
-     * @param {string} html - HTML string to sanitize
-     * @returns {string} Sanitized HTML string
-     */
-    sanitizeHtml(html) {
-        // Extract content, only preserving <strong> tags
-        // Replace <strong> with placeholder, escape everything, then restore
-        const strongPattern = /<strong>(.*?)<\/strong>/gi;
-        const matches = [];
-        // Use NUL-delimited placeholders to avoid collisions with user input
-        const placeholderPrefix = '\x00STRONG_';
-        const placeholderSuffix = '\x00';
-        let sanitized = html.replace(strongPattern, (match, content) => {
-            const index = matches.length;
-            matches.push(this.escapeHtml(content));
-            return `${placeholderPrefix}${index}${placeholderSuffix}`;
-        });
-        // Escape the rest
-        sanitized = this.escapeHtml(sanitized);
-        // Restore <strong> tags with escaped content
-        matches.forEach((content, index) => {
-            sanitized = sanitized.replace(
-                `${placeholderPrefix}${index}${placeholderSuffix}`,
-                `<strong>${content}</strong>`
-            );
-        });
-        return sanitized;
     }
 
     /**

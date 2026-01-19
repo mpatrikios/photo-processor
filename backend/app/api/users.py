@@ -37,12 +37,6 @@ async def get_my_quota(
 ):
     """Get current user's quota information."""
 
-    # Debug request headers
-    print(f"🔍 Quota endpoint - Request headers:")
-    for name, value in request.headers.items():
-        if name.lower() in ["authorization", "content-type", "origin"]:
-            print(f"🔍   {name}: {value}")
-
     quota = usage_tracker.get_or_create_user_quota(db, current_user.id)
 
     return {
@@ -185,10 +179,10 @@ async def get_my_subscription(
     tier_info = tier_service.get_user_tier(db, current_user.id)
     
     subscription_info = {
-        "tier_name": tier_info.get("tier_name", "trial"),
-        "monthly_photo_limit": tier_info.get("monthly_photo_limit", 50),
+        "tier_name": tier_info.get("tier_name", "free"),
+        "monthly_photo_limit": tier_info.get("monthly_photo_limit", 100),
         "features": tier_info.get("features", []),
-        "is_premium": tier_info.get("tier_name", "trial") != "trial"
+        "is_premium": tier_info.get("tier_name", "free") != "free"
     }
     
     # Add Stripe subscription status if user has one

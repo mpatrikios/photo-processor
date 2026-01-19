@@ -127,7 +127,7 @@ class UsageTracker:
         if not user:
             logger.error(f"User ID {user_id} not found when fetching quota.")
             # Fallback for safety, but this shouldn't happen if auth works
-            user_tier = "Trial"
+            user_tier = "Free"
         else:
             user_tier = user.current_tier 
 

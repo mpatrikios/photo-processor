@@ -44,7 +44,7 @@ export async function showStandaloneUpgradeModal() {
                 <div id="standalone-amateur-card"></div>
                 <div id="standalone-pro-card"></div>
             </div>
-            <div class="tier-options" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 66%; margin: 0 auto;">
+            <div class="tier-options" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: calc(100% * 2 / 3); margin: 0 auto;">
                 <div id="standalone-power-user-card"></div>
                 <div id="standalone-enterprise-card"></div>
             </div>
@@ -209,108 +209,3 @@ export async function initLandingPagePricing(containerId = 'pricing-cards-contai
     }
 }
 
-/**
- * Show the upgrade modal with pricing cards
- * Uses the existing modal infrastructure
- */
-export async function showUpgradeModal() {
-    const contentDiv = document.getElementById('customModalContent');
-    if (!contentDiv) return;
-    
-    try {
-        // Load tier data from backend API (ensures data is cached)
-        await window.stateManager.loadTiers();
-        
-        // Expand modal width for pricing cards
-        const modalContent = document.querySelector('.modern-modal-content');
-        if (modalContent) {
-            modalContent.classList.add('modal-wide');
-        }
-        
-        // Get current user tier from subscription data
-        let currentTier = 'Free'; // Default fallback
-        if (window.currentUserSubscription && window.currentUserSubscription.tier_name) {
-            // Convert lowercase API response to title case to match tier names, including multi-word tiers
-            const tierName = window.currentUserSubscription.tier_name;
-            currentTier = tierName
-                .split(' ')
-                .filter(Boolean)
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ');
-        }
-
-        contentDiv.innerHTML = `
-            <div class="upgrade-modal-content">
-                <div style="text-align: center; margin-bottom: 32px;">
-                    <h4 style="margin-bottom: 12px; color: #212529;">Choose Your Plan</h4>
-                    <p style="color: #6C757D; margin: 0;">Select the plan that fits your needs</p>
-                </div>
-
-                <div class="tier-options" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                    <div id="modal-amateur-card"></div>
-                    <div id="modal-pro-card"></div>
-                </div>
-                <div class="tier-options" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 32px;">
-                    <div id="modal-power-user-card"></div>
-                    <div id="modal-enterprise-card"></div>
-                </div>
-
-                <div style="text-align: center;">
-                    <button data-back-to-profile class="modern-btn modern-btn-outline">
-                        ← Back to Profile
-                    </button>
-                </div>
-            </div>
-        `;
-
-        // Create PricingCard components for modal (all paid tiers)
-        const amateurCard = new PricingCard(
-            document.getElementById('modal-amateur-card'),
-            'Amateur',
-            currentTier,
-            { layout: 'modal' }
-        );
-
-        const proCard = new PricingCard(
-            document.getElementById('modal-pro-card'),
-            'Pro',
-            currentTier,
-            { layout: 'modal' }
-        );
-
-        const powerUserCard = new PricingCard(
-            document.getElementById('modal-power-user-card'),
-            'Power User',
-            currentTier,
-            { layout: 'modal' }
-        );
-
-        const enterpriseCard = new PricingCard(
-            document.getElementById('modal-enterprise-card'),
-            'Enterprise',
-            currentTier,
-            { layout: 'modal' }
-        );
-
-        amateurCard.render();
-        proCard.render();
-        powerUserCard.render();
-        enterpriseCard.render();
-    } catch (error) {
-        console.error('Failed to load upgrade modal:', error);
-        
-        // Fallback: Show error message in modal
-        contentDiv.innerHTML = `
-            <div class="upgrade-modal-content" style="text-align: center; padding: 40px;">
-                <div style="color: #dc3545; margin-bottom: 20px;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 15px;"></i>
-                    <h4>Unable to Load Pricing</h4>
-                    <p>Please try again in a moment.</p>
-                </div>
-                <button data-back-to-profile class="modern-btn modern-btn-outline">
-                    ← Back to Profile
-                </button>
-            </div>
-        `;
-    }
-}

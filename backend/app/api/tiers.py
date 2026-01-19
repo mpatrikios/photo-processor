@@ -31,19 +31,17 @@ async def get_tiers():
 
 def transform_features(tier_name: str, config: dict) -> list:
     """
-    Transform backend feature codes to frontend display strings.
-    Photos/month values are wrapped in <strong> tags for bold display.
+    Transform backend feature codes to structured frontend data.
+    Returns structured objects that frontend formats (no HTML in API responses).
     """
     features = []
 
-    # Add upload limit as first feature (bold)
+    # Add upload limit as first feature (structured data, frontend formats)
     max_uploads = config["max_uploads"]
-    if tier_name == "Free":
-        features.append({"text": f"<strong>{max_uploads}</strong>  Photos/Month", "isHtml": True})
-    elif tier_name == "Enterprise":
-        features.append({"text": "<strong>Unlimited</strong>  Photos/Month", "isHtml": True})
+    if tier_name == "Enterprise":
+        features.append({"value": "Unlimited", "unit": "Photos/Month", "emphasis": True})
     else:
-        features.append({"text": f"<strong>{max_uploads:,}</strong>  Photos/Month", "isHtml": True})
+        features.append({"value": max_uploads, "unit": "Photos/Month", "emphasis": True})
 
     # Transform backend feature codes to display strings
     feature_map = {

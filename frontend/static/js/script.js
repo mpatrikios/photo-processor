@@ -2,7 +2,7 @@
 
 import CONFIG from './config.js';
 import { PaymentForm } from '../../components/payment-form.js';
-import { initLandingPagePricing, showUpgradeModal, showStandaloneUpgradeModal } from '../../components/pricing-cards-manager.js';
+import { initLandingPagePricing, showStandaloneUpgradeModal } from '../../components/pricing-cards-manager.js';
 import { PhotoProcessor } from './photo-processor.js';
 import { StateManager } from './state-manager.js';
 
@@ -353,7 +353,7 @@ function updateNavbarForAuthenticatedUser() {
 
 /**
  * Update hero CTAs for authenticated users viewing landing page
- * Replaces trial signup buttons with app navigation
+ * Replaces signup buttons with app navigation
  */
 function updateHeroForAuthenticatedUser() {
     // Parent already validated auth
@@ -820,9 +820,6 @@ async function loadCustomProfileData() {
     );
 }
 
-// Store current user subscription data globally for access in other functions
-let currentUserSubscription = null;
-
 /**
  * Humanize feature names for display
  * @param {string} featureName - Feature code from backend
@@ -847,25 +844,8 @@ async function updateCustomModalContent(quotaData, statsData) {
     const { user, stats } = statsData;
     const { quota } = quotaData;
     
-    // Load subscription data
-    let subscriptionData = null;
-    try {
-        const apiBase = CONFIG.API_BASE_URL;
-        
-        const response = await fetch(`${apiBase}/users/me/subscription`, {
-            headers: CONFIG.getAuthHeaders()
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            subscriptionData = result.subscription;
-            // Store globally for access in showUpgradeModal and showStandaloneUpgradeModal
-            currentUserSubscription = subscriptionData;
-            window.currentUserSubscription = subscriptionData;
-        }
-    } catch (error) {
-        console.error('Error loading subscription data:', error);
-    }
+    // Load subscription data via StateManager (handles caching and global state)
+    const subscriptionData = await window.stateManager.loadSubscription();
     
     contentDiv.innerHTML = `
         <div>
@@ -1291,7 +1271,7 @@ function createPasswordField(inputId, placeholder, inputClass = 'modern-form-inp
     return `
         <div class="password-input-wrapper">
             <input type="password" id="${inputId}" class="${inputClass}" placeholder="${placeholder}" autocomplete="${autocomplete}">
-            <button type="button" class="password-toggle-btn" aria-label="Show password" onclick="togglePasswordVisibility('${inputId}', this)">
+            <button type="button" class="password-toggle-btn" aria-label="Show password" aria-pressed="false" onclick="togglePasswordVisibility('${inputId}', this)">
                 <i class="fas fa-eye" aria-hidden="true"></i>
             </button>
         </div>
@@ -1307,12 +1287,12 @@ function togglePasswordVisibility(inputId, toggleBtn) {
     input.type = isHidden ? 'text' : 'password';
     icon.classList.replace(isHidden ? 'fa-eye' : 'fa-eye-slash', isHidden ? 'fa-eye-slash' : 'fa-eye');
     toggleBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+    toggleBtn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
 }
 
 // Keep essential profile functions for modal interactions
 window.showProfileModal = showProfileModal;
 window.showCustomTab = showCustomTab;
-window.showUpgradeModal = showUpgradeModal;
 window.showStandaloneUpgradeModal = showStandaloneUpgradeModal;
 window.togglePasswordVisibility = togglePasswordVisibility;
 

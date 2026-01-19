@@ -158,7 +158,7 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
         pass
         
     elif event_type == 'customer.subscription.deleted':
-        # Logic to downgrade user to 'Trial' or 'Free' tier
+        # Logic to downgrade user to 'Free' tier
         pass
         
     else:

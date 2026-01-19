@@ -80,19 +80,29 @@ class TierService:
         return datetime.now(timezone.utc) < expiry_date
 
     @staticmethod
+    def get_effective_tier(user: User) -> str:
+        """
+        Returns the user's effective tier, falling back to Free if paid tier expired.
+        """
+        if not TierService.is_tier_active(user):
+            return "Free"
+        return user.current_tier
+
+    @staticmethod
     def check_upload_allowed(user: User) -> bool:
         """
         Determines if the user is allowed to upload based on tier and usage.
+        Expired paid tiers fall back to Free tier limits.
         """
-        if not TierService.is_tier_active(user):
-            logger.warning(f"User {user.id} upload denied: Tier {user.current_tier} expired.")
-            return False
+        effective_tier = TierService.get_effective_tier(user)
+        if effective_tier != user.current_tier:
+            logger.info(f"User {user.id} tier {user.current_tier} expired, using Free tier limits")
 
-        current_limit = TierService.get_upload_limit(user.current_tier)
+        current_limit = TierService.get_upload_limit(effective_tier)
         allowed = user.uploads_this_period < current_limit
         if not allowed:
             logger.warning(
-                f"User {user.id} ({user.current_tier}) upload limit reached: "
+                f"User {user.id} ({effective_tier}) upload limit reached: "
                 f"{user.uploads_this_period} / {current_limit}"
             )
         return allowed
@@ -106,7 +116,7 @@ class TierService:
         # Get user from database
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            # Return default/trial tier for non-existent users
+            # Return default Free tier for non-existent users
             tier_config = TierService.get_tier_info("Free")
             return {
                 "tier_name": "Free",
@@ -119,14 +129,14 @@ class TierService:
                 "is_active": False
             }
         
-        # Get tier configuration for user's current tier
-        tier_config = TierService.get_tier_info(user.current_tier)
-        
-        # Check if tier is active
+        # Check if tier is active, use effective tier for limits
         is_active = TierService.is_tier_active(user)
-        
+        effective_tier = TierService.get_effective_tier(user)
+        tier_config = TierService.get_tier_info(effective_tier)
+
         return {
-            "tier_name": user.current_tier,
+            "tier_name": effective_tier,  # Show effective tier (Free if expired)
+            "original_tier": user.current_tier if not is_active else None,  # Track expired tier
             "monthly_photo_limit": tier_config["max_uploads"],
             "features": tier_config["features"],
             "duration_days": tier_config["duration_days"],

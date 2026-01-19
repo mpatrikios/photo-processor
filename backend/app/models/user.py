@@ -36,7 +36,7 @@ class User(Base):
     
     # Subscription tracking
     current_tier = Column(String(50), default="Free", nullable=False)  # 'Free', 'Amateur', 'Pro', 'Power User', 'Enterprise'
-    tier_expiry_date = Column(DateTime(timezone=True), nullable=True) # When paid tier or trial expires
+    tier_expiry_date = Column(DateTime(timezone=True), nullable=True) # When paid tier expires
     uploads_this_period = Column(Integer, default=0, nullable=False) # Usage counter for the current period (resets monthly/when tier changes)
 
     # User preferences
