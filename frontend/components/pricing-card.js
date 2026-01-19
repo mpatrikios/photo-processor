@@ -157,16 +157,22 @@ class PricingCard {
         // Replace <strong> with placeholder, escape everything, then restore
         const strongPattern = /<strong>(.*?)<\/strong>/gi;
         const matches = [];
+        // Use NUL-delimited placeholders to avoid collisions with user input
+        const placeholderPrefix = '\x00STRONG_';
+        const placeholderSuffix = '\x00';
         let sanitized = html.replace(strongPattern, (match, content) => {
             const index = matches.length;
             matches.push(this.escapeHtml(content));
-            return `__STRONG_${index}__`;
+            return `${placeholderPrefix}${index}${placeholderSuffix}`;
         });
         // Escape the rest
         sanitized = this.escapeHtml(sanitized);
         // Restore <strong> tags with escaped content
         matches.forEach((content, index) => {
-            sanitized = sanitized.replace(`__STRONG_${index}__`, `<strong>${content}</strong>`);
+            sanitized = sanitized.replace(
+                `${placeholderPrefix}${index}${placeholderSuffix}`,
+                `<strong>${content}</strong>`
+            );
         });
         return sanitized;
     }
