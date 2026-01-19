@@ -4,8 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 import logging
 
-# Import the Stripe service function we created
-from app.services.stripe_service import create_checkout_session, handle_webhook_event
+# Import the Stripe service functions
+from app.services.stripe_service import (
+    create_checkout_session,
+    create_billing_portal_session,
+    handle_webhook_event
+)
 # Import security components (assuming payment requires authentication)
 from app.api.auth import get_current_user
 from app.models.user import User
@@ -28,39 +32,32 @@ class CheckoutSessionRequest(BaseModel):
 @router.post("/create-checkout-session", response_model=dict, status_code=200)
 async def handle_create_checkout_session(
     request_data: CheckoutSessionRequest,
-    # Requires an authenticated and active user to initiate payment
-    current_user: User = Depends(get_current_user) 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Creates a Stripe Checkout Session and returns the session URL for redirect.
+    Creates a Stripe Checkout Session for subscription and returns the session URL.
     """
-    
-    # Extract user information from User object
-    user_id = current_user.id
-    user_email = current_user.email
-    
     logger.info(
-        f"Attempting to create Checkout Session for User ID {user_id}, "
+        f"Creating Checkout Session for User ID {current_user.id}, "
         f"Tier: {request_data.tier_name}"
     )
 
-    # Call the Stripe Service to create the checkout session
     session_url, error_message = create_checkout_session(
+        db=db,
         tier_name=request_data.tier_name,
-        user_id=user_id,
-        user_email=user_email,
+        user=current_user,
         success_url=request_data.success_url,
         cancel_url=request_data.cancel_url
     )
 
     if session_url is None:
-        logger.error(f"Failed to create Checkout Session for user {user_id}: {error_message}")
+        logger.error(f"Failed to create Checkout Session for user {current_user.id}: {error_message}")
         raise HTTPException(
             status_code=400,
             detail=f"Payment processing failed: {error_message}"
         )
-        
-    # Return the session URL to redirect to
+
     return {"sessionUrl": session_url}
 
 @router.get("/config", response_model=dict, status_code=200)
@@ -72,6 +69,32 @@ async def get_payment_config():
     return {
         "stripe_publishable_key": settings.stripe_publishable_key
     }
+
+
+class BillingPortalRequest(BaseModel):
+    """Schema for billing portal request."""
+    return_url: str = Field(..., description="URL to redirect to after leaving the portal")
+
+
+@router.post("/billing-portal", response_model=dict, status_code=200)
+async def handle_billing_portal(
+    request_data: BillingPortalRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Creates a Stripe Billing Portal session for managing subscription.
+    Allows users to upgrade, downgrade, or cancel their subscription.
+    """
+    portal_url, error_message = create_billing_portal_session(
+        user=current_user,
+        return_url=request_data.return_url
+    )
+
+    if portal_url is None:
+        raise HTTPException(status_code=400, detail=error_message)
+
+    return {"portalUrl": portal_url}
+
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):

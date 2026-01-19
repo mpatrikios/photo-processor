@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     stripe_webhook_secret: Optional[str] = Field(default=None)
     stripe_publishable_key: Optional[str] = Field(default=None)
 
+    # Stripe Price IDs (from Stripe Dashboard)
+    stripe_amateur_price_id: str = Field(default="price_1SrOd3RdXk3IZpw5U5ILSw7Z")
+    stripe_pro_price_id: str = Field(default="price_1SrOeIRdXk3IZpw5EXYhYONx")
+    stripe_power_user_price_id: str = Field(default="price_1SrOfvRdXk3IZpw5BbGA4BYX")
+
     # Database
     database_url: str = Field(default="sqlite:///./tag_photos.db")
 
