@@ -801,8 +801,15 @@ export class StateManager {
     getCurrentTierName() {
         const sub = this.state.subscription.data;
         if (sub && sub.tier_name) {
-            // Convert to title case
-            return sub.tier_name.charAt(0).toUpperCase() + sub.tier_name.slice(1);
+            // Convert to title case for each word (handles multi-word tiers like "power user")
+            const name = String(sub.tier_name).trim();
+            if (!name) {
+                return 'Free';
+            }
+            return name
+                .split(/\s+/)
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
         }
         return 'Free';
     }
