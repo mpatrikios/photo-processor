@@ -183,9 +183,48 @@
     color: #dc3545 !important;
 }
 
+/* Upgrade button styling within pill */
+.nav-pill-button.upgrade-button {
+    color: var(--tagsort-red);
+    font-weight: 600;
+}
+
+.nav-pill-button.upgrade-button:hover {
+    color: var(--tagsort-red);
+}
+
+.nav-pill-button.upgrade-button::before {
+    background: linear-gradient(135deg, rgba(227, 0, 34, 0.15), rgba(227, 0, 34, 0.25));
+}
+
 /* Position adjustments for header buttons */
 #app-section header .position-absolute {
     top: 0.5rem;
+}
+
+/* Password visibility toggle */
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper input {
+    padding-right: 40px;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    padding: 0;
+}
+
+.password-toggle-btn:hover {
+    color: #495057;
 }
 
 /* ========================================

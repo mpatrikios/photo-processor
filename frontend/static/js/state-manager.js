@@ -26,6 +26,14 @@ export class StateManager {
                 error: null,
                 loadingPromise: null  // Track in-flight requests
             },
+
+            // Subscription (cached user tier data)
+            subscription: {
+                data: null,
+                lastFetched: null,
+                isLoading: false,
+                loadingPromise: null
+            },
             
             // API Configuration
             api: {
@@ -718,7 +726,87 @@ export class StateManager {
     getTiersError() {
         return this.state.tiers.error;
     }
-    
+
+    /**
+     * Subscription Management Methods
+     */
+
+    async loadSubscription(force = false) {
+        // Check if we have cached data and it's fresh (less than 2 minutes old)
+        const twoMinutes = 2 * 60 * 1000;
+        const now = new Date();
+
+        if (!force &&
+            this.state.subscription.data &&
+            this.state.subscription.lastFetched &&
+            (now - this.state.subscription.lastFetched) < twoMinutes) {
+            return this.state.subscription.data;
+        }
+
+        // If already loading, return the same promise
+        if (this.state.subscription.isLoading && this.state.subscription.loadingPromise) {
+            return this.state.subscription.loadingPromise;
+        }
+
+        // Must be authenticated to fetch subscription
+        const headers = CONFIG.getAuthHeaders();
+        if (!headers || !headers.Authorization) {
+            return null;
+        }
+
+        this.state.subscription.loadingPromise = this._fetchSubscription(headers, now);
+        this.state.subscription.isLoading = true;
+
+        try {
+            const data = await this.state.subscription.loadingPromise;
+            return data;
+        } finally {
+            this.state.subscription.isLoading = false;
+            this.state.subscription.loadingPromise = null;
+        }
+    }
+
+    async _fetchSubscription(headers, timestamp) {
+        try {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/api/users/me/subscription`, {
+                headers
+            });
+
+            if (!response.ok) {
+                console.warn('Failed to fetch subscription:', response.status);
+                return null;
+            }
+
+            const result = await response.json();
+            const subscriptionData = result.subscription;
+
+            // Update state
+            this.state.subscription.data = subscriptionData;
+            this.state.subscription.lastFetched = timestamp;
+
+            // Also update window global for backwards compatibility
+            window.currentUserSubscription = subscriptionData;
+
+            return subscriptionData;
+        } catch (error) {
+            console.error('Error loading subscription:', error);
+            return null;
+        }
+    }
+
+    getSubscription() {
+        return this.state.subscription.data;
+    }
+
+    getCurrentTierName() {
+        const sub = this.state.subscription.data;
+        if (sub && sub.tier_name) {
+            // Convert to title case
+            return sub.tier_name.charAt(0).toUpperCase() + sub.tier_name.slice(1);
+        }
+        return 'Free';
+    }
+
     /**
      * Debug: Get full state
      */
