@@ -1031,6 +1031,16 @@ export class PhotoProcessor {
             return;
         }
 
+        // Handle unlimited tier (-1 signals unlimited)
+        if (quota.monthly_photo_limit === -1 || quota.photos_remaining === -1) {
+            quotaText.textContent = 'Unlimited photos available (Enterprise)';
+            quotaProgress.style.width = '0%';
+            quotaProgress.className = 'progress-bar bg-success';
+            quotaStatus.className = 'alert alert-success mb-4';
+            quotaStatus.classList.remove('d-none');
+            return;
+        }
+
         const remaining = quota.photos_remaining;
         const used = quota.photos_used_this_month;
         const total = quota.monthly_photo_limit;
@@ -1061,6 +1071,12 @@ export class PhotoProcessor {
         if (!quota) return { canUpload: true, message: '' };
 
         const remaining = quota.photos_remaining;
+
+        // Unlimited tier (-1) always allows uploads
+        if (remaining === -1 || quota.monthly_photo_limit === -1) {
+            return { canUpload: true, message: '' };
+        }
+
         if (photoCount > remaining) {
             return {
                 canUpload: false,

@@ -858,9 +858,9 @@ async function updateCustomModalContent(quotaData, statsData) {
             <div id="quotaContent">
                 <div class="glass-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="padding: 24px;">
                     <h5>Monthly Photo Quota</h5>
-                    <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month}/${quota.monthly_photo_limit}</div>
+                    <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month.toLocaleString()}/${formatQuotaLimit(quota.monthly_photo_limit)}</div>
                     <div class="modern-progress">
-                        <div class="modern-progress-bar ${getQuotaBarClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="width: ${Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%;"></div>
+                        <div class="modern-progress-bar ${getQuotaBarClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="width: ${quota.monthly_photo_limit === -1 ? '0' : Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%;"></div>
                     </div>
                     <div style="font-size: 0.9rem; margin-top: 8px; opacity: 0.9;">${getQuotaStatusMessage(quota.photos_used_this_month, quota.monthly_photo_limit)}</div>
                 </div>
@@ -1057,26 +1057,35 @@ async function updateCustomProfile() {
 // ==========================================
 
 // Quota Color Helper Functions
+// Note: -1 represents unlimited (Enterprise tier)
 function getQuotaCardClass(used, limit) {
+    // Unlimited tier always shows safe
+    if (limit === -1) return 'modern-card-safe';
     const percentage = limit > 0 ? (used / limit) * 100 : 0;
-    
+
     if (percentage <= 70) return 'modern-card-safe';
     if (percentage <= 90) return 'modern-card-warning';
     return 'modern-card-danger';
 }
 
 function getQuotaBarClass(used, limit) {
+    // Unlimited tier always shows safe
+    if (limit === -1) return 'safe';
     const percentage = limit > 0 ? (used / limit) * 100 : 0;
-    
+
     if (percentage <= 70) return 'safe';
     if (percentage <= 90) return 'warning';
     return 'danger';
 }
 
 function getQuotaStatusMessage(used, limit) {
+    // Unlimited tier
+    if (limit === -1) {
+        return `Unlimited photos available. You've used ${used.toLocaleString()} this month.`;
+    }
     const percentage = limit > 0 ? (used / limit) * 100 : 0;
     const remaining = Math.max(0, limit - used);
-    
+
     if (percentage <= 70) {
         return `You have ${remaining} photos remaining this month. Keep uploading!`;
     } else if (percentage <= 90) {
@@ -1086,6 +1095,11 @@ function getQuotaStatusMessage(used, limit) {
     } else {
         return `You've reached your monthly limit. Consider upgrading your plan.`;
     }
+}
+
+// Helper to format quota limit display (handles -1 unlimited)
+function formatQuotaLimit(limit) {
+    return limit === -1 ? 'Unlimited' : limit.toLocaleString();
 }
 
 // Email Change Functions

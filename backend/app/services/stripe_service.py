@@ -185,19 +185,24 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
         user_id = data['metadata'].get('user_id')
         tier_name = data['metadata'].get('requested_tier')
         subscription_id = data.get('subscription')
+        checkout_session_id = data.get('id')
 
-        # Idempotency: Skip if already processed
-        if subscription_id:
-            existing = db.query(User).filter(
-                User.stripe_subscription_id == subscription_id,
-                User.subscription_status == "active"
-            ).first()
-            if existing:
-                logger.info(f"Checkout {subscription_id} already processed, skipping")
-                return "Already processed", 200
+        # Subscription mode checkouts must have a subscription_id
+        if not subscription_id:
+            logger.error(f"Checkout session {checkout_session_id} missing subscription_id")
+            return "Missing subscription ID for subscription checkout", 400
+
+        # Idempotency: Skip if already processed (using subscription_id as key)
+        existing = db.query(User).filter(
+            User.stripe_subscription_id == subscription_id,
+            User.subscription_status == "active"
+        ).first()
+        if existing:
+            logger.info(f"Checkout {subscription_id} already processed for user {existing.id}, skipping")
+            return "Already processed", 200
 
         if not user_id or not tier_name:
-            logger.error("Missing user_id or requested_tier in checkout metadata")
+            logger.error(f"Missing user_id or requested_tier in checkout {checkout_session_id} metadata")
             return "Missing fulfillment data", 400
 
         if fulfill_subscription(db, int(user_id), tier_name, subscription_id):
@@ -263,18 +268,21 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
         billing_reason = data.get('billing_reason')
 
         user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
-        if user:
-            # Recover from past_due
-            if user.subscription_status == "past_due":
-                user.subscription_status = "active"
+        if not user:
+            logger.warning(f"invoice.paid: No user found for customer {customer_id}")
+            return "User not found", 200
 
-            # Reset usage on renewal (not initial subscription)
-            if billing_reason == 'subscription_cycle':
-                user.uploads_this_period = 0
-                logger.info(f"User {user.id} billing cycle reset")
+        # Recover from past_due
+        if user.subscription_status == "past_due":
+            user.subscription_status = "active"
+            logger.info(f"User {user.id} recovered from past_due status")
 
-            db.commit()
+        # Reset usage on renewal (not initial subscription)
+        if billing_reason == 'subscription_cycle':
+            user.uploads_this_period = 0
+            logger.info(f"User {user.id} billing cycle reset")
 
+        db.commit()
         return "Invoice paid processed", 200
 
     else:

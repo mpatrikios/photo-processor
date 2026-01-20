@@ -799,17 +799,17 @@ export class StateManager {
     }
 
     getCurrentTierName() {
+        // Canonical tier names matching backend TIER_CONFIGS
+        const VALID_TIERS = ['Free', 'Amateur', 'Pro', 'Power User', 'Enterprise'];
+
         const sub = this.state.subscription.data;
         if (sub && sub.tier_name) {
-            // Convert to title case for each word (handles multi-word tiers like "power user")
             const name = String(sub.tier_name).trim();
-            if (!name) {
-                return 'Free';
+            // Return as-is if valid tier, otherwise default to Free
+            if (VALID_TIERS.includes(name)) {
+                return name;
             }
-            return name
-                .split(/\s+/)
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(' ');
+            console.warn(`Unknown tier name: "${name}", defaulting to Free`);
         }
         return 'Free';
     }

@@ -117,8 +117,8 @@ class UsageTracker:
 
     def get_or_create_user_quota(self, db: Session, user_id: int) -> UserQuota:
         """
-        Get or create user quota record for the current month, 
-        ensuring limits are set based on the user's current tier.
+        Get or create user quota record for the current month,
+        ensuring limits are set based on the user's effective tier (expired tiers fall back to Free).
         """
         current_month = datetime.utcnow().strftime("%Y-%m")
 
@@ -129,9 +129,10 @@ class UsageTracker:
             # Fallback for safety, but this shouldn't happen if auth works
             user_tier = "Free"
         else:
-            user_tier = user.current_tier 
+            # Use effective tier (falls back to Free if paid tier expired)
+            user_tier = TierService.get_effective_tier(user)
 
-        # 2. Determine the limit based on the user's tier
+        # 2. Determine the limit based on the user's effective tier
         tier_limit = TierService.get_upload_limit(user_tier)
         
         # 3. Fetch the quota object
@@ -176,9 +177,13 @@ class UsageTracker:
 
         if action_type == ActionType.UPLOAD:
             if not quota.can_upload_photos(photo_count):
-                remaining = max(
-                    0, quota.monthly_photo_limit - quota.photos_used_this_month
-                )
+                # Handle unlimited (-1) case, though it should never fail
+                if quota.monthly_photo_limit == -1:
+                    remaining = -1
+                else:
+                    remaining = max(
+                        0, quota.monthly_photo_limit - quota.photos_used_this_month
+                    )
                 return (
                     False,
                     f"Monthly photo limit reached. {remaining} photos remaining this month.",

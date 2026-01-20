@@ -303,7 +303,11 @@ class UserQuota(Base):
     def can_upload_photos(self, photo_count: int) -> bool:
         """
         Check if user can upload the specified number of photos.
+        -1 represents unlimited uploads (Enterprise tier).
         """
+        # Unlimited tier (-1) always allows uploads
+        if self.monthly_photo_limit == -1:
+            return True
         return (self.photos_used_this_month + photo_count) <= self.monthly_photo_limit
 
     def can_process(self) -> bool:
@@ -339,7 +343,14 @@ class UserQuota(Base):
     def to_dict(self) -> dict:
         """
         Convert quota to dictionary for API responses.
+        -1 represents unlimited (returns -1 for remaining to signal unlimited to frontend).
         """
+        # Handle unlimited photo limit (-1)
+        if self.monthly_photo_limit == -1:
+            photos_remaining = -1  # Signal unlimited to frontend
+        else:
+            photos_remaining = max(0, self.monthly_photo_limit - self.photos_used_this_month)
+
         return {
             "user_id": self.user_id,
             "monthly_photo_limit": self.monthly_photo_limit,
@@ -349,9 +360,7 @@ class UserQuota(Base):
             "photos_used_this_month": self.photos_used_this_month,
             "processing_used_this_month": self.processing_used_this_month,
             "exports_used_this_month": self.exports_used_this_month,
-            "photos_remaining": max(
-                0, self.monthly_photo_limit - self.photos_used_this_month
-            ),
+            "photos_remaining": photos_remaining,
             "processing_remaining": max(
                 0, self.monthly_processing_limit - self.processing_used_this_month
             ),

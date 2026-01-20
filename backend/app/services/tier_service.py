@@ -5,6 +5,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Sentinel value for unlimited uploads (-1 allows distinction from 0)
+UNLIMITED_UPLOADS = -1
+
+def is_unlimited(limit: int) -> bool:
+    """Check if a limit value represents unlimited uploads."""
+    return limit == UNLIMITED_UPLOADS
+
 TIER_CONFIGS = {
     "Free": {
         "max_uploads": 100,
@@ -99,6 +106,11 @@ class TierService:
             logger.info(f"User {user.id} tier {user.current_tier} expired, using Free tier limits")
 
         current_limit = TierService.get_upload_limit(effective_tier)
+
+        # Unlimited tier always allows uploads
+        if is_unlimited(current_limit):
+            return True
+
         allowed = user.uploads_this_period < current_limit
         if not allowed:
             logger.warning(
