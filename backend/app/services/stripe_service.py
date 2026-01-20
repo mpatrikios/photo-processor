@@ -1,6 +1,7 @@
 import stripe
 from sqlalchemy.orm import Session
 from app.models.user import User
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -185,6 +186,16 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
         tier_name = data['metadata'].get('requested_tier')
         subscription_id = data.get('subscription')
 
+        # Idempotency: Skip if already processed
+        if subscription_id:
+            existing = db.query(User).filter(
+                User.stripe_subscription_id == subscription_id,
+                User.subscription_status == "active"
+            ).first()
+            if existing:
+                logger.info(f"Checkout {subscription_id} already processed, skipping")
+                return "Already processed", 200
+
         if not user_id or not tier_name:
             logger.error("Missing user_id or requested_tier in checkout metadata")
             return "Missing fulfillment data", 400
@@ -207,6 +218,11 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
         # Update subscription status
         user.subscription_status = status
 
+        # Track subscription period end
+        current_period_end = data.get('current_period_end')
+        if current_period_end:
+            user.tier_expiry_date = datetime.fromtimestamp(current_period_end, tz=timezone.utc)
+
         # Check if tier changed (upgrade/downgrade)
         if data.get('items', {}).get('data'):
             price_id = data['items']['data'][0]['price']['id']
@@ -216,7 +232,6 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
                 user.uploads_this_period = 0
                 logger.info(f"User {user.id} changed tier to {new_tier}")
 
-        db.add(user)
         db.commit()
         return f"Subscription updated for user {user.id}", 200
 
@@ -238,11 +253,30 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
         user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
         if user:
             user.subscription_status = "past_due"
-            db.add(user)
             db.commit()
             logger.warning(f"Payment failed for user {user.id}")
 
         return "Payment failure recorded", 200
+
+    elif event_type == 'invoice.paid':
+        # Payment succeeded - recover from past_due, reset usage on renewal
+        customer_id = data['customer']
+        billing_reason = data.get('billing_reason')
+
+        user = db.query(User).filter(User.stripe_customer_id == customer_id).first()
+        if user:
+            # Recover from past_due
+            if user.subscription_status == "past_due":
+                user.subscription_status = "active"
+
+            # Reset usage on renewal (not initial subscription)
+            if billing_reason == 'subscription_cycle':
+                user.uploads_this_period = 0
+                logger.info(f"User {user.id} billing cycle reset")
+
+            db.commit()
+
+        return "Invoice paid processed", 200
 
     else:
         logger.info(f"Unhandled webhook event: {event_type}")

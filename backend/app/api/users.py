@@ -186,11 +186,10 @@ async def get_my_subscription(
     }
     
     # Add Stripe subscription status if user has one
-    if hasattr(current_user, 'stripe_customer_id') and current_user.stripe_customer_id:
+    if current_user.stripe_customer_id:
         subscription_info.update({
-            "stripe_customer_id": current_user.stripe_customer_id,
             "has_stripe_subscription": True,
-            "manage_billing_url": f"/api/payment/customer-portal?customer_id={current_user.stripe_customer_id}"
+            "manage_billing_url": "/api/payment/billing-portal"
         })
     else:
         subscription_info.update({
