@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from urllib.parse import urlparse
 import logging
 
 # Import the Stripe service functions
@@ -21,6 +22,33 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def validate_redirect_url(url: str) -> bool:
+    """
+    Validate that a redirect URL is safe (prevents open redirect attacks).
+    Allows: relative URLs or URLs matching configured CORS origins.
+    """
+    if not url:
+        return False
+
+    # Allow relative URLs (start with /)
+    if url.startswith('/') and not url.startswith('//'):
+        return True
+
+    try:
+        parsed = urlparse(url)
+        # Must have a scheme and netloc for absolute URLs
+        if not parsed.scheme or not parsed.netloc:
+            return False
+
+        # Build origin from parsed URL
+        url_origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Check against allowed CORS origins
+        return url_origin in settings.cors_origins
+    except Exception:
+        return False
+
 # --- Schema for Checkout Session Request ---
 class CheckoutSessionRequest(BaseModel):
     """Schema for the data expected when creating a Checkout Session."""
@@ -38,6 +66,12 @@ async def handle_create_checkout_session(
     """
     Creates a Stripe Checkout Session for subscription and returns the session URL.
     """
+    # Validate redirect URLs to prevent open redirect attacks
+    if not validate_redirect_url(request_data.success_url):
+        raise HTTPException(status_code=400, detail="Invalid success_url domain")
+    if not validate_redirect_url(request_data.cancel_url):
+        raise HTTPException(status_code=400, detail="Invalid cancel_url domain")
+
     logger.info(
         f"Creating Checkout Session for User ID {current_user.id}, "
         f"Tier: {request_data.tier_name}"
@@ -85,6 +119,10 @@ async def handle_billing_portal(
     Creates a Stripe Billing Portal session for managing subscription.
     Allows users to upgrade, downgrade, or cancel their subscription.
     """
+    # Validate redirect URL to prevent open redirect attacks
+    if not validate_redirect_url(request_data.return_url):
+        raise HTTPException(status_code=400, detail="Invalid return_url domain")
+
     portal_url, error_message = create_billing_portal_session(
         user=current_user,
         return_url=request_data.return_url

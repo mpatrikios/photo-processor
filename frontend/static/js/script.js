@@ -826,6 +826,7 @@ async function loadCustomProfileData() {
  * @returns {string} Human-readable feature name
  */
 function humanizeFeature(featureName) {
+    // Canonical feature map matching backend TIER_CONFIGS
     const featureMap = {
         'standard_support': 'Standard Support',
         'priority_support': 'Priority Support',
@@ -834,7 +835,12 @@ function humanizeFeature(featureName) {
         'custom_solutions': 'Custom Solutions'
     };
 
-    return featureMap[featureName] || featureName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    if (featureMap[featureName]) {
+        return featureMap[featureName];
+    }
+
+    console.warn(`Unknown feature code: "${featureName}"`);
+    return featureName;
 }
 
 async function updateCustomModalContent(quotaData, statsData) {
@@ -1259,15 +1265,21 @@ async function logoutAllSessions() {
 async function openBillingPortal() {
     try {
         const apiBase = CONFIG.API_BASE_URL;
-            
-        const response = await fetch(`${apiBase}/payment/customer-portal`, {
+
+        const response = await fetch(`${apiBase}/payment/billing-portal`, {
             method: 'POST',
-            headers: CONFIG.getAuthHeaders()
+            headers: {
+                ...CONFIG.getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                return_url: window.location.href
+            })
         });
-        
+
         if (response.ok) {
-            const { url } = await response.json();
-            window.open(url, '_blank');
+            const { portalUrl } = await response.json();
+            window.open(portalUrl, '_blank');
         } else {
             showNotification('Error opening billing portal', 'error');
         }

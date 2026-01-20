@@ -48,7 +48,7 @@ TIER_CONFIGS = {
     "Enterprise": {
         "max_uploads": -1,  # Unlimited
         "duration_days": 30,
-        "price_cents": 0,  # Contact us
+        "price_cents": -1,  # Custom pricing (contact sales)
         "is_paid": True,
         "max_file_size_mb": 500,
         "features": ["unlimited_photos", "custom_solutions"]

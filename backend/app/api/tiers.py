@@ -18,9 +18,13 @@ async def get_tiers():
     frontend_tiers = {}
     
     for tier_name, config in TIER_CONFIGS.items():
+        # Handle custom pricing (-1) for Enterprise tier
+        price_cents = config["price_cents"]
+        price = None if price_cents == -1 else price_cents / 100.0
+
         frontend_tiers[tier_name] = {
             "name": tier_name,
-            "price": config["price_cents"] / 100.0,  # Convert cents to dollars
+            "price": price,
             "maxUploads": config["max_uploads"],
             "features": transform_features(tier_name, config),
             "isEnterprise": tier_name == "Enterprise"

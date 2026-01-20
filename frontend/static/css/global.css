@@ -4139,6 +4139,7 @@ html {
 
 .modal-fullscreen .modal-body {
     display: flex;
+    flex-direction: column;
     padding: 0;
     height: calc(100vh - 120px);
 }
@@ -5321,11 +5322,11 @@ html {
     background: var(--analytics-bg);
 }
 
-/* Analytics Grid Layout */
+/* Analytics Grid Layout - Row-based */
 .analytics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     margin-bottom: 2rem;
 }
 
@@ -5538,11 +5539,6 @@ html {
     
     #analyticsModal .modal-body {
         padding: 1rem;
-    }
-    
-    .analytics-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
     }
     
     .analytics-card {

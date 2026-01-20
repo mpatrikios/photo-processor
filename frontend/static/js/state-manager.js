@@ -784,9 +784,6 @@ export class StateManager {
             this.state.subscription.data = subscriptionData;
             this.state.subscription.lastFetched = timestamp;
 
-            // Also update window global for backwards compatibility
-            window.currentUserSubscription = subscriptionData;
-
             return subscriptionData;
         } catch (error) {
             console.error('Error loading subscription:', error);
