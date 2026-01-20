@@ -69,7 +69,8 @@ When reviewing code, you will systematically evaluate against these criteria:
    - Similar functions to consolidate
    - Constants to extract
    - Patterns to standardize
-
+   - Do not need backwards compatibility since product has not been deployed to public yet
+   - Remove legacy or deprecated code
 ## Output Format
 
 For each review, provide:

@@ -2,7 +2,7 @@
 
 import CONFIG from './config.js';
 import { PaymentForm } from '../../components/payment-form.js';
-import { initLandingPagePricing, showUpgradeModal } from '../../components/pricing-cards-manager.js';
+import { initLandingPagePricing, showStandaloneUpgradeModal } from '../../components/pricing-cards-manager.js';
 import { PhotoProcessor } from './photo-processor.js';
 import { StateManager } from './state-manager.js';
 
@@ -25,7 +25,6 @@ function showSignInModal() {
             signInForm.removeEventListener('submit', handleSignIn);
             // Add new listener
             signInForm.addEventListener('submit', handleSignIn);
-            console.log('Sign In form listener attached in modal'); // Debug log
         }
     }, 100);
 }
@@ -47,7 +46,6 @@ function showCreateAccountModal() {
             createAccountForm.removeEventListener('submit', handleCreateAccount);
             // Add new listener
             createAccountForm.addEventListener('submit', handleCreateAccount);
-            console.log('Create Account form listener attached in modal'); // Debug log
         }
     }, 100);
 }
@@ -113,7 +111,6 @@ function showAppSection() {
                 if (userInfo) {
                     window.stateManager.set('auth.user', JSON.parse(userInfo));
                 }
-                console.log('StateManager auth state updated after login');
             } catch (error) {
                 console.error('Failed to update StateManager auth state:', error);
             }
@@ -127,6 +124,7 @@ class AppRouter {
         this.routes = {
             '': this.showHome.bind(this),
             'home': this.showHome.bind(this),
+            'pricing': this.showPricing.bind(this),
             'analytics': this.showAnalytics.bind(this),
             'app': this.showApp.bind(this),
             'upload': this.showUpload.bind(this),
@@ -225,16 +223,24 @@ class AppRouter {
     }
     
     showHome() {
-        // Check if already authenticated
-        const token = localStorage.getItem('auth_token');
-        if (token && window.photoProcessor) {
-            // If authenticated, show upload by default
-            window.location.hash = 'upload';
-            return;
-        }
+        // Allow both authenticated and unauthenticated users to view landing page
         showLandingPage();
+        updateLandingPageForAuthState();
     }
-    
+
+    showPricing() {
+        // Show landing page and scroll to pricing section
+        showLandingPage();
+        updateLandingPageForAuthState();
+        // Scroll to pricing section after a brief delay to ensure page is rendered
+        setTimeout(() => {
+            const pricingSection = document.getElementById('pricing');
+            if (pricingSection) {
+                pricingSection.scrollIntoView({ behavior: 'smooth' });
+            }
+        }, 100);
+    }
+
     showAnalytics() {
         // Hide landing page and app section
         document.getElementById('landing-page').classList.add('d-none');
@@ -304,6 +310,68 @@ class AppRouter {
 
 // Router will be initialized in DOMContentLoaded
 
+// ==========================================
+// LANDING PAGE AUTH STATE FUNCTIONS
+// ==========================================
+
+/**
+ * Update landing page UI based on authentication state
+ */
+function updateLandingPageForAuthState() {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+        updateNavbarForAuthenticatedUser();
+        updateHeroForAuthenticatedUser();
+    }
+}
+
+/**
+ * Update navbar for authenticated users viewing landing page
+ * Replaces "Sign In / Start Trial" with "Go to App" + profile dropdown
+ */
+function updateNavbarForAuthenticatedUser() {
+    const navButtons = document.querySelector('#navbarNav .d-flex.align-items-center');
+    if (!navButtons) return;  // Parent already validated auth
+
+    navButtons.innerHTML = `
+        <button class="btn clean-btn-primary" onclick="window.location.hash='upload'">
+            <i class="fas fa-images me-2"></i>Go to App
+        </button>
+        <div class="dropdown ms-2">
+            <button class="btn clean-btn-ghost dropdown-toggle" data-bs-toggle="dropdown" aria-label="User menu">
+                <i class="fas fa-user-circle"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="#" onclick="showProfileModal(); return false;">Profile</a></li>
+                <li><a class="dropdown-item" href="#pricing">Pricing</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item text-danger" href="#" onclick="logout(); return false;">Sign Out</a></li>
+            </ul>
+        </div>
+    `;
+}
+
+/**
+ * Update hero CTAs for authenticated users viewing landing page
+ * Replaces signup buttons with app navigation
+ */
+function updateHeroForAuthenticatedUser() {
+    // Parent already validated auth
+    const heroCTAs = document.querySelector('.hero-section .d-flex.gap-3');
+    if (!heroCTAs) return;
+
+    heroCTAs.innerHTML = `
+        <button class="btn btn-danger btn-lg px-4 py-3" onclick="window.location.hash='results'">
+            <i class="fas fa-images me-2"></i>
+            Go to Your Photos
+        </button>
+        <a href="#pricing" class="btn btn-outline-dark btn-lg px-4 py-3">
+            <i class="fas fa-tags me-2"></i>
+            View Pricing
+        </a>
+    `;
+}
+
 // Keep only essential global functions for backwards compatibility
 window.showSignInModal = showSignInModal;
 window.showCreateAccountModal = showCreateAccountModal;
@@ -314,31 +382,25 @@ window.showAppSection = showAppSection;
 window.logout = logout;
 
 function logout() {
-    // Clear auth token and show landing page
+    // Clear auth token
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_info');
-    
-    // Navigate to home
-    window.location.hash = '';
-    showLandingPage();
+    localStorage.removeItem('refresh_token');
 
     // Reset any app state
     if (window.photoProcessor) {
         window.photoProcessor.isAuthenticated = false;
         window.photoProcessor.authToken = null;
     }
-    
-    // Clear StateManager auth state
+
+    // Clear StateManager auth state using existing logout method
     if (window.stateManager) {
-        try {
-            window.stateManager.set('auth.isAuthenticated', false);
-            window.stateManager.set('auth.token', null);
-            window.stateManager.set('auth.user', null);
-            console.log('StateManager auth state cleared after logout');
-        } catch (error) {
-            console.error('Failed to clear StateManager auth state:', error);
-        }
+        window.stateManager.logout();
     }
+
+    // Navigate to home and reload to reset landing page UI to guest state
+    window.location.hash = '';
+    window.location.reload();
 }
 
 // ==========================================
@@ -428,8 +490,6 @@ async function handleSignIn(event) {
                 // Stay on landing page and trigger upgrade
                 showNotification(result.message || 'Welcome back!', 'success');
                 setTimeout(() => {
-                    console.log('Triggering delayed upgrade for tier:', pendingTier);
-                    console.log('Current auth token:', localStorage.getItem('auth_token'));
                     handleUpgrade(pendingTier);
                 }, 2000); // Increased delay to ensure login completes
             } else {
@@ -534,8 +594,6 @@ async function handleCreateAccount(event) {
                 // Stay on landing page and trigger upgrade
                 showNotification(result.message || 'Account created successfully!', 'success');
                 setTimeout(() => {
-                    console.log('Triggering delayed upgrade for tier:', pendingTier);
-                    console.log('Current auth token:', localStorage.getItem('auth_token'));
                     handleUpgrade(pendingTier);
                 }, 2000); // Increased delay to ensure registration completes
             } else {
@@ -745,8 +803,7 @@ async function loadCustomProfileData() {
     }
     
     const apiBase = CONFIG.API_BASE_URL;
-        
-    const headers = { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` };
+    const headers = CONFIG.getAuthHeaders();
 
     const [quotaResponse, statsResponse] = await Promise.all([
         fetch(`${apiBase}/users/me/quota`, { headers }),
@@ -763,30 +820,27 @@ async function loadCustomProfileData() {
     );
 }
 
-// Store current user subscription data globally for access in other functions
-let currentUserSubscription = null;
-
 /**
  * Humanize feature names for display
  * @param {string} featureName - Feature code from backend
  * @returns {string} Human-readable feature name
  */
 function humanizeFeature(featureName) {
+    // Canonical feature map matching backend TIER_CONFIGS
     const featureMap = {
-        'basic_sorting': 'Basic Sorting',
-        'priority_support': 'Priority Support', 
+        'standard_support': 'Standard Support',
+        'priority_support': 'Priority Support',
         'export_csv': 'CSV Export',
-        'advanced_sorting': 'Advanced Sorting',
-        'raw_file_support': 'RAW File Support',
-        'ai_features': 'AI Features',
-        'batch_operations': 'Batch Operations',
-        'custom_fields': 'Custom Fields',
-        'api_access': 'API Access',
-        'white_label': 'White Label',
-        'unlimited_storage': 'Unlimited Storage'
+        'unlimited_photos': 'Unlimited Photos',
+        'custom_solutions': 'Custom Solutions'
     };
-    
-    return featureMap[featureName] || featureName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    if (featureMap[featureName]) {
+        return featureMap[featureName];
+    }
+
+    console.warn(`Unknown feature code: "${featureName}"`);
+    return featureName;
 }
 
 async function updateCustomModalContent(quotaData, statsData) {
@@ -796,24 +850,8 @@ async function updateCustomModalContent(quotaData, statsData) {
     const { user, stats } = statsData;
     const { quota } = quotaData;
     
-    // Load subscription data
-    let subscriptionData = null;
-    try {
-        const apiBase = CONFIG.API_BASE_URL;
-        
-        const response = await fetch(`${apiBase}/users/me/subscription`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            subscriptionData = result.subscription;
-            // Store globally for access in showUpgradeModal
-            currentUserSubscription = subscriptionData;
-        }
-    } catch (error) {
-        console.error('Error loading subscription data:', error);
-    }
+    // Load subscription data via StateManager (handles caching and global state)
+    const subscriptionData = await window.stateManager.loadSubscription();
     
     contentDiv.innerHTML = `
         <div>
@@ -826,9 +864,9 @@ async function updateCustomModalContent(quotaData, statsData) {
             <div id="quotaContent">
                 <div class="glass-card ${getQuotaCardClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="padding: 24px;">
                     <h5>Monthly Photo Quota</h5>
-                    <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month}/${quota.monthly_photo_limit}</div>
+                    <div style="font-size: 2rem; font-weight: 700; margin-bottom: 8px;">${quota.photos_used_this_month.toLocaleString()}/${formatQuotaLimit(quota.monthly_photo_limit)}</div>
                     <div class="modern-progress">
-                        <div class="modern-progress-bar ${getQuotaBarClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="width: ${Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%;"></div>
+                        <div class="modern-progress-bar ${getQuotaBarClass(quota.photos_used_this_month, quota.monthly_photo_limit)}" style="width: ${quota.monthly_photo_limit === -1 ? '0' : Math.min(100, (quota.photos_used_this_month / quota.monthly_photo_limit) * 100)}%;"></div>
                     </div>
                     <div style="font-size: 0.9rem; margin-top: 8px; opacity: 0.9;">${getQuotaStatusMessage(quota.photos_used_this_month, quota.monthly_photo_limit)}</div>
                 </div>
@@ -886,7 +924,7 @@ async function updateCustomModalContent(quotaData, statsData) {
                         ` : ''}
                         ${!subscriptionData.has_stripe_subscription ? `
                             <button class="upgrade-button" data-upgrade-plan>
-                                Change Plan
+                                View Plans
                             </button>
                         ` : ''}
                     </div>
@@ -946,12 +984,16 @@ function handleModalClicks(e) {
         return;
     }
     
-    // Upgrade plan button  
+    // Upgrade plan button - close profile modal and open standalone upgrade modal
     if (e.target.hasAttribute('data-upgrade-plan')) {
         e.preventDefault();
-        showUpgradeModal();
-        // Re-establish event delegation after modal content changes
-        setupModalEventDelegation();
+        // Close the profile modal first
+        const profileModal = document.getElementById('customProfileModal');
+        if (profileModal) {
+            profileModal.remove();
+        }
+        // Open the standalone upgrade modal
+        showStandaloneUpgradeModal();
         return;
     }
     
@@ -995,9 +1037,7 @@ async function updateCustomProfile() {
         
         const response = await fetch(`${apiBase}/users/me/profile`, {
             method: 'PUT',
-            headers: {
-                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-            },
+            headers: CONFIG.getAuthHeaders(),
             body: formData
         });
         
@@ -1023,26 +1063,35 @@ async function updateCustomProfile() {
 // ==========================================
 
 // Quota Color Helper Functions
+// Note: -1 represents unlimited (Enterprise tier)
 function getQuotaCardClass(used, limit) {
+    // Unlimited tier always shows safe
+    if (limit === -1) return 'modern-card-safe';
     const percentage = limit > 0 ? (used / limit) * 100 : 0;
-    
+
     if (percentage <= 70) return 'modern-card-safe';
     if (percentage <= 90) return 'modern-card-warning';
     return 'modern-card-danger';
 }
 
 function getQuotaBarClass(used, limit) {
+    // Unlimited tier always shows safe
+    if (limit === -1) return 'safe';
     const percentage = limit > 0 ? (used / limit) * 100 : 0;
-    
+
     if (percentage <= 70) return 'safe';
     if (percentage <= 90) return 'warning';
     return 'danger';
 }
 
 function getQuotaStatusMessage(used, limit) {
+    // Unlimited tier
+    if (limit === -1) {
+        return `Unlimited photos available. You've used ${used.toLocaleString()} this month.`;
+    }
     const percentage = limit > 0 ? (used / limit) * 100 : 0;
     const remaining = Math.max(0, limit - used);
-    
+
     if (percentage <= 70) {
         return `You have ${remaining} photos remaining this month. Keep uploading!`;
     } else if (percentage <= 90) {
@@ -1052,6 +1101,11 @@ function getQuotaStatusMessage(used, limit) {
     } else {
         return `You've reached your monthly limit. Consider upgrading your plan.`;
     }
+}
+
+// Helper to format quota limit display (handles -1 unlimited)
+function formatQuotaLimit(limit) {
+    return limit === -1 ? 'Unlimited' : limit.toLocaleString();
 }
 
 // Email Change Functions
@@ -1064,7 +1118,7 @@ async function showChangeEmailForm() {
         </div>
         <div class="modern-form-field">
             <label class="modern-form-label">Current Password</label>
-            <input type="password" id="emailChangePassword" class="modern-form-input" placeholder="Enter your current password">
+            ${createPasswordField('emailChangePassword', 'Enter your current password', 'modern-form-input', 'current-password')}
         </div>
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
             <button onclick="cancelEmailChange()" class="modern-btn modern-btn-outline">Cancel</button>
@@ -1095,7 +1149,7 @@ async function changeEmail() {
         
         const response = await fetch(`${apiBase}/users/me/email`, {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
+            headers: CONFIG.getAuthHeaders(),
             body: formData
         });
         
@@ -1118,13 +1172,13 @@ async function showChangePasswordForm() {
     passwordField.innerHTML = `
         <label class="modern-form-label">Change Password</label>
         <div class="modern-form-field">
-            <input type="password" id="currentPassword" class="modern-form-input" placeholder="Current password">
+            ${createPasswordField('currentPassword', 'Current password', 'modern-form-input', 'current-password')}
         </div>
         <div class="modern-form-field">
-            <input type="password" id="newPassword" class="modern-form-input" placeholder="New password (min 8 characters)">
+            ${createPasswordField('newPassword', 'New password (min 8 characters)', 'modern-form-input', 'new-password')}
         </div>
         <div class="modern-form-field">
-            <input type="password" id="confirmPassword" class="modern-form-input" placeholder="Confirm new password">
+            ${createPasswordField('confirmPassword', 'Confirm new password', 'modern-form-input', 'new-password')}
         </div>
         <div style="display: flex; gap: 8px; justify-content: flex-end;">
             <button onclick="cancelPasswordChange()" class="modern-btn modern-btn-outline">Cancel</button>
@@ -1162,8 +1216,8 @@ async function changePassword() {
             
         const response = await fetch(`${apiBase}/auth/password/change`, {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            headers: {
+                ...CONFIG.getAuthHeaders(),
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -1193,7 +1247,7 @@ async function logoutAllSessions() {
             
         const response = await fetch(`${apiBase}/auth/logout-all`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            headers: CONFIG.getAuthHeaders()
         });
         
         if (response.ok) {
@@ -1211,15 +1265,21 @@ async function logoutAllSessions() {
 async function openBillingPortal() {
     try {
         const apiBase = CONFIG.API_BASE_URL;
-            
-        const response = await fetch(`${apiBase}/payment/customer-portal`, {
+
+        const response = await fetch(`${apiBase}/payment/billing-portal`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+            headers: {
+                ...CONFIG.getAuthHeaders(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                return_url: window.location.href
+            })
         });
-        
+
         if (response.ok) {
-            const { url } = await response.json();
-            window.open(url, '_blank');
+            const { portalUrl } = await response.json();
+            window.open(portalUrl, '_blank');
         } else {
             showNotification('Error opening billing portal', 'error');
         }
@@ -1232,10 +1292,35 @@ async function openBillingPortal() {
 function showChangePasswordModal() { showChangePasswordForm(); }
 function editProfile() { showProfileModal(); }
 
+// Password field helper - creates consistent password input with toggle
+function createPasswordField(inputId, placeholder, inputClass = 'modern-form-input', autocomplete = 'off') {
+    return `
+        <div class="password-input-wrapper">
+            <input type="password" id="${inputId}" class="${inputClass}" placeholder="${placeholder}" autocomplete="${autocomplete}">
+            <button type="button" class="password-toggle-btn" aria-label="Show password" aria-pressed="false" onclick="togglePasswordVisibility('${inputId}', this)">
+                <i class="fas fa-eye" aria-hidden="true"></i>
+            </button>
+        </div>
+    `;
+}
+
+// Password visibility toggle with ARIA support
+function togglePasswordVisibility(inputId, toggleBtn) {
+    const input = document.getElementById(inputId);
+    const icon = toggleBtn.querySelector('i');
+    const isHidden = input.type === 'password';
+
+    input.type = isHidden ? 'text' : 'password';
+    icon.classList.replace(isHidden ? 'fa-eye' : 'fa-eye-slash', isHidden ? 'fa-eye-slash' : 'fa-eye');
+    toggleBtn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+    toggleBtn.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+}
+
 // Keep essential profile functions for modal interactions
 window.showProfileModal = showProfileModal;
 window.showCustomTab = showCustomTab;
-window.showUpgradeModal = showUpgradeModal;
+window.showStandaloneUpgradeModal = showStandaloneUpgradeModal;
+window.togglePasswordVisibility = togglePasswordVisibility;
 
 // ==========================================
 // STRIPE CHECKOUT FUNCTIONS
@@ -1322,6 +1407,11 @@ function handlePaymentSuccess() {
  * Handle cancelled payment return
  */
 function handlePaymentCancelled() {
+    // Reset payment form state to allow retry
+    if (paymentForm) {
+        paymentForm.resetState();
+    }
+
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-info alert-dismissible fade show';
     alertDiv.innerHTML = `
@@ -1504,8 +1594,6 @@ window.submitFeedback = submitFeedback;
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM Content Loaded');
-
     // 1. Initialize Router FIRST (required by PhotoProcessor)
     const appRouter = new AppRouter();
     window.appRouter = appRouter;
@@ -1514,19 +1602,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Initialize Classes with ES6 modules
     try {
         window.photoProcessor = new PhotoProcessor();
-        console.log('PhotoProcessor initialized successfully');
-        
-        // Initialize StateManager 
+
+        // Initialize StateManager
         window.stateManager = new StateManager();
-        console.log('StateManager initialized successfully');
-        
+
         // Initialize Landing Page Pricing after StateManager is ready
         await initLandingPagePricing();
     } catch (error) {
         console.error('Failed to initialize PhotoProcessor:', error);
         window.photoProcessor = {
             isAuthenticated: false,
-            initializeApp: () => console.log('PhotoProcessor init failed')
+            initializeApp: () => {}
         };
         
         // Still try to initialize pricing with fallback behavior
@@ -1543,21 +1629,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (signInForm) signInForm.addEventListener('submit', handleSignIn);
     if (createAccountForm) createAccountForm.addEventListener('submit', handleCreateAccount);
 
-    // 4. Handle payment result pages (both path and hash-based)
+    // 4. Initialize Payment Components (must be before payment status check)
+    initializePaymentForm();
+
+    // 5. Handle payment result pages (both path and hash-based)
     const currentPath = window.location.pathname;
     const currentHash = window.location.hash;
-    
+
     if (currentPath === '/payment/success' || currentHash.includes('payment-success')) {
         handlePaymentSuccess();
     } else if (currentPath === '/payment/cancelled' || currentHash.includes('payment-cancelled')) {
         handlePaymentCancelled();
     }
 
-    // 5. Initialize seamless navbar scroll behavior
+    // 6. Initialize seamless navbar scroll behavior
     initializeSeamlessNavbar();
-
-    // 6. Initialize Payment Components
-    initializePaymentForm();
     
     // 7. Add True Event Delegation for All Interactive Buttons
     document.addEventListener('click', (event) => {
@@ -1565,8 +1651,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const tierButton = event.target.closest('.tier-choose-button');
         if (tierButton) {
             const tier = tierButton.dataset.tier;
-            console.log(`Tier selected: ${tier}`);
-            
+
             if (tier === 'Trial') {
                 showCreateAccountModal();
             } else {
@@ -1606,7 +1691,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('[data-landing-btn]').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
-            showLandingPage();
+            window.location.hash = 'home';  // Router handles showLandingPage + updateLandingPageForAuthState
         });
     });
     
@@ -1614,7 +1699,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Now that all dependencies are ready, initialize the app logic
     if (window.photoProcessor && typeof window.photoProcessor.initializeApp === 'function') {
         window.photoProcessor.initializeApp();
-        console.log('PhotoProcessor app logic initialized');
     }
 
     // 10. Check Auth & Handle Initial Route

@@ -35,9 +35,14 @@ class User(Base):
     total_exports = Column(Integer, default=0, nullable=False)
     
     # Subscription tracking
-    current_tier = Column(String(50), default="Trial", nullable=False) # 'Trial', 'Basic', 'Pro'
-    tier_expiry_date = Column(DateTime(timezone=True), nullable=True) # When paid tier or trial expires
+    current_tier = Column(String(50), default="Free", nullable=False)  # 'Free', 'Amateur', 'Pro', 'Power User', 'Enterprise'
+    tier_expiry_date = Column(DateTime(timezone=True), nullable=True) # When paid tier expires
     uploads_this_period = Column(Integer, default=0, nullable=False) # Usage counter for the current period (resets monthly/when tier changes)
+
+    # Stripe integration
+    stripe_customer_id = Column(String(255), unique=True, nullable=True, index=True)
+    stripe_subscription_id = Column(String(255), nullable=True)
+    subscription_status = Column(String(50), nullable=True)  # 'active', 'past_due', 'canceled', 'trialing'
 
     # User preferences
     timezone = Column(String(50), default="UTC", nullable=False)
@@ -130,6 +135,10 @@ class User(Base):
             "total_photos_processed": self.total_photos_processed,
             "total_exports": self.total_exports,
             "timezone": self.timezone,
+            "current_tier": self.current_tier,
+            "tier_expiry_date": self.tier_expiry_date.isoformat() if self.tier_expiry_date else None,
+            "uploads_this_period": self.uploads_this_period,
+            "subscription_status": self.subscription_status,
         }
 
         if include_sensitive:
@@ -196,9 +205,6 @@ class UserSession(Base):
             "is_active": self.is_active,
             "ip_address": self.ip_address,
             "user_agent": self.user_agent,
-            "current_tier": self.current_tier,
-            "tier_expiry_date": self.tier_expiry_date.isoformat() if self.tier_expiry_date else None,
-            "uploads_this_period": self.uploads_this_period,
         }
 
     def __repr__(self) -> str:

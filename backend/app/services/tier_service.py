@@ -1,36 +1,57 @@
-# --- INSTRUCTIONS TO CREATE backend/app/services/tier_service.py ---
-
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.user import User # Import the updated User model
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Sentinel value for unlimited uploads (-1 allows distinction from 0)
+UNLIMITED_UPLOADS = -1
+
+def is_unlimited(limit: int) -> bool:
+    """Check if a limit value represents unlimited uploads."""
+    return limit == UNLIMITED_UPLOADS
+
 TIER_CONFIGS = {
-    "Trial": {
-        "max_uploads": 100,  # Maximum uploads during trial period
-        "duration_days": 3,
+    "Free": {
+        "max_uploads": 100,
+        "duration_days": None,  # No expiry for free tier
         "price_cents": 0,
         "is_paid": False,
         "max_file_size_mb": 10,
         "features": ["standard_support"]
     },
-    "Basic": {
-        "max_uploads": 1000,
+    "Amateur": {
+        "max_uploads": 5000,
         "duration_days": 30,
-        "price_cents": 999,  # $9.99
+        "price_cents": 2799,  # $27.99
         "is_paid": True,
         "max_file_size_mb": 25,
         "features": ["export_csv"]
     },
     "Pro": {
-        "max_uploads": 5000,
+        "max_uploads": 15000,
         "duration_days": 30,
-        "price_cents": 2999,  # $29.99
+        "price_cents": 4999,  # $49.99
         "is_paid": True,
         "max_file_size_mb": 50,
-        "features": ["priority_support", "export_csv", "advanced_sorting"]
+        "features": ["priority_support", "export_csv"]
+    },
+    "Power User": {
+        "max_uploads": 30000,
+        "duration_days": 30,
+        "price_cents": 8999,  # $89.99
+        "is_paid": True,
+        "max_file_size_mb": 100,
+        "features": ["priority_support", "export_csv"]
+    },
+    "Enterprise": {
+        "max_uploads": -1,  # Unlimited
+        "duration_days": 30,
+        "price_cents": -1,  # Custom pricing (contact sales)
+        "is_paid": True,
+        "max_file_size_mb": 500,
+        "features": ["unlimited_photos", "custom_solutions"]
     }
 }
 
@@ -40,7 +61,7 @@ class TierService:
     @staticmethod
     def get_tier_info(tier_name: str) -> dict:
         """Returns the specific limits and properties for a given tier."""
-        return TIER_CONFIGS.get(tier_name, TIER_CONFIGS["Trial"])
+        return TIER_CONFIGS.get(tier_name, TIER_CONFIGS["Free"])
 
     @staticmethod
     def get_upload_limit(tier_name: str) -> int:
@@ -49,41 +70,51 @@ class TierService:
 
     @staticmethod
     def is_tier_active(user: User) -> bool:
-        """Checks if the user's current tier (trial or paid) is still active."""
-        
-        # Trial/Paid tier has no expiry date set (e.g., perpetual)
+        """Checks if the user's current tier is still active."""
+
+        # Free tier is always active (no expiry)
+        if user.current_tier == "Free":
+            return True
+
+        # Paid tiers with no expiry date set
         if user.tier_expiry_date is None:
-            # Check if the user is in a paid tier
-            if user.current_tier in ["Basic", "Pro"]:
+            if user.current_tier in ["Amateur", "Pro", "Power User", "Enterprise"]:
                 return True
-            
-            # Check for a new user who just started their trial
-            if user.current_tier == "Trial":
-                # Check 3-day limit from creation date
-                trial_duration = TIER_CONFIGS["Trial"]["duration_days"]
-                trial_ends_at = user.created_at + timedelta(days=trial_duration)
-                return datetime.now(timezone.utc) < trial_ends_at
-            
             return False
-            
+
         # Check against an explicit expiry date
         expiry_date = user.tier_expiry_date.replace(tzinfo=timezone.utc) if user.tier_expiry_date.tzinfo is None else user.tier_expiry_date
         return datetime.now(timezone.utc) < expiry_date
 
     @staticmethod
+    def get_effective_tier(user: User) -> str:
+        """
+        Returns the user's effective tier, falling back to Free if paid tier expired.
+        """
+        if not TierService.is_tier_active(user):
+            return "Free"
+        return user.current_tier
+
+    @staticmethod
     def check_upload_allowed(user: User) -> bool:
         """
         Determines if the user is allowed to upload based on tier and usage.
+        Expired paid tiers fall back to Free tier limits.
         """
-        if not TierService.is_tier_active(user):
-            logger.warning(f"User {user.id} upload denied: Tier {user.current_tier} expired.")
-            return False
+        effective_tier = TierService.get_effective_tier(user)
+        if effective_tier != user.current_tier:
+            logger.info(f"User {user.id} tier {user.current_tier} expired, using Free tier limits")
 
-        current_limit = TierService.get_upload_limit(user.current_tier)
+        current_limit = TierService.get_upload_limit(effective_tier)
+
+        # Unlimited tier always allows uploads
+        if is_unlimited(current_limit):
+            return True
+
         allowed = user.uploads_this_period < current_limit
         if not allowed:
             logger.warning(
-                f"User {user.id} ({user.current_tier}) upload limit reached: "
+                f"User {user.id} ({effective_tier}) upload limit reached: "
                 f"{user.uploads_this_period} / {current_limit}"
             )
         return allowed
@@ -97,10 +128,10 @@ class TierService:
         # Get user from database
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
-            # Return default/trial tier for non-existent users
-            tier_config = TierService.get_tier_info("Trial")
+            # Return default Free tier for non-existent users
+            tier_config = TierService.get_tier_info("Free")
             return {
-                "tier_name": "Trial",
+                "tier_name": "Free",
                 "monthly_photo_limit": tier_config["max_uploads"],
                 "features": tier_config["features"],
                 "duration_days": tier_config["duration_days"],
@@ -110,14 +141,14 @@ class TierService:
                 "is_active": False
             }
         
-        # Get tier configuration for user's current tier
-        tier_config = TierService.get_tier_info(user.current_tier)
-        
-        # Check if tier is active
+        # Check if tier is active, use effective tier for limits
         is_active = TierService.is_tier_active(user)
-        
+        effective_tier = TierService.get_effective_tier(user)
+        tier_config = TierService.get_tier_info(effective_tier)
+
         return {
-            "tier_name": user.current_tier,
+            "tier_name": effective_tier,  # Show effective tier (Free if expired)
+            "original_tier": user.current_tier if not is_active else None,  # Track expired tier
             "monthly_photo_limit": tier_config["max_uploads"],
             "features": tier_config["features"],
             "duration_days": tier_config["duration_days"],
