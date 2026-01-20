@@ -206,7 +206,6 @@ def handle_webhook_event(db: Session, payload: bytes, sig_header: str) -> tuple[
 
     elif event_type == 'customer.subscription.updated':
         # Subscription changed (upgrade/downgrade/renewal)
-        subscription_id = data['id']
         status = data['status']
         customer_id = data['customer']
 
