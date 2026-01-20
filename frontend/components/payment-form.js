@@ -80,57 +80,16 @@ export class PaymentForm {
         }
     }
 
+    resetState() {
+        this.isProcessing = false;
+    }
+
     static getApiBaseUrl() {
         return CONFIG.API_BASE_URL;
     }
 }
 
-// Helper function to check payment status from URL
-function checkPaymentStatusFromUrl() {
-    const hash = window.location.hash;
-    
-    if (hash.includes('payment-success')) {
-        const sessionId = new URLSearchParams(hash.split('&').slice(1).join('&')).get('session_id');
-        handlePaymentSuccess(sessionId);
-    } else if (hash.includes('payment-cancelled')) {
-        handlePaymentCancelled();
-    }
-}
-
-function handlePaymentSuccess(sessionId) {
-    // Clear any stored pending actions
-    localStorage.removeItem('pending_action');
-    localStorage.removeItem('pending_tier');
-    
-    // Show success message using existing PhotoProcessor system
-    if (window.photoProcessor) {
-        window.photoProcessor.showSuccess('Payment successful! Your tier has been upgraded.');
-    } else {
-        alert('Payment successful! Your tier has been upgraded.');
-    }
-    
-    // Refresh user data and redirect to main app
-    window.location.hash = '#dashboard';
-    
-    // Refresh user quota to show new tier
-    if (window.photoProcessor && window.photoProcessor.loadUserQuota) {
-        window.photoProcessor.loadUserQuota();
-    }
-}
-
-function handlePaymentCancelled() {
-    // Show cancellation message using existing PhotoProcessor system  
-    if (window.photoProcessor) {
-        window.photoProcessor.showError('Payment was cancelled.');
-    }
-    
-    // Return to pricing/dashboard
-    window.location.hash = '#dashboard';
-}
-
-// Payment status checking is handled by script.js to avoid conflicts
-
 // Export for module use
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PaymentForm, checkPaymentStatusFromUrl, handlePaymentSuccess, handlePaymentCancelled };
+    module.exports = { PaymentForm };
 }

@@ -1381,6 +1381,11 @@ function handlePaymentSuccess() {
  * Handle cancelled payment return
  */
 function handlePaymentCancelled() {
+    // Reset payment form state to allow retry
+    if (paymentForm) {
+        paymentForm.resetState();
+    }
+
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-info alert-dismissible fade show';
     alertDiv.innerHTML = `
@@ -1598,21 +1603,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (signInForm) signInForm.addEventListener('submit', handleSignIn);
     if (createAccountForm) createAccountForm.addEventListener('submit', handleCreateAccount);
 
-    // 4. Handle payment result pages (both path and hash-based)
+    // 4. Initialize Payment Components (must be before payment status check)
+    initializePaymentForm();
+
+    // 5. Handle payment result pages (both path and hash-based)
     const currentPath = window.location.pathname;
     const currentHash = window.location.hash;
-    
+
     if (currentPath === '/payment/success' || currentHash.includes('payment-success')) {
         handlePaymentSuccess();
     } else if (currentPath === '/payment/cancelled' || currentHash.includes('payment-cancelled')) {
         handlePaymentCancelled();
     }
 
-    // 5. Initialize seamless navbar scroll behavior
+    // 6. Initialize seamless navbar scroll behavior
     initializeSeamlessNavbar();
-
-    // 6. Initialize Payment Components
-    initializePaymentForm();
     
     // 7. Add True Event Delegation for All Interactive Buttons
     document.addEventListener('click', (event) => {

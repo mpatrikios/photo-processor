@@ -768,7 +768,7 @@ export class StateManager {
 
     async _fetchSubscription(headers, timestamp) {
         try {
-            const response = await fetch(`${CONFIG.API_BASE_URL}/api/users/me/subscription`, {
+            const response = await fetch(`${CONFIG.API_BASE_URL}/users/me/subscription`, {
                 headers
             });
 
