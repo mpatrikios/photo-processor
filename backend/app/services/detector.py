@@ -94,7 +94,8 @@ class NumberDetector:
         logger.info(f"📥 PREFETCH COMPLETE: {cached_count}/{len(photo_ids)} images cached in {prefetch_time:.2f}s")
 
         # Concurrency limit to respect Gemini rate limits
-        CONCURRENCY_LIMIT = 20
+        # Increased from 20 to 50 to better utilize available quota (2,000 RPM)
+        CONCURRENCY_LIMIT = 50
         semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
 
         async def process_with_semaphore(photo_id: str, index: int) -> Tuple[str, DetectionResult]:
@@ -206,14 +207,23 @@ Return JSON:
 
             for attempt in range(max_retries):
                 try:
-                    response = await self.gemini_client.aio.models.generate_content(
-                        model="gemini-2.0-flash",
-                        contents=content,
-                        config=types.GenerateContentConfig(response_mime_type="application/json")
+                    # 30 second timeout prevents hung requests from blocking workers
+                    response = await asyncio.wait_for(
+                        self.gemini_client.aio.models.generate_content(
+                            model="gemini-2.0-flash",
+                            contents=content,
+                            config=types.GenerateContentConfig(response_mime_type="application/json")
+                        ),
+                        timeout=30.0
                     )
                     if response and response.text:
                         break  # Success
                     logger.warning(f"⚠️ [{photo_id[:8]}] Empty response, attempt {attempt+1}/{max_retries}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"⚠️ [{photo_id[:8]}] Timeout after 30s, attempt {attempt+1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(base_delay * (2 ** attempt))
+                    continue
                 except Exception as e:
                     error_str = str(e).lower()
                     if "429" in error_str or "rate" in error_str or "quota" in error_str or "resource_exhausted" in error_str:

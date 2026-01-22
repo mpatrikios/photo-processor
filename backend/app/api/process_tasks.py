@@ -330,125 +330,102 @@ async def process_batch_photos_worker(request: Request):
 
 
 async def save_batch_results_to_database(batch_results: Dict[str, DetectionResult], user_id: int, processing_job_id: str):
-    """Save multiple detection results using simple loop for reliability."""
+    """Save multiple detection results using bulk updates for performance."""
     db_session = SessionLocal()
     try:
         from app.models.processing import PhotoDB, ProcessingStatus
         from app.models.usage import ProcessingJob as ProcessingJobDB
-        
+        from sqlalchemy import case
+
         processed_time = datetime.utcnow()
-        
-        # Get the INTEGER primary key for this job_id 
+
+        # Get the INTEGER primary key for this job_id
         processing_job_record = db_session.query(ProcessingJobDB).filter(
             ProcessingJobDB.job_id == processing_job_id,
             ProcessingJobDB.user_id == user_id
         ).first()
-        
+
         processing_job_pk = processing_job_record.id if processing_job_record else None
-        
-        # Simple approach: update each photo individually in a transaction
+
+        # Separate successful detections from unknown/error
+        successful_updates = []
+        unknown_updates = []
+
         for photo_id, detection_result in batch_results.items():
-            photo = db_session.query(PhotoDB).filter(
-                PhotoDB.photo_id == photo_id, 
-                PhotoDB.user_id == user_id
-            ).first()
-            
-            if photo:
-                if detection_result.bib_number and detection_result.bib_number not in ["unknown", "error"]:
-                    # Successful detection
-                    photo.detected_number = detection_result.bib_number
-                    photo.confidence = detection_result.confidence
-                    photo.detection_method = "gemini_flash_batch"
-                    photo.processing_status = ProcessingStatus.COMPLETED
-                    photo.processing_job_id = processing_job_pk
-                    photo.processed_at = processed_time
-                    
-                    # Add bounding box if available
-                    if detection_result.bbox:
-                        photo.bbox_x1 = detection_result.bbox[0]
-                        photo.bbox_y1 = detection_result.bbox[1]
-                        photo.bbox_x2 = detection_result.bbox[2]
-                        photo.bbox_y2 = detection_result.bbox[3]
-                else:
-                    # Unknown/error detection
-                    photo.detected_number = "unknown"
-                    photo.confidence = 0.0
-                    photo.detection_method = "gemini_flash_batch"
-                    photo.processing_status = ProcessingStatus.COMPLETED
-                    photo.processing_job_id = processing_job_pk
-                    photo.processed_at = processed_time
+            if detection_result.bib_number and detection_result.bib_number not in ["unknown", "error"]:
+                successful_updates.append({
+                    "photo_id": photo_id,
+                    "detected_number": detection_result.bib_number,
+                    "confidence": detection_result.confidence,
+                    "bbox": detection_result.bbox
+                })
             else:
-                logger.warning(f"Photo {photo_id} not found for user {user_id}")
-        
+                unknown_updates.append(photo_id)
+
+        # Bulk update for successful detections using CASE statement
+        if successful_updates:
+            photo_ids = [u["photo_id"] for u in successful_updates]
+
+            # Build CASE expressions for each field
+            detected_number_cases = {u["photo_id"]: u["detected_number"] for u in successful_updates}
+            confidence_cases = {u["photo_id"]: u["confidence"] for u in successful_updates}
+
+            db_session.query(PhotoDB).filter(
+                PhotoDB.photo_id.in_(photo_ids),
+                PhotoDB.user_id == user_id
+            ).update({
+                PhotoDB.detected_number: case(
+                    detected_number_cases,
+                    value=PhotoDB.photo_id
+                ),
+                PhotoDB.confidence: case(
+                    confidence_cases,
+                    value=PhotoDB.photo_id
+                ),
+                PhotoDB.detection_method: "gemini_flash_batch",
+                PhotoDB.processing_status: ProcessingStatus.COMPLETED,
+                PhotoDB.processing_job_id: processing_job_pk,
+                PhotoDB.processed_at: processed_time
+            }, synchronize_session=False)
+
+            # Update bounding boxes separately for photos that have them
+            # bbox format from detector: [x1, y1, x2, y2] -> convert to [x, y, width, height]
+            for update_data in successful_updates:
+                if update_data.get("bbox"):
+                    bbox = update_data["bbox"]
+                    db_session.query(PhotoDB).filter(
+                        PhotoDB.photo_id == update_data["photo_id"],
+                        PhotoDB.user_id == user_id
+                    ).update({
+                        PhotoDB.bbox_x: bbox[0],
+                        PhotoDB.bbox_y: bbox[1],
+                        PhotoDB.bbox_width: bbox[2] - bbox[0],
+                        PhotoDB.bbox_height: bbox[3] - bbox[1]
+                    }, synchronize_session=False)
+
+        # Bulk update for unknown detections (simpler - all same values)
+        if unknown_updates:
+            db_session.query(PhotoDB).filter(
+                PhotoDB.photo_id.in_(unknown_updates),
+                PhotoDB.user_id == user_id
+            ).update({
+                PhotoDB.detected_number: "unknown",
+                PhotoDB.confidence: 0.0,
+                PhotoDB.detection_method: "gemini_flash_batch",
+                PhotoDB.processing_status: ProcessingStatus.COMPLETED,
+                PhotoDB.processing_job_id: processing_job_pk,
+                PhotoDB.processed_at: processed_time
+            }, synchronize_session=False)
+
         db_session.commit()
-        logger.info(f"✅ BATCH SAVED: {len(batch_results)} photos saved to database with job_pk={processing_job_pk}")
-        
+        logger.info(f"✅ BULK SAVED: {len(successful_updates)} detected + {len(unknown_updates)} unknown = {len(batch_results)} photos (job_pk={processing_job_pk})")
+
     except Exception as e:
         db_session.rollback()
         logger.error(f"❌ DB Save Failed: {e}")
         raise
     finally:
         db_session.close()
-
-
-async def save_detection_to_database(photo_id: str, user_id: int, detection_result, processing_job_id: str):
-    """Save detection result to PhotoDB table after OCR processing."""
-    try:
-        from app.models.processing import PhotoDB, ProcessingStatus
-        from app.models.usage import ProcessingJob as ProcessingJobDB
-        
-        db_session = SessionLocal()
-        try:
-            # Get the INTEGER primary key for this job_id 
-            processing_job_record = db_session.query(ProcessingJobDB).filter(
-                ProcessingJobDB.job_id == processing_job_id,
-                ProcessingJobDB.user_id == user_id
-            ).first()
-            
-            processing_job_pk = processing_job_record.id if processing_job_record else None
-            # Check if photo record already exists
-            existing_photo = db_session.query(PhotoDB).filter(
-                PhotoDB.photo_id == photo_id,
-                PhotoDB.user_id == user_id
-            ).first()
-            
-            if existing_photo:
-                # Update existing record with detection results
-                if detection_result.bib_number and detection_result.bib_number != "unknown":
-                    existing_photo.detected_number = detection_result.bib_number
-                    existing_photo.confidence = detection_result.confidence
-                    existing_photo.detection_method = "gemini_flash"
-                    if detection_result.bbox:
-                        existing_photo.bbox_x1 = detection_result.bbox[0]
-                        existing_photo.bbox_y1 = detection_result.bbox[1] 
-                        existing_photo.bbox_x2 = detection_result.bbox[2]
-                        existing_photo.bbox_y2 = detection_result.bbox[3]
-                    existing_photo.processing_status = ProcessingStatus.COMPLETED
-                    existing_photo.processing_job_id = processing_job_pk
-                    existing_photo.processed_at = datetime.utcnow()
-                else:
-                    existing_photo.detected_number = "unknown"
-                    existing_photo.confidence = 0.0
-                    existing_photo.detection_method = "gemini_flash"
-                    existing_photo.processing_status = ProcessingStatus.COMPLETED
-                    existing_photo.processing_job_id = processing_job_pk
-                    existing_photo.processed_at = datetime.utcnow()
-                
-                db_session.commit()
-                logger.debug(f"Updated photo {photo_id} in database with detection results")
-            else:
-                logger.warning(f"Photo {photo_id} not found in database - skipping result save")
-                
-        except Exception as db_error:
-            db_session.rollback()
-            logger.error(f"Database error saving detection for {photo_id}: {db_error}")
-            raise
-        finally:
-            db_session.close()
-            
-    except Exception as e:
-        logger.error(f"Failed to save detection result for photo {photo_id}: {e}")
-        raise
 
 
 async def update_job_progress(job_id: str, db: Session):

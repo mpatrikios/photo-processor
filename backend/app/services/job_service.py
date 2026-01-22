@@ -46,7 +46,7 @@ class JobService:
             debug_mode=debug,
             status=ProcessingStatus.PENDING,
         )
-        job.set_expiration(24)  # Expire after 24 hours
+        job.set_expiration()  # Expire after 30 days (default)
 
         db.add(job)
         db.flush()  # Get the ID
