@@ -273,10 +273,6 @@ from app.api import secure_files
 
 app.include_router(secure_files.router, tags=["secure-files"])
 
-# Mount upload/processed directories for serving files
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/processed", StaticFiles(directory="processed"), name="processed")
-
 # Serve frontend static files LAST - so they don't override API routes
 frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.exists(frontend_path):

@@ -1210,11 +1210,13 @@ export class PhotoProcessor {
             const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
             const batchNumbers = concurrentBatches.map((_, idx) => i + idx + 1);
 
-            // Update progress with current batch info
-            this.unifiedProgress?.setPhase('upload',
-                (i / batches.length) * 100,
-                { currentBatch: i + 1, totalBatches: batches.length }
-            );
+            // Update progress with current batch info (only if not yet in processing phase)
+            if (!this.backgroundPollingActive) {
+                this.unifiedProgress?.setPhase('upload',
+                    (i / batches.length) * 100,
+                    { currentBatch: i + 1, totalBatches: batches.length }
+                );
+            }
 
             const batchPromises = concurrentBatches.map((batch, idx) =>
                 this.uploadBatch(batch, batchNumbers[idx])
@@ -1335,6 +1337,9 @@ export class PhotoProcessor {
                 if (statusData.status === 'completed') {
                     this.backgroundPollingActive = false;
                     this.unifiedProgress?.complete();
+
+                    // Brief delay to show 100% before showing results
+                    await new Promise(r => setTimeout(r, 400));
 
                     // Fetch and display results
                     if (this.isUploadMoreOperation) {

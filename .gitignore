@@ -57,3 +57,6 @@ logs/
 # Cache
 .cache/
 .parcel-cache/
+
+# GCP config backups
+gcp-config-backup*.yaml

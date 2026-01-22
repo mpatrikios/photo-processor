@@ -195,9 +195,9 @@ class ProcessingJob(Base):
             return False
         return datetime.utcnow() > self.expires_at
 
-    def set_expiration(self, hours: int = 24):
-        """Set job expiration time."""
-        self.expires_at = datetime.utcnow() + timedelta(hours=hours)
+    def set_expiration(self, days: int = 30):
+        """Set job expiration time in days."""
+        self.expires_at = datetime.utcnow() + timedelta(days=days)
 
     def to_schema(self):
         """Convert to ProcessingJob schema for API responses."""
