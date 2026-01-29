@@ -2,7 +2,7 @@
 Database models for photo processing, jobs, and exports.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -168,15 +168,20 @@ class ExportDB(Base):
         """Check if the export has expired."""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        now = datetime.now(timezone.utc)
+        # Handle both timezone-aware and naive datetimes
+        expires = self.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return now > expires
 
     def set_expiration(self, days: int = 7):
         """Set export expiration time."""
-        self.expires_at = datetime.utcnow() + timedelta(days=days)
+        self.expires_at = datetime.now(timezone.utc) + timedelta(days=days)
 
     def mark_downloaded(self):
         """Mark export as downloaded."""
-        self.last_downloaded_at = datetime.utcnow()
+        self.last_downloaded_at = datetime.now(timezone.utc)
         self.download_count += 1
 
 

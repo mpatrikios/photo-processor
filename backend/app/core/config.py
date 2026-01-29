@@ -266,9 +266,9 @@ class Settings(BaseSettings):
         logger.info(f"Rate Limit: {self.rate_limit_per_minute} requests/minute")
 
         if self.gemini_api_key:
-            logger.info("Gemini Flash API: Configured ✅")
+            logger.info("Gemini Flash API: Configured")
         else:
-            logger.error("Gemini Flash API: Not configured ❌")
+            logger.error("Gemini Flash API: Not configured")
 
         if self.get_smtp_config():
             logger.info("Email: Configured")

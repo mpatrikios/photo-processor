@@ -1012,7 +1012,7 @@ export class PhotoProcessor {
                 this.updateQuotaDisplay(data.quota);
                 return data.quota;
             } else {
-                console.error('❌ Quota request failed:', response.status, response.statusText);
+                console.error('Quota request failed:', response.status, response.statusText);
             }
         } catch (error) {
             console.error('Failed to load quota:', error);
@@ -1435,7 +1435,7 @@ export class PhotoProcessor {
                 });
 
                 if (!uploadResponse.ok) {
-                    console.error(`❌ Direct upload failed for ${file.name}:`, uploadResponse.status);
+                    console.error(`Direct upload failed for ${file.name}:`, uploadResponse.status);
                     throw new Error(`Direct upload failed for ${file.name}: ${uploadResponse.statusText}`);
                 }
 
@@ -1477,7 +1477,7 @@ export class PhotoProcessor {
             return result.photo_ids || [];
 
         } catch (error) {
-            console.error(`❌ Batch ${batchNum} failed:`, error);
+            console.error(`Batch ${batchNum} failed:`, error);
             throw error;
         }
     }
