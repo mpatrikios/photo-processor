@@ -556,9 +556,9 @@ async def get_processing_status(job_id: str, current_user: User = Depends(get_cu
                 logger.debug(f"NO CHANGE: {job_id[:8]}... still {current_status} at {current_progress}%")
 
             # Timeout protection: If job has been processing for more than 10 minutes, mark as failed
-            from datetime import datetime, timedelta
+            from datetime import datetime, timedelta, timezone
             if hasattr(job_data["job"], 'created_at'):
-                time_elapsed = datetime.utcnow() - job_data["job"].created_at
+                time_elapsed = datetime.now(timezone.utc) - job_data["job"].created_at
                 if time_elapsed > timedelta(minutes=10):
                     logger.warning(f"TIMEOUT: {job_id[:8]}... after {time_elapsed.total_seconds():.1f}s")
                     job_data["job"].status = ProcessingStatus.FAILED
