@@ -1,11 +1,12 @@
 import asyncio
 import io
+import json
 import logging
 import os
+import random
 import re
 import sys
 import time
-import json
 from typing import Dict, List, Optional, Tuple
 
 from PIL import Image
@@ -18,21 +19,10 @@ from app.models.schemas import (
     PhotoInfo,
     ProcessingStatus,
 )
+from app.core.gcs import get_gcs_client
 
 # Configure logger for this module
 logger = logging.getLogger(__name__)
-
-# Singleton GCS client for connection reuse (avoids 150-200ms overhead per download)
-_gcs_client = None
-
-def get_gcs_client():
-    """Lazy-initialize and return singleton GCS client."""
-    global _gcs_client
-    if _gcs_client is None:
-        from google.cloud import storage
-        _gcs_client = storage.Client()
-        logger.info("✅ GCS client singleton initialized")
-    return _gcs_client
 
 
 class NumberDetector:
@@ -49,19 +39,19 @@ class NumberDetector:
         try:
             # Get Gemini API key from settings configuration
             from app.core.config import settings
-            
+
             api_key = settings.gemini_api_key
             if api_key:
                 self.gemini_client = genai.Client(api_key=api_key)
                 self.use_gemini = True
-                logger.info("✅ Gemini 2.0 Flash API initialized successfully")
+                logger.info("Gemini 2.0 Flash API initialized successfully")
             else:
                 # No API key available
                 self.gemini_client = None
                 self.use_gemini = False
-                logger.error("❌ No Gemini API key available - classification will fail")
+                logger.error("No Gemini API key available - classification will fail")
         except Exception as e:
-            logger.error(f"❌ Gemini API initialization failed: {e}")
+            logger.error(f"Gemini API initialization failed: {e}")
             self.gemini_client = None
             self.use_gemini = False
 
@@ -84,14 +74,14 @@ class NumberDetector:
             return {photo_id: DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
                    for photo_id in photo_ids}
 
-        logger.info(f"🚀 CONCURRENT PROCESSING: Starting {len(photo_ids)} photos")
+        logger.info(f"CONCURRENT PROCESSING: Starting {len(photo_ids)} photos")
 
         # PREFETCH: Download all images in parallel before Gemini calls
         prefetch_start = time.time()
         image_cache = await self._prefetch_all_images(photo_ids, user_id, debug_mode)
         prefetch_time = time.time() - prefetch_start
         cached_count = len([v for v in image_cache.values() if v[0] is not None])
-        logger.info(f"📥 PREFETCH COMPLETE: {cached_count}/{len(photo_ids)} images cached in {prefetch_time:.2f}s")
+        logger.info(f"PREFETCH COMPLETE: {cached_count}/{len(photo_ids)} images cached in {prefetch_time:.2f}s")
 
         # Concurrency limit to respect Gemini rate limits
         # Increased from 20 to 50 to better utilize available quota (2,000 RPM)
@@ -113,7 +103,7 @@ class NumberDetector:
         results = {}
         for item in results_list:
             if isinstance(item, Exception):
-                logger.error(f"❌ Task exception: {item}")
+                logger.error(f"Task exception: {item}")
                 continue
             photo_id, detection_result = item
             results[photo_id] = detection_result
@@ -126,7 +116,7 @@ class NumberDetector:
         success_rate = (successful_count / len(photo_ids)) * 100 if photo_ids else 0
         avg_time = total_time / len(photo_ids) if photo_ids else 0
 
-        logger.info(f"🎯 CONCURRENT COMPLETE: {successful_count}/{len(photo_ids)} detected ({success_rate:.1f}% success) in {total_time:.2f}s ({avg_time:.2f}s/photo effective)")
+        logger.info(f"CONCURRENT COMPLETE: {successful_count}/{len(photo_ids)} detected ({success_rate:.1f}% success) in {total_time:.2f}s ({avg_time:.2f}s/photo effective)")
 
         return results
 
@@ -134,13 +124,13 @@ class NumberDetector:
         self, photo_ids: List[str], user_id: Optional[int], debug_mode: bool
     ) -> Dict[str, Tuple[Optional[bytes], Tuple[int, int]]]:
         """Download all images from GCS in parallel before processing."""
-        logger.info(f"📥 PREFETCH: Downloading {len(photo_ids)} images in parallel...")
+        logger.info(f"PREFETCH: Downloading {len(photo_ids)} images in parallel...")
 
         async def fetch_one(photo_id: str) -> Tuple[str, Tuple[Optional[bytes], Tuple[int, int]]]:
             try:
                 photo_path = await asyncio.to_thread(self._find_photo_path, photo_id, user_id)
                 if not photo_path:
-                    logger.warning(f"❌ [{photo_id[:8]}] Photo not found during prefetch")
+                    logger.warning(f"[{photo_id[:8]}] Photo not found during prefetch")
                     return photo_id, (None, (1, 1))
 
                 image_data, img_shape = await asyncio.to_thread(
@@ -148,7 +138,7 @@ class NumberDetector:
                 )
                 return photo_id, (image_data, img_shape)
             except Exception as e:
-                logger.error(f"❌ [{photo_id[:8]}] Prefetch error: {e}")
+                logger.error(f"[{photo_id[:8]}] Prefetch error: {e}")
                 return photo_id, (None, (1, 1))
 
         tasks = [fetch_one(pid) for pid in photo_ids]
@@ -163,18 +153,18 @@ class NumberDetector:
         photo_start_time = time.time()
 
         try:
-            logger.info(f"📸 [{index+1}/{total}] Processing {photo_id[:8]}... (cached)")
+            logger.debug(f"[{index+1}/{total}] Processing {photo_id[:8]}... (cached)")
 
-            # ⏱️ TIMING: Cache retrieval
+            # TIMING: Cache retrieval
             cache_start = time.time()
             image_data, img_shape = image_cache.get(photo_id, (None, (1, 1)))
             cache_time = (time.time() - cache_start) * 1000
 
             if not image_data:
-                logger.warning(f"❌ [{photo_id[:8]}] No cached image data")
+                logger.warning(f"[{photo_id[:8]}] No cached image data")
                 return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
-            logger.info(f"⏱️ [{photo_id[:8]}] Cache retrieval: {cache_time:.1f}ms, Image size: {len(image_data)/1024:.0f}KB")
+            logger.debug(f"[{photo_id[:8]}] Cache retrieval: {cache_time:.1f}ms, Image size: {len(image_data)/1024:.0f}KB")
 
             # REFINED PROMPT: Focus on Digit Integrity over Count
             single_prompt = """Act as an elite sports photography OCR specialist.
@@ -198,8 +188,7 @@ Return JSON:
                 single_prompt
             ]
 
-            # ⏱️ TIMING: Gemini API call with exponential backoff retry
-            import random
+            # TIMING: Gemini API call with exponential backoff retry
             api_start = time.time()
             response = None
             max_retries = 3
@@ -218,9 +207,9 @@ Return JSON:
                     )
                     if response and response.text:
                         break  # Success
-                    logger.warning(f"⚠️ [{photo_id[:8]}] Empty response, attempt {attempt+1}/{max_retries}")
+                    logger.warning(f"[{photo_id[:8]}] Empty response, attempt {attempt+1}/{max_retries}")
                 except asyncio.TimeoutError:
-                    logger.warning(f"⚠️ [{photo_id[:8]}] Timeout after 30s, attempt {attempt+1}/{max_retries}")
+                    logger.warning(f"[{photo_id[:8]}] Timeout after 30s, attempt {attempt+1}/{max_retries}")
                     if attempt < max_retries - 1:
                         await asyncio.sleep(base_delay * (2 ** attempt))
                     continue
@@ -229,31 +218,31 @@ Return JSON:
                     if "429" in error_str or "rate" in error_str or "quota" in error_str or "resource_exhausted" in error_str:
                         # Exponential backoff with jitter: 0.5-1s, 1-1.5s, 2-2.5s
                         delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
-                        logger.warning(f"⚠️ [{photo_id[:8]}] Rate limited, retry {attempt+1}/{max_retries} after {delay:.1f}s")
+                        logger.warning(f"[{photo_id[:8]}] Rate limited, retry {attempt+1}/{max_retries} after {delay:.1f}s")
                         await asyncio.sleep(delay)
                     else:
-                        logger.error(f"❌ [{photo_id[:8]}] Gemini error: {e}")
+                        logger.error(f"[{photo_id[:8]}] Gemini error: {e}")
                         raise
 
             api_time = (time.time() - api_start) * 1000
-            logger.info(f"⏱️ [{photo_id[:8]}] Gemini API call: {api_time:.0f}ms")
+            logger.debug(f"[{photo_id[:8]}] Gemini API call: {api_time:.0f}ms")
 
             if not response or not response.text:
-                logger.error(f"❌ [{photo_id[:8]}] Empty Gemini response after {max_retries} attempts")
+                logger.error(f"[{photo_id[:8]}] Empty Gemini response after {max_retries} attempts")
                 return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
-            # ⏱️ TIMING: Parse response
+            # TIMING: Parse response
             parse_start = time.time()
             result = self._parse_gemini_response(response.text, photo_id, img_shape, photo_start_time)
             parse_time = (time.time() - parse_start) * 1000
 
             total_time = (time.time() - photo_start_time) * 1000
-            logger.info(f"⏱️ [{photo_id[:8]}] TOTAL: {total_time:.0f}ms (API: {api_time:.0f}ms, Parse: {parse_time:.1f}ms)")
+            logger.debug(f"[{photo_id[:8]}] TOTAL: {total_time:.0f}ms (API: {api_time:.0f}ms, Parse: {parse_time:.1f}ms)")
 
             return result
 
         except Exception as e:
-            logger.error(f"❌ PROCESSING ERROR [{photo_id[:8]}]: {e}")
+            logger.error(f"PROCESSING ERROR [{photo_id[:8]}]: {e}")
             return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
     def _parse_gemini_response(
@@ -272,11 +261,11 @@ Return JSON:
             # Handle both array and object responses from Gemini
             if isinstance(res_json, list):
                 if len(res_json) == 0:
-                    logger.error(f"❌ EMPTY ARRAY [{photo_id[:8]}]: Gemini returned empty array")
+                    logger.error(f"EMPTY ARRAY [{photo_id[:8]}]: Gemini returned empty array")
                     return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
                 res_json = res_json[0]
             elif not isinstance(res_json, dict):
-                logger.error(f"❌ INVALID FORMAT [{photo_id[:8]}]: Expected dict or list, got {type(res_json)}")
+                logger.error(f"INVALID FORMAT [{photo_id[:8]}]: Expected dict or list, got {type(res_json)}")
                 return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
             # Extract and validate fields
@@ -286,10 +275,10 @@ Return JSON:
 
             # Validate detected bib number
             if not detected_bib or detected_bib.upper() in ["NONE", "NULL", "UNKNOWN", ""]:
-                logger.info(f"❌ EMPTY [{photo_id[:8]}]: No number detected - {reasoning}")
+                logger.debug(f"EMPTY [{photo_id[:8]}]: No number detected - {reasoning}")
                 return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
             elif not self._is_valid_bib_number(detected_bib):
-                logger.info(f"❌ INVALID [{photo_id[:8]}]: '{detected_bib}' failed validation")
+                logger.debug(f"INVALID [{photo_id[:8]}]: '{detected_bib}' failed validation")
                 return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
             # Convert text confidence to numeric
@@ -303,7 +292,7 @@ Return JSON:
             ]
 
             photo_time = time.time() - start_time
-            logger.info(f"✅ SUCCESS [{photo_id[:8]}] ({confidence_text}): '{detected_bib}' in {photo_time:.2f}s")
+            logger.info(f"SUCCESS [{photo_id[:8]}] ({confidence_text}): '{detected_bib}' in {photo_time:.2f}s")
 
             return DetectionResult(
                 bib_number=detected_bib,
@@ -312,10 +301,10 @@ Return JSON:
             )
 
         except json.JSONDecodeError as e:
-            logger.error(f"❌ JSON ERROR [{photo_id[:8]}]: {e}")
+            logger.error(f"JSON ERROR [{photo_id[:8]}]: {e}")
             return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
         except KeyError as e:
-            logger.error(f"❌ MISSING FIELD [{photo_id[:8]}]: {e}")
+            logger.error(f"MISSING FIELD [{photo_id[:8]}]: {e}")
             return DetectionResult(bib_number="unknown", confidence=0.0, bbox=None)
 
 
@@ -330,30 +319,30 @@ Return JSON:
                 # Convert to RGB to handle PNGs/CMYK
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
-                
+
                 original_size = img.size
-                
-                # Crop bottom 5% to remove watermarks while preserving handlebar plates  
+
+                # Crop bottom 5% to remove watermarks while preserving handlebar plates
                 width, height = img.size
                 crop_height = int(height * 0.95)  # Keep top 95%
                 img = img.crop((0, 0, width, crop_height))
-                
+
                 # Only resize if larger than max_size
                 if max(img.size) > max_size:
                     img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
-                    
+
                     if logger.isEnabledFor(logging.DEBUG):
                         new_size = img.size
                         reduction = ((original_size[0] * original_size[1]) - (new_size[0] * new_size[1])) / (original_size[0] * original_size[1]) * 100
-                        logger.debug(f"🏎️ OCR Resize: {original_size} → {new_size} ({reduction:.0f}% smaller, watermark cropped)")
-                
+                        logger.debug(f"OCR Resize: {original_size} -> {new_size} ({reduction:.0f}% smaller, watermark cropped)")
+
                 # OCR-optimized compression settings
                 buffer = io.BytesIO()
                 img.save(buffer, format="JPEG", quality=85, optimize=True)
                 return buffer.getvalue()
-                
+
         except Exception as e:
-            logger.warning(f"⚠️ PIL resize failed: {e}, using original")
+            logger.warning(f"PIL resize failed: {e}, using original")
             return image_bytes  # Fallback to original
 
     def _optimize_image_for_gemini(
@@ -373,7 +362,7 @@ Return JSON:
             resized_data = self._resize_image(original_data, max_size=1024)
 
             if debug_mode:
-                logger.info(f"📷 IMAGE: {original_width}x{original_height} ({len(original_data)/1024:.0f}KB) → resized ({len(resized_data)/1024:.0f}KB)")
+                logger.debug(f"IMAGE: {original_width}x{original_height} ({len(original_data)/1024:.0f}KB) -> resized ({len(resized_data)/1024:.0f}KB)")
 
             return resized_data, (original_height, original_width)
 
@@ -424,7 +413,7 @@ Return JSON:
             if settings.bucket_name:
                 storage_client = get_gcs_client()  # Singleton - avoids 150ms overhead per call
                 bucket = storage_client.bucket(settings.bucket_name)
-                
+
                 for ext in extensions:
                     filename = f"{photo_id}{ext}"
                     blob_path = f"{user_id}/{filename}"
@@ -435,7 +424,7 @@ Return JSON:
                         os.makedirs(user_upload_dir, exist_ok=True)
                         local_path = os.path.join(user_upload_dir, filename)
                         blob.download_to_filename(local_path)
-                        logger.info(f"Downloaded {photo_id} from GCS to local storage")
+                        logger.debug(f"Downloaded {photo_id} from GCS to local storage")
                         return local_path
                     except Exception:
                         continue  # Try next extension
@@ -506,5 +495,5 @@ Return JSON:
             return True
 
         except Exception as e:
-            logger.error(f"❌ Failed to manually label photo {photo_id}: {e}")
+            logger.error(f"Failed to manually label photo {photo_id}: {e}")
             return False

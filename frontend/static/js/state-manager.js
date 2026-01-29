@@ -369,8 +369,6 @@ export class StateManager {
                 this.set('auth.token', data.access_token);
                 this.set('auth.refreshToken', data.refresh_token);
                 this.set('auth.tokenExpiresAt', new Date(Date.now() + data.expires_in * 1000));
-                
-                console.log('Token refreshed successfully');
                 return true;
             } else {
                 // Refresh failed, logout user
@@ -405,12 +403,11 @@ export class StateManager {
     
                 // If token expires in less than 5 mins, refresh NOW before sending request
                 if (expiresIn < fiveMinutes && !this.refreshInProgress) {
-                    console.log('Token expiring soon, refreshing proactively...');
                     this.refreshInProgress = true;
                     try {
                         await this.refreshToken();
                     } catch (e) {
-                        console.warn('Proactive refresh failed, proceeding with current token');
+                        // Continue with current token if refresh fails
                     } finally {
                         this.refreshInProgress = false;
                     }
@@ -452,7 +449,6 @@ export class StateManager {
                     this.refreshInProgress = true;
                     
                     try {
-                        console.log('401 detected, attempting reactive refresh...');
                         const refreshed = await this.refreshToken();
                         if (refreshed) {
                             // Retry the original request with the NEW token
@@ -593,10 +589,8 @@ export class StateManager {
         this.set('processing.lastCompletedAt', new Date());
         this.set('processing.lastJobStatus', status);
         this.set('processing.currentJobId', null);
-        this.set('processing.currentJobStatus', null);  // Clear current job status
+        this.set('processing.currentJobStatus', null);
         this.set('processing.isProcessing', false);
-        
-        console.log(`Job ${jobId} marked as ${status} and saved to localStorage`);
     }
     
     /**
@@ -607,8 +601,6 @@ export class StateManager {
         this.set('processing.lastCompletedAt', null);
         this.set('processing.lastJobStatus', null);
         this.set('photos.groupedPhotos', []);
-        
-        console.log('Completed job state cleared');
     }
     
     /**
@@ -700,11 +692,10 @@ export class StateManager {
                 if (cached) {
                     const tierData = JSON.parse(cached);
                     this.state.tiers.configs = tierData;
-                    console.log('Using cached tier data as fallback');
                     return tierData;
                 }
             } catch (e) {
-                console.warn('Failed to load cached tiers:', e);
+                // Cache unavailable
             }
             
             throw error;

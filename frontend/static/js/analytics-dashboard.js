@@ -265,31 +265,18 @@ class AnalyticsDashboard {
      */
     async loadOverviewData() {
         try {
-            console.log('Loading analytics data from /analytics/daily-metrics...');
             const response = await this.state.request('GET', '/analytics/daily-metrics');
-            
-            console.log('Analytics response status:', response.status);
-            console.log('Analytics response headers:', response.headers);
-            
+
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Analytics API error response:', errorText);
                 throw new Error(`API call failed: ${response.status} ${response.statusText}`);
             }
-            
+
             const data = await response.json();
-            console.log('🔍 FRONTEND DEBUG - Raw analytics data received:', data);
-            console.log('🔍 FRONTEND DEBUG - Key fields:', {
-                ai_first_pass_accuracy: data.ai_first_pass_accuracy,
-                total_processed_photos: data.total_processed_photos,
-                total_jobs: data.total_jobs,
-                user_id: data.user_id
-            });
-            
+
             // Transform the API data to match the expected format for updateOverviewMetrics
             const transformedData = {
                 user_stats: {
-                    total_photos_processed: data.total_processed_photos || 0,  // FIXED: Use actual photo count
+                    total_photos_processed: data.total_processed_photos || 0,
                     uploads: data.trends?.reduce((sum, trend) => sum + (trend.photos || 0), 0) || 0
                 },
                 detection_accuracy: {
@@ -298,8 +285,7 @@ class AnalyticsDashboard {
                     total_photos: data.total_processed_photos || 0
                 }
             };
-            
-            console.log('Transformed data for analytics:', transformedData);
+
             this.updateOverviewMetrics(transformedData);
             
         } catch (error) {
@@ -937,21 +923,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Wait a bit for StateManager to be fully initialized
     setTimeout(() => {
         if (window.stateManager) {
-            console.log('Initializing AnalyticsDashboard with StateManager');
             window.analyticsDashboard = new AnalyticsDashboard(window.stateManager);
-            
-            // Track page view (disabled until engagement endpoints are implemented)
-            // if (window.analyticsDashboard) {
-            //     window.analyticsDashboard.trackEngagement('page_view');
-            // }
-        } else {
-            console.error('StateManager not found on window object');
-            // Try to create a new StateManager if it doesn't exist
-            if (typeof StateManager !== 'undefined') {
-                console.log('Creating new StateManager instance for analytics');
-                window.stateManager = new StateManager();
-                window.analyticsDashboard = new AnalyticsDashboard(window.stateManager);
-            }
+        } else if (typeof StateManager !== 'undefined') {
+            // Create a new StateManager if it doesn't exist
+            window.stateManager = new StateManager();
+            window.analyticsDashboard = new AnalyticsDashboard(window.stateManager);
         }
-    }, 100); // Small delay to ensure StateManager is ready
+    }, 100);
 });

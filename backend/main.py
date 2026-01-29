@@ -37,9 +37,9 @@ logger = logging.getLogger(__name__)
 
 # Security check for JWT
 if settings.is_production():
-    logger.info("✅ Running in PRODUCTION mode with secure JWT configuration")
+    logger.info("Running in PRODUCTION mode with secure JWT configuration")
 else:
-    logger.warning("⚠️  Running in DEVELOPMENT mode")
+    logger.warning("Running in DEVELOPMENT mode")
 
 app = FastAPI(
     title="TagSort API",
@@ -108,31 +108,29 @@ async def startup_event():
     """Initialize database tables and configuration on startup."""
     # Enable SQL query logging for debugging
     logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
-    logger.info("🔍 SQL query logging enabled for analytics debugging")
-    
+    logger.info("SQL query logging enabled for analytics debugging")
+
     # Print configuration info
     settings.print_startup_info()
 
-    logger.info("🔄 Database connection ready...")
-    
+    logger.info("Database connection ready...")
+
     db_info = get_db_info()
-    logger.info(f"✅ Database connected: {db_info['database_path']}")
-    logger.info(f"📊 Database size: {db_info['database_size_mb']} MB")
+    logger.info(f"Database connected: {db_info['database_path']}")
+    logger.info(f"Database size: {db_info['database_size_mb']} MB")
 
     # Test AuthService singleton and JWT functionality
     from app.services.auth_service import auth_service
 
-    logger.info("🧪 Testing AuthService functionality...")
+    logger.info("Testing AuthService functionality...")
 
-    # Test token creation and verification
+    # Test token creation and verification (without logging the token)
     test_token = auth_service.create_access_token(999)  # Test user ID
-    logger.debug(f"🧪 Test token created: {test_token[:50]}...")
-
     test_result = auth_service.verify_token(test_token)
     if test_result:
-        logger.info("✅ AuthService test PASSED - tokens work correctly")
+        logger.info("AuthService test PASSED - tokens work correctly")
     else:
-        logger.error("❌ AuthService test FAILED - JWT not working properly")
+        logger.error("AuthService test FAILED - JWT not working properly")
 
     # Clean up expired sessions on startup
     from app.services.job_service import job_service
@@ -144,42 +142,41 @@ async def startup_event():
         try:
             from database import Base, engine
             Base.metadata.create_all(bind=engine)
-            logger.info("✅ Database tables verified/created")
+            logger.info("Database tables verified/created")
         except Exception as e:
-            logger.warning(f"⚠️ Table creation verification failed: {e}")
+            logger.warning(f"Table creation verification failed: {e}")
 
         # Clean up expired sessions
         try:
             cleaned_sessions = auth_service.cleanup_expired_sessions(db)
             if cleaned_sessions > 0:
-                logger.info(f"🧹 Cleaned up {cleaned_sessions} expired sessions")
+                logger.info(f"Cleaned up {cleaned_sessions} expired sessions")
         except Exception as e:
-            logger.warning(f"⚠️ Session cleanup failed: {e}")
+            logger.warning(f"Session cleanup failed: {e}")
 
         # Recover stalled processing jobs (gracefully handle missing tables)
         try:
             recovered_jobs = job_service.recover_jobs_on_startup(db)
             if recovered_jobs > 0:
-                logger.info(f"🔄 Recovered {recovered_jobs} processing jobs")
+                logger.info(f"Recovered {recovered_jobs} processing jobs")
         except Exception as e:
-            logger.warning(f"⚠️ Job recovery skipped (tables may not exist yet): {e}")
+            logger.warning(f"Job recovery skipped (tables may not exist yet): {e}")
 
         # Load active processing jobs into memory (gracefully handle missing tables)
         try:
-            from app.api.process_tasks import cleanup_old_jobs, sync_jobs_from_database
+            from app.api.process_tasks import sync_jobs_from_database
             sync_jobs_from_database()
-            cleanup_old_jobs()
-            logger.info("🔄 Synced active jobs from database")
+            logger.info("Synced active jobs from database")
         except Exception as e:
-            logger.warning(f"⚠️ Job sync skipped (tables may not exist yet): {e}")
+            logger.warning(f"Job sync skipped (tables may not exist yet): {e}")
 
         # Clean up expired jobs and exports (gracefully handle missing tables)
         try:
             cleaned_jobs = job_service.cleanup_expired_jobs(db)
             if cleaned_jobs > 0:
-                logger.info(f"🧹 Cleaned up {cleaned_jobs} expired jobs")
+                logger.info(f"Cleaned up {cleaned_jobs} expired jobs")
         except Exception as e:
-            logger.warning(f"⚠️ Job cleanup skipped (tables may not exist yet): {e}")
+            logger.warning(f"Job cleanup skipped (tables may not exist yet): {e}")
 
     finally:
         db.close()
@@ -195,7 +192,7 @@ allowed_origins = settings.cors_origins
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,  
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -204,7 +201,7 @@ app.add_middleware(
 # Create required directories with proper permissions
 settings.create_directories()
 logger.info(
-    f"✅ Created directories: {settings.upload_dir}, {settings.export_dir}, {settings.temp_dir}"
+    f"Created directories: {settings.upload_dir}, {settings.export_dir}, {settings.temp_dir}"
 )
 
 
@@ -283,7 +280,7 @@ if os.path.exists(frontend_path):
     )
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
 
-logger.info("✅ API routers registered:")
+logger.info("API routers registered:")
 logger.info("  - /api/auth")
 logger.info("  - /api/users")
 logger.info("  - /api/upload")
@@ -299,6 +296,6 @@ if __name__ == "__main__":
     import os
     # Get the PORT from Cloud Run (defaults to 8080)
     port = int(os.environ.get("PORT", 8080))
-    
-    # ✅ CORRECT FastAPI startup
+
+    # CORRECT FastAPI startup
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

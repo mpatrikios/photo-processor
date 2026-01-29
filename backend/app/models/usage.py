@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import (
@@ -140,7 +140,7 @@ class ProcessingJob(Base):
         Mark the job as started.
         """
         self.status = "processing"
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
 
     def complete_processing(
         self, success: bool = True, error_message: Optional[str] = None
@@ -149,7 +149,7 @@ class ProcessingJob(Base):
         Mark the job as completed or failed.
         """
         self.status = "completed" if success else "failed"
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         if error_message:
             self.error_message = error_message
 
@@ -193,11 +193,15 @@ class ProcessingJob(Base):
         """Check if the job has expired."""
         if not self.expires_at:
             return False
-        return datetime.utcnow() > self.expires_at
+        now = datetime.now(timezone.utc)
+        expires = self.expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return now > expires
 
     def set_expiration(self, days: int = 30):
         """Set job expiration time in days."""
-        self.expires_at = datetime.utcnow() + timedelta(days=days)
+        self.expires_at = datetime.now(timezone.utc) + timedelta(days=days)
 
     def to_schema(self):
         """Convert to ProcessingJob schema for API responses."""
