@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.gcs import get_gcs_bucket, generate_signed_url
-from app.core.security_config import ALLOWED_EXTENSIONS
 from app.models.schemas import PhotoInfo, ProcessingStatus
 from app.models.user import User
 from database import get_db
